@@ -1,7 +1,22 @@
+0.59i: (MH)
+-----------
+- added front-end (remote) patch from "Brian J. Swetland" <swetland@uiuc.edu>
+- added OS2 patches from Niclas Lindstrom <nil@wineasy.se>
+- fixed 'rewind bug'
+- added patches from Leo Broukhis <leo@zycad.com>
+- added shuffle patch from Tillmann Steinbrecher <tst@darmstadt.netsurf.de>
+- added i386-getbits from M.Stekelenburg <m.stekelenburg@student.utwente.nl>
+- added fallback to 8bit if no 16bit samples support (currently linux only)
+- added (slightly changed) outburst patch
+  from Antti Andreimann <anttix@cyberix.edu.ee>
+- added 'http accept' patch from Hur TaeSung <saturn@arari.snu.ac.kr>
+- fixed buffer mode bug 
+
+
 0.59h: (MH)
 ------
 
-- added '--8bit' option to force 'UNSIGNED 8 BIT' playing
+- added '--8bit' option to force 'ULAW 8 BIT' playing
 - pcm buffer type changed to 'unsigned char *' 
 - plays 2:1 and 4:1 with the real frequency (ie 11025/22050 instead
   of 44100)

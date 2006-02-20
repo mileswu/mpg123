@@ -83,8 +83,9 @@ static void get_II_stuff(struct frame *fr)
        { 0,3,3,0,0,0,1,1,1,1,1,1,1,1,1,0 } } };
 
   int table,sblim;
-  static struct al_table *tables[4] = { alloc_0, alloc_1, alloc_2, alloc_3 };
-  static int sblims[4] = { 27 , 30 , 8, 12 };
+  static struct al_table *tables[5] = 
+       { alloc_0, alloc_1, alloc_2, alloc_3 , alloc_4 };
+  static int sblims[5] = { 27 , 30 , 8, 12 , 30 };
 
   if(fr->lsf)
     table = 4;
@@ -138,15 +139,6 @@ void read_frame_init (void)
 
 int read_frame(struct frame *fr)
 {
-  static long fs[3][16] = {
-    { 0 , 104, 156, 182, 208, 261, 313, 365, 417, 522, 626, 731, 835, 1044, 1253, },
-    { 0 , 96 , 144, 168, 192, 240, 288, 336, 384, 480, 576, 672, 768, 960 , 1152, },
-    { 0 , 144, 216, 252, 288, 360, 432, 504, 576, 720, 864, 1008, 1152, 1440, 1728 } };
-
-/*
-  static int jsb_table[3][4] =  { { 4, 8, 12, 16 }, { 4, 8, 12, 16}, { 0, 4, 8, 16} };
-*/
-
   static unsigned long newhead;
   static unsigned long firsthead=0;
 
@@ -188,11 +180,12 @@ int read_frame(struct frame *fr)
     fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
 #endif
 
-    if( (newhead & 0xffe00000) != 0xffe00000)
-    {
-      fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
+init_resync:
+    if( (newhead & 0xffe00000) != 0xffe00000) {
+      if (!quiet)
+        fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
               newhead,ftell(filept)-4);
-      if (tryresync && oldhead) {
+      if (tryresync) {
             /* Read more bytes until we find something that looks
                reasonably like a valid header.  This is not a
                perfect strategy, but it should get us back on the
@@ -207,8 +200,13 @@ int read_frame(struct frame *fr)
           if (fread(&hbuf[3],1,1,filept) != 1)
 #endif
             return 0;
-          newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
-                    ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
+
+          /* This is faster than combining newhead from scratch */
+          newhead = ((newhead << 8) | hbuf[3]) & 0xffffffff;
+
+          if (!oldhead)
+            goto init_resync;       /* "considered harmful", eh? */
+
         } while ((newhead & HDRCMPMASK) != (oldhead & HDRCMPMASK)
               && (newhead & HDRCMPMASK) != (firsthead & HDRCMPMASK));
         if (!quiet)
@@ -288,9 +286,9 @@ int read_frame(struct frame *fr)
         get_II_stuff(fr);
         fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ?
                          (fr->mode_ext<<2)+4 : fr->II_sblimit;
-/* can't work for MPEG 2.0 -> (Freq is new) */
-        framesize = fs[fr->sampling_frequency&0x3][fr->bitrate_index]-4;
-        framesize += fr->padding;
+        framesize = (long) tabsel_123[fr->lsf][1][fr->bitrate_index] * 144000;
+        framesize /= freqs[fr->sampling_frequency];
+        framesize += fr->padding - 4;
         break;
       case 3:
         if(fr->lsf)
@@ -314,7 +312,7 @@ int read_frame(struct frame *fr)
 #endif
         break; 
       default:
-        fprintf(stderr,"Sorry, unknow layer type.\n"); 
+        fprintf(stderr,"Sorry, unknown layer type.\n"); 
         return (0);
     }
   }
@@ -343,6 +341,22 @@ int read_frame(struct frame *fr)
 
   return 1;
 }
+
+#ifdef MPG123_REMOTE
+void print_rheader(struct frame *fr)
+{
+	static char *modes[4] = { "Stereo", "Joint-Stereo", "Dual-Channel", "Single-Channel" };
+	static char *layers[4] = { "Unknown" , "I", "II", "III" };
+	static char *mpeg_type[2] = { "1.0" , "2.0" };
+
+	/* version, layer, freq, mode, channels, bitrate, BPF */
+	fprintf(stderr,"@I %s %s %ld %s %d %d %d\n",
+			mpeg_type[fr->lsf],layers[fr->lay],freqs[fr->sampling_frequency],
+			modes[fr->mode],fr->stereo,
+			tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index],
+			fsize+4);
+}
+#endif
 
 void print_header(struct frame *fr)
 {

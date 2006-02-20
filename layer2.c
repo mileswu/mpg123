@@ -246,7 +246,7 @@ int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
     {
       if(single >= 0)
       {
-        clip += (fr->synth) (fraction[single][j],0,pcm_sample+pcm_point);
+        clip += (fr->synth_mono) (fraction[single][j],pcm_sample+pcm_point);
       }
       else {
           clip += (fr->synth) (fraction[0][j],0,pcm_sample+pcm_point);

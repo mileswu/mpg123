@@ -5,7 +5,7 @@
  * All rights reserved. See also 'README'
  *
  * - I'm currently working on that .. needs a few more optimizations,
- *   though the code is now fast enough to run in realtime on a 133Mhz 486
+ *   though the code is now fast enough to run in realtime on a 100Mhz 486
  * - a few personal notes are in german .. 
  *
  * used source: 
@@ -537,7 +537,7 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
   unsigned char *pnt;
   int i,j;
   unsigned int slen;
-  int nnul;
+  int n = 0;
   int numbits = 0;
 
   static unsigned char stab[3][6][4] = {
@@ -554,21 +554,15 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
     slen = n_slen2[gr_info->scalefac_compress];
 
   gr_info->preflag = (slen>>15) & 0x1;
- 
+
+  n = 0;  
   if( gr_info->block_type == 2 ) {
-    if(gr_info->mixed_block_flag) {
-      nnul = 5;
-      pnt = stab[2][(slen>>12)&0x7];
-    }
-    else {
-      nnul = 3;
-      pnt = stab[1][(slen>>12)&0x7];
-    }
+    n++;
+    if(gr_info->mixed_block_flag)
+      n++;
   }
-  else {
-    nnul = 1;
-    pnt = stab[0][(slen>>12)&0x7];
-  }
+
+  pnt = stab[n][(slen>>12)&0x7];
 
   for(i=0;i<4;i++) {
     int num = slen & 0x7;
@@ -583,7 +577,9 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
         *scf++ = 0;
     }
   }
-  for(i=0;i<nnul;i++)
+  
+  n = (n << 1) + 1;
+  for(i=0;i<n;i++)
     *scf++ = 0;
 
   return numbits;
@@ -594,7 +590,6 @@ static int pretab2[22] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 /*
  * don't forget to apply the same changes to III_dequantize_sample_ms() !!! 
- * (note: maxband stuff would only be necessary for second channel and I-stereo)
  */
 static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
    struct gr_info_s *gr_info,int sfreq,int part2bits)
@@ -613,7 +608,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
     l3 = ((576>>1)-bv)>>1;   
 /*
  * we may lose the 'odd' bit here !! 
- * check this later gain 
+ * check this later again 
  */
     if(bv <= region1) {
       l[0] = bv; l[1] = 0; l[2] = 0;
@@ -725,9 +720,14 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
       register short *val = h->table,a;
 
       while((a=*val++)<0) {
+        part2remain--;
+        if(part2remain < 0) {
+          part2remain++;
+          a = 0;
+          break;
+        }
         if (get1bit())
           val -= a;
-        part2remain--;
       }
 
       for(i=0;i<4;i++) {
@@ -750,11 +750,15 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
         }
         if( (a & (0x8>>i)) ) {
           max[lwin] = cb;
+          part2remain--;
+          if(part2remain < 0) {
+            part2remain++;
+            break;
+          }
           if(get1bit()) 
             *xrpnt = -v;
           else
             *xrpnt = v;
-          part2remain--;
         }
         else
           *xrpnt = 0.0;
@@ -869,9 +873,14 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
       register short *val = h->table,a;
 
       while((a=*val++)<0) {
+        part2remain--;
+        if(part2remain < 0) {
+          part2remain++;
+          a = 0;
+          break;
+        }
         if (get1bit())
           val -= a;
-        part2remain--;
       }
 
       for(i=0;i<4;i++) {
@@ -885,11 +894,15 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
         }
         if ( (a & (0x8>>i)) ) {
           max = cb;
+          part2remain--;
+          if(part2remain < 0) {
+            part2remain++;
+            break;
+          }
           if(get1bit())
             *xrpnt++ = -v;
           else
             *xrpnt++ = v;
-          part2remain--;
         }
         else
           *xrpnt++ = 0.0;
@@ -912,11 +925,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
     getbits(part2remain);
   else if(part2remain < 0) {
     fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-part2remain);
-#if 0
     return 1; /* -> error */
-#else
-    return 0; /* test */
-#endif
   }
   return 0;
 }
@@ -1080,9 +1089,14 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
       register short *val = h->table,a;
 
       while((a=*val++)<0) {
+        part2remain--;
+        if(part2remain < 0) {
+          part2remain++;
+          a = 0;
+          break;
+        }
         if (get1bit())
           val -= a;
-        part2remain--;
       }
 
       for(i=0;i<4;i++) {
@@ -1106,6 +1120,11 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
         }
         if( (a & (0x8>>i)) ) {
           max[lwin] = cb;
+          part2remain--;
+          if(part2remain < 0) {
+            part2remain++;
+            break;
+          }
           if(get1bit()) {
             *xrpnt = *xr0pnt + v;
             *xr0pnt -= v;
@@ -1114,7 +1133,6 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = *xr0pnt - v;
             *xr0pnt += v;
           }
-          part2remain--;
         }
         else
           *xrpnt = *xr0pnt;
@@ -1254,9 +1272,14 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
       register short *val = h->table,a;
 
       while((a=*val++)<0) {
+        part2remain--;
+        if(part2remain < 0) {
+          part2remain++;
+          a = 0;
+          break;
+        }
         if (get1bit())
           val -= a;
-        part2remain--;
       }
 
       for(i=0;i<4;i++) {
@@ -1270,6 +1293,11 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
         }
         if ( (a & (0x8>>i)) ) {
           max = cb;
+          part2remain--;
+          if(part2remain <= 0) {
+            part2remain++;
+            break;
+          }
           if(get1bit()) {
             *xrpnt++ = *xr0pnt + v;
             *xr0pnt++ -= v;
@@ -1278,7 +1306,6 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = *xr0pnt - v;
             *xr0pnt++ += v;
           }
-          part2remain--;
         }
         else
           *xrpnt++ = *xr0pnt++;
@@ -1300,7 +1327,7 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
   if(part2remain > 0 )
     getbits(part2remain);
   else if(part2remain < 0) {
-    fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-part2remain);
+    fprintf(stderr,"mpg123_ms: Can't rewind stream by %d bits!\n",-part2remain);
     return 1; /* -> error */
   }
   return 0;
@@ -1895,8 +1922,7 @@ static void dct12(real *in,real *rawout1,real *rawout2,register real *wi,registe
 }
 
 /*
- * III_hybrid:
- *   we still need a faster DCT for the dct36 
+ * III_hybrid
  */
 static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
    int ch,struct gr_info_s *gr_info)
@@ -1947,6 +1973,9 @@ static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
    }
 }
 
+/*
+ * main layer3 handler
+ */
 int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 {
   int gr, ch, ss,clip=0;

@@ -24,6 +24,7 @@ Uses code (or at least ideas) from:
   Philipp Knirsch (DCT36/manual unroll)
   Thomas Woerner (SGI Audio)
   Damien Clermonte (HP-UX audio fixes)
+  Niclas Lindstrom (OS2 port)
 
 current original distribution site is:
   http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html
@@ -47,7 +48,7 @@ CPU cycles, though the whole code is optimized for 'full' stereo playing.
 
 'Benchmarks': (+/- 2%)
 ----------------------
-(AMD 5x86/133MHZ,ASUS SP3G,256KB cache,DIRTY-TAG installed,(BusLogic SCSI))
+(AMD 486/133MHZ,ASUS SP3G,256KB cache,DIRTY-TAG installed,(BusLogic SCSI))
 (Layer3, 112Kbit/s, Joint-Stereo stream (partially MS stereo, no I-stereo))
 (Compiled with: -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486
    -fomit-frame-pointer -funroll-all-loops -finline-functions -ffast-math)
@@ -73,15 +74,15 @@ You will find code from the mpegaudio package in:
    layer3.c
    common.c
    mpg123.h
-   mpg123.c
 I also often used the same variable names in the rewritten parts.
 
 In the current layer3.c I'm using a DCT36 from Jeff Tsay's 
 (ctsay@pasteur.eecs.berkeley.edu) maplay 1.2+ package. His code is
 under GPL .. I also tried the enhancement from Mikko Tommila. His
 code is also in layer3.c (but it's disabled at the moment, because
-it was slightly slower than the unrolled 9 point DCT on MY system)
-Theoretically it should be faster. You may try it on your system.
+it was slightly slower than the unrolled 9 point DCT (at least on 
+_my_ system)). Theoretically it should be faster. You may try it on
+your system.
 
 The output is always 'two channel interleaved'. If the input is a
 a mono-stream or single-channel is enabled, the player duplicates
@@ -96,7 +97,7 @@ have fun,
 ----------------------------------------------------------------------------
 
 Just for info:
-    I'm also working on a DSP port for this package.
+    I'm also working (but not at the moment) on a DSP port for this package. 
     A first testversion of the layer-2 part is finished and seems
     to work in realtime with my 20MHZ ADSP-2115 
 
@@ -106,6 +107,7 @@ Copyrights (c) 1995,1996,1997 of all changes/modifications and
 of the new code by Michael Hipp. All rights reserved.
 Copyrights (c) 1997 of several enhancements by Oliver Fromme.
 See the packages 'maplay 1.2(+)' and 'mpegaudio' for their copy-policies.
+Copyrights (c) 1997 of the OS2 specific parts by Niclas Lindstrom
 
 known bugs:
   layer 3 i-stereo not heavily tested

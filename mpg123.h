@@ -9,6 +9,13 @@
 
 #include        <unistd.h>
 
+#ifdef OS2
+#include <float.h>
+#endif
+
+#define MPG123_REMOTE
+#define SHUFFLESUPPORT
+
 #ifdef SGI
 #include <audio.h>
 #endif
@@ -16,7 +23,7 @@
 #include "xfermem.h"
 
 #ifdef SUNOS
-#define memmove bcopy
+#define memmove(dst,src,size) bcopy(src,dst,size)
 #endif
 
 #ifdef REAL_IS_FLOAT
@@ -54,6 +61,9 @@
 #define         MPG_MD_JOINT_STEREO     1
 #define         MPG_MD_DUAL_CHANNEL     2
 #define         MPG_MD_MONO             3
+
+#define MAXOUTBURST 32768
+
 
 struct al_table 
 {

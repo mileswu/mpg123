@@ -1,11 +1,9 @@
 /* 
- * Mpeg Layer audio decoder V0.59h
+ * Mpeg Layer audio decoder V0.59i
  * -------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
  *
- * used sources:
- *   mpegaudio package
  */
 
 #include <stdlib.h>
@@ -25,6 +23,14 @@
 static void usage(char *dummy);
 static void print_title(void);
 
+static long rates[3][3] = { 
+ { 32000,44100,48000 } ,
+ { 16000,22050,24000 } ,
+ {  8000,11025,12000 } 
+};
+
+int supported_rates = 0;
+
 int outmode = DECODE_AUDIO;
 
 char *listname = NULL;
@@ -35,12 +41,16 @@ int quiet      = FALSE;
 int verbose    = 0;
 int doublespeed= 0;
 int halfspeed  = 0;
+int shuffle = 0;
 int change_always = 1;
 int force_8bit = 0;
 int force_frequency = -1;
 long numframes = -1;
 long startFrame= 0;
 int usebuffer  = 0;
+#ifdef MPG123_REMOTE
+int remote     = 0;
+#endif
 int buffer_fd[2];
 int buffer_pid;
 
@@ -50,11 +60,44 @@ static void catch_child(void)
 }
 
 static int intflag = FALSE;
+#ifdef MPG123_REMOTE
+static int remflag = FALSE;
+#endif
 
 static void catch_interrupt(void)
 {
   intflag = TRUE;
 }
+
+#ifdef MPG123_REMOTE
+static void catch_remote(void)
+{
+	remflag = TRUE;
+	intflag = TRUE;
+	if(usebuffer)
+		kill(buffer_pid,SIGINT);    
+}
+
+static char remote_buffer[1024];
+
+void print_rheader(struct frame *fr);
+
+char *handle_remote(void)
+{
+	fgets(remote_buffer,1024,stdin);
+	remote_buffer[strlen(remote_buffer)-1]=0;
+  
+	switch(remote_buffer[0]) {
+		case 'P':
+			return remote_buffer +1;        
+	}
+
+	if(usebuffer)
+		kill(buffer_pid,SIGINT);    
+
+	return NULL;    
+}
+#endif
 
 static struct frame fr;
 static struct audio_info_struct ai;
@@ -69,6 +112,7 @@ void init_output(void)
   if (init_done)
     return;
   init_done = TRUE;
+#ifndef OS2
   if (usebuffer) {
     unsigned int bufferbytes;
     if (usebuffer < 32)
@@ -95,10 +139,13 @@ void init_output(void)
     }
   }
   else {
+#endif
     if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2))) {
       perror ("malloc()");
       exit (1);
+#ifndef OS2
     }
+#endif
   }
 
   if(outmode==DECODE_AUDIO) {
@@ -114,6 +161,18 @@ char *get_next_file (int argc, char *argv[])
 {
     static FILE *listfile = NULL;
     static char line[1024];
+
+#ifdef SHUFFLESUPPORT
+	static int ord[2048];
+	int temp, randomized,pos;
+	static char initialized=0;
+	time_t t;
+#endif
+
+#ifdef MPG123_REMOTE
+	if (remote)
+		return handle_remote();
+#endif
 
     if (listname || listfile) {
         if (!listfile) {
@@ -146,9 +205,31 @@ char *get_next_file (int argc, char *argv[])
             }
         } while (listfile);
     }
+
+#ifdef SHUFFLESUPPORT
+	if(!initialized){
+		for(pos=0;pos<=argc; pos++)   ord[pos]=pos;
+		initialized=1;
+	}
+	if(shuffle){
+		fprintf(stderr, "\nShuffle play - %u file(s) in loop.\n", argc-loptind);
+		srandom(time(&t));
+		for(pos=loptind;pos<argc;pos++){
+			randomized=(random()%(argc-pos))+pos;
+			temp=ord[pos];
+			ord[pos]=ord[randomized];
+			ord[randomized]=temp;
+		}
+		shuffle=0;
+	}
+	if (loptind < argc)
+		return (argv[ord[loptind++]]);
+	return (NULL);
+#else
     if (loptind < argc)
     	return (argv[loptind++]);
     return (NULL);
+#endif
 }
 
 void set_synth (char *arg)
@@ -216,22 +297,31 @@ topt opts[] = {
     {'v', "var",         0,        set_varmode, &varmode,    TRUE},
 #endif
     {'b', "buffer",      GLO_ARG | GLO_NUM,  0, &usebuffer,  0},
+#ifdef MPG123_REMOTE
+	{'R', "remote",      0,                  0,  &remote,     TRUE},
+#endif
     {'d', "doublespeed", GLO_ARG | GLO_NUM,  0, &doublespeed,0},
     {'h', "halfspeed",   GLO_ARG | GLO_NUM,  0, &halfspeed,  0},
     {'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
     {'@', "list",        GLO_ARG | GLO_CHAR, 0, &listname,   0},
+#ifdef SHUFFLESUPPORT
+		/* 'z' comes from the the german word 'zufall' (eng: random) */
+	{'z', "shuffle",         0,        0, &shuffle,    1},
+#endif
     {'?', "help",        0,              usage, 0,           0}
 };
 
 int main(int argc, char *argv[])
 {
     int result, stereo, clip=0;
-    int crc_error_count, total_error_count;
-    unsigned int old_crc;
     unsigned long frameNum = 0;
     char *fname;
     struct timeval start_time, now;
     unsigned long secdiff;
+
+#ifdef OS2
+        _wildcard(&argc,&argv);
+#endif
 
 #ifdef SET_PRIO
 	int mypid = getpid();
@@ -262,9 +352,53 @@ int main(int argc, char *argv[])
     if (loptind >= argc && !listname)
       usage(NULL);
 
+#ifdef MPG123_REMOTE
+	if (remote){
+		verbose = 0;        
+		quiet = 1;
+		catchsignal(SIGUSR1, catch_remote);
+		fprintf(stderr,"@R MPG123\n");        
+	}
+#endif
+
     if (!quiet)
       print_title();
 
+
+	{
+		int fmts;
+		int i,j;
+
+		struct audio_info_struct ai;
+
+		audio_info_struct_init(&ai);
+		audio_open(&ai);
+		fmts = audio_get_formats(&ai);
+
+        supported_rates = 0;
+		for(i=0;i<3;i++) {
+          for(j=0;j<3;j++) {
+            ai.rate = rates[i][j];
+            audio_rate_best_match(&ai);
+            /* allow about 2% difference */
+            if( ((rates[i][j]*98) < (ai.rate*100)) &&
+                ((rates[i][j]*102) > (ai.rate*100)) )
+              supported_rates |= 1<<(i*3+j);
+          }	
+        }
+		
+		audio_close(&ai);
+
+		if(!force_8bit && !(fmts & AUDIO_FORMAT_SIGNED_16))
+			force_8bit = 1;
+
+		if(force_8bit && !(fmts & AUDIO_FORMAT_ULAW_8)) {
+			fprintf(stderr,"No supported audio format found!\n");
+			exit(1);
+		}
+	}
+
+	
     if(force_8bit) {
 #if 0
       ai.format = AUDIO_FORMAT_UNSIGNED_8;
@@ -328,12 +462,14 @@ int main(int argc, char *argv[])
       for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) 
       {
          stereo = fr.stereo;
-         crc_error_count   = 0;
-         total_error_count = 0;
 
          if((fr.header_change && change_always) || !frameNum)
          {
            int reset_audio = 0;
+#ifdef MPG123_REMOTE
+           if(remote)
+				print_rheader(&fr);
+#endif
            if (!quiet && !frameNum)
              print_header(&fr);
            if(force_frequency < 0) {
@@ -358,8 +494,9 @@ int main(int argc, char *argv[])
          }
          numframes--;
 
-         if (fr.error_protection)
-            old_crc = getbits(16);
+         if (fr.error_protection) {
+            getbits(16); /* crc */
+         }
 
          switch(fr.lay)
          {
@@ -373,10 +510,11 @@ int main(int argc, char *argv[])
              clip = do_layer1(&fr,outmode,&ai);
              break;
          }
+#ifndef OS2
          if (usebuffer) {
            if (!intflag) {
              buffermem->freeindex =
-                   (buffermem->freeindex + pcm_point * 2) % buffermem->size;
+                   (buffermem->freeindex + pcm_point) % buffermem->size;
              if (buffermem->wakeme[XF_READER])
                xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
            }
@@ -390,12 +528,14 @@ int main(int argc, char *argv[])
            if (intflag)
              break;
          }
-
+#endif
          if(verbose) {
            if (verbose > 1 || !(frameNum & 0xf))
              fprintf(stderr, "\r{%4lu} ",frameNum);
+#ifndef OS2
            if (verbose > 1 && usebuffer)
              fprintf (stderr, "%7d ", xfermem_get_usedspace(buffermem));
+#endif
          }
          if(clip > 0 && checkrange)
            fprintf(stderr,"%d samples clipped\n", clip);
@@ -408,6 +548,14 @@ int main(int argc, char *argv[])
         fprintf(stderr,"[%d:%02d] Decoding of %s finished.\n", secs / 60,
                 secs % 60, fname ? fname : "standard input");
       }
+#ifdef MPG123_REMOTE
+	if(remote)
+		fprintf(stderr,"@R MPG123\n");        
+	if (remflag) {
+		intflag = FALSE;
+		remflag = FALSE;
+	}
+#endif
       if (intflag) {
         gettimeofday (&now, NULL);
         secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
@@ -420,16 +568,19 @@ int main(int argc, char *argv[])
         intflag = FALSE;
       }
     }
-
+#ifndef OS2
     if (usebuffer) {
       xfermem_done_writer (buffermem);
       waitpid (buffer_pid, NULL, 0);
       xfermem_done (buffermem);
     }
     else {
+#endif
       audio_flush(outmode, &ai);
       free (pcm_sample);
+#ifndef OS2
     }
+#endif
 
     if(outmode==DECODE_AUDIO)
       audio_close(&ai);
@@ -461,6 +612,7 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -d n  play every n'th frame only     -h n  play every frame n times\n");
    fprintf(stderr,"   -0    decode channel 0 (left) only   -1    decode channel 1 (right) only\n");
    fprintf(stderr,"   -m    mix both channels (mono)       -p p  use HTTP proxy p [$HTTP_PROXY]\n");
+   fprintf(stderr,"   -@ f  read filenames/URLs from f     -z    shuffle play (with wildcards)\n");
    fprintf(stderr,"   -@ f  read filenames/URLs from f\n");
    fprintf(stderr,"See the manpage %s(1) for more information.\n", prgName);
    exit(1);

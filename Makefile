@@ -29,6 +29,7 @@ nothing-specified:
 	@echo "make dec             DEC Unix (tested: 3.2 and 4.0), OSF/1"
 	@echo "make ultrix          DEC Ultrix (tested: 4.4)"
 	@echo "make aix             IBM AIX (tested: 4.1)"
+	@echo "make os2             IBM OS/2"
 	@echo "make generic         try this one if your system isn't listed above"
 	@echo ""
 	@echo "Please read the file INSTALL for additional information."
@@ -37,8 +38,8 @@ nothing-specified:
 linux-devel:
 	$(MAKE) OBJECTS='decode_i386.o dct64_i386.o' \
         CC=gcc LDFLAGS= \
-        CFLAGS='-DDEBUG_GETBITS -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486 \
-            -fomit-frame-pointer -funroll-all-loops \
+        CFLAGS='-DREAL_IS_FLOAT -DLINUX -Wall -g -m486 \
+            -funroll-all-loops \
             -finline-functions -ffast-math' \
         mpg123
 
@@ -106,6 +107,14 @@ aix:
 	$(MAKE) LDFLAGS= OBJECTS='decode.o dct64.o' \
 		CFLAGS='-O -DAIX' \
 		mpg123
+os2:
+	$(MAKE) CC=gcc LDFLAGS= \
+		OBJECTS='decode_i386.o dct64_i386.o' \
+		CFLAGS='-DREAL_IS_FLOAT -DOS2 -Wall -O2 -m486 \
+		-fomit-frame-pointer -funroll-all-loops \
+		-finline-functions -ffast-math' \
+		LIBS='-los2me -lsocket' \
+		mpg123.exe
 
 generic:
 	$(MAKE) LDFLAGS= OBJECTS='decode.o dct64.o' \
@@ -119,6 +128,14 @@ mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
 		decode_4to1.o getlopt.o httpget.o xfermem.o $(OBJECTS) \
 		-o mpg123 -lm $(AUDIO_LIB)
+
+mpg123.exe: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
+	tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
+	getlopt.o httpget.o Makefile
+	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o \
+		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
+		decode_4to1.o getlopt.o httpget.o $(OBJECTS) \
+		-o mpg123.exe -lm $(LIBS)
 
 tst:
 	gcc $(CFLAGS) -S decode.c

@@ -137,7 +137,7 @@ FILE *http_open (char *url)
 			proxyip = INADDR_NONE;
 	}
 	
-	if ((linelength = strlen(url)+100) < 1024)
+	if ((linelength = strlen(url)+175) < 1024)
 		linelength = 1024;
 	if (!(request = malloc(linelength)) || !(purl = malloc(1024))) {
 		fprintf (stderr, "malloc() failed, out of memory.\n");
@@ -164,7 +164,7 @@ FILE *http_open (char *url)
 				free (host);
 			strcat (request, sptr);
 		}
-		sprintf (agent, " HTTP/1.0\r\nUser-Agent: %s/%s\r\n\r\n",
+		sprintf (agent, " HTTP/1.0\r\nUser-Agent: %s/%s\r\nAccept: text/html\r\nAccept: audio/x-mpeg\r\nAccept: audio/x-mpeg3\r\n\r\n" ,
 			prgName, prgVersion);
 		strcat (request, agent);
 		server.sin_family = AF_INET;
@@ -202,7 +202,7 @@ FILE *http_open (char *url)
 			readstring (request, linelength-1, myfile);
 			if (!strncmp(request, "Location:", 9))
 				strncpy (purl, request+10, 1023);
-		} while (request[0] != '\r' && request[0] != 'n');
+		} while (request[0] != '\r' && request[0] != '\n');
 	} while (relocate && purl[0] && numrelocs++ < 5);
 	if (relocate) {
 		fprintf (stderr, "Too many HTTP relocations.\n");
