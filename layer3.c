@@ -2051,17 +2051,13 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
     for(ss=0;ss<SSLIMIT;ss++) {
       if(single >= 0) {
-        int i;
-        short *pcm = pcm_sample+pcm_point;
-        clip += (fr->synth)(hybridOut[0][ss],0,pcm);
-        for(i=0;i<32;i++,pcm+=2)
-          pcm[1] = pcm[0];
+        clip += (fr->synth_mono)(hybridOut[0][ss],pcm_sample+pcm_point);
       }
       else {
         clip += (fr->synth)(hybridOut[0][ss],0,pcm_sample+pcm_point);
         clip += (fr->synth)(hybridOut[1][ss],1,pcm_sample+pcm_point);
       }
-      pcm_point += 64;
+      pcm_point += fr->block_size;
 
 #ifdef VARMODESUPPORT
       if (playlimit < 128) {

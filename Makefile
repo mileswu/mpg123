@@ -133,6 +133,7 @@ decode_4to1.o:	mpg123.h
 decode_i386.o:	mpg123.h
 common.o:	mpg123.h tables.h
 mpg123.o:	mpg123.h getlopt.h xfermem.h version.h
+mpg123.h:	audio.h
 audio.o:	mpg123.h
 buffer.o:	mpg123.h xfermem.h
 getbits.o:	mpg123.h

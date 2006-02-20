@@ -19,11 +19,57 @@
   else if( (sum) < -32768.0) { *(samples) = -0x8000; (clip)++; } \
   else { *(samples) = sum; }
 
-int synth_4to1(real *bandPtr,int channel,short *samples)
+int synth_4to1_8bit(real *bandPtr,int channel,unsigned char *samples)
+{
+  short samples_tmp[16];
+  short *tmp1 = samples_tmp + channel;
+  int i,ret;
+
+  samples += channel;
+  ret = synth_4to1(bandPtr,channel,(unsigned char *) samples_tmp);
+
+  for(i=0;i<8;i++) {
+    *samples = conv16to8[*tmp1>>4];
+    samples += 2;
+    tmp1 += 2;
+  }
+
+  return ret;
+}
+
+int synth_4to1_8bit_mono(real *bandPtr,unsigned char *samples)
+{
+  short samples_tmp[16];
+  short *tmp1 = samples_tmp;
+  int i,ret;
+
+  ret = synth_4to1(bandPtr,0,(unsigned char *) samples_tmp);
+
+  for(i=0;i<8;i++) {
+    *samples++ = conv16to8[*tmp1>>4];
+    *samples++ = conv16to8[*tmp1>>4];
+    tmp1 += 2;
+  }
+
+  return ret;
+}
+
+int synth_4to1_mono(real *bandPtr,unsigned char *samples)
+{
+  int i,ret = synth_4to1(bandPtr,0,samples);
+  for(i=0;i<8;i++) {
+    ((short *)samples)[1] = ((short *)samples)[0];
+    samples+=4;
+  }
+  return ret;
+}
+
+int synth_4to1(real *bandPtr,int channel,unsigned char *out)
 {
   static real buffs[2][2][0x110];
   static const int step = 2;
   static int bo = 1;
+  short *samples = (short *) out;
 
   real *b0,(*buf)[0x110];
   int clip = 0; 
@@ -75,9 +121,11 @@ int synth_4to1(real *bandPtr,int channel,short *samples)
       sum -= *window++ * *b0++;
 
       WRITE_SAMPLE(samples,sum,clip); samples += step;
+#if 0
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
+#endif
     }
 
     {
@@ -91,9 +139,11 @@ int synth_4to1(real *bandPtr,int channel,short *samples)
       sum += window[0xC] * b0[0xC];
       sum += window[0xE] * b0[0xE];
       WRITE_SAMPLE(samples,sum,clip); samples += step;
+#if 0
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
+#endif
       b0-=0x40,window-=0x80;
     }
     window += bo1<<1;
@@ -119,9 +169,11 @@ int synth_4to1(real *bandPtr,int channel,short *samples)
       sum -= *(--window) * *b0++;
 
       WRITE_SAMPLE(samples,sum,clip); samples += step;
+#if 0
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
+#endif
     }
   }
 

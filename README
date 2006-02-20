@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59g                                * 
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59h                                * 
 *                                                                    *
 * (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                      *
 * Layer-3 realtime only with a 'fast' machine                        *
@@ -48,7 +48,7 @@ CPU cycles, though the whole code is optimized for 'full' stereo playing.
 'Benchmarks': (+/- 2%)
 ----------------------
 (AMD 5x86/133MHZ,ASUS SP3G,256KB cache,DIRTY-TAG installed,(BusLogic SCSI))
-(Layer3, 112Kbit/s, Joint-Stereo stream (paritally MS stereo, no I-stereo))
+(Layer3, 112Kbit/s, Joint-Stereo stream (partially MS stereo, no I-stereo))
 (Compiled with: -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486
    -fomit-frame-pointer -funroll-all-loops -finline-functions -ffast-math)
 
@@ -86,7 +86,7 @@ Theoretically it should be faster. You may try it on your system.
 The output is always 'two channel interleaved'. If the input is a
 a mono-stream or single-channel is enabled, the player duplicates
 the channel. Currently, only (very simple) audiosupport for
-Linux,HP7xx,SGI and SunOS/Solaris,FreeBSD systems.
+Linux,HP7xx,SGI,SunOS/Solaris and FreeBSD systems.
 I have tested the program with a lot of teststreams, but it's very 
 likely, that there are still a few bugs.
 

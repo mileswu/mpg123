@@ -37,6 +37,8 @@
 #define VOXWARE
 #endif
 
+#include "audio.h"
+
 /* AUDIOBUFSIZE = n*64 with n=1,2,3 ...  */
 #define		AUDIOBUFSIZE		16384
 
@@ -53,9 +55,6 @@
 #define         MPG_MD_DUAL_CHANNEL     2
 #define         MPG_MD_MONO             3
 
-enum { AUDIO_OUT_HEADPHONES,AUDIO_OUT_INTERNAL_SPEAKER,AUDIO_OUT_LINE_OUT };
-enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT, DECODE_BUFFER };
-
 struct al_table 
 {
   short bits;
@@ -64,7 +63,8 @@ struct al_table
 
 struct frame {
     struct al_table *alloc;
-    int (*synth)(real *,int,short *);
+    int (*synth)(real *,int,unsigned char *);
+    int (*synth_mono)(real *,unsigned char *);
     int stereo;
     int jsbound;
     int single;
@@ -72,6 +72,8 @@ struct frame {
     int lsf;
     int mpeg25;
     int down_sample;
+    int header_change;
+    int block_size;
     int lay;
     int error_protection;
     int bitrate_index;
@@ -85,26 +87,6 @@ struct frame {
     int emphasis;
 };
 
-#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(VOXWARE)
-#define AUDIO_USES_FD
-#endif
-
-struct audio_info_struct
-{
-#ifdef AUDIO_USES_FD
-  int fn; /* filenumber */
-#endif
-#ifdef SGI
-  ALconfig config;
-  ALport port;
-#endif
-  long rate;
-  int gain;
-  int output;
-  char *device;
-  int channels;
-};
-
 extern int outmode;  
 extern int tryresync;
 extern int quiet;
@@ -114,7 +96,6 @@ extern int buffer_fd[2];
 extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
 
-extern int audio_play_samples(struct audio_info_struct *,short *,int);
 extern void buffer_loop(struct audio_info_struct *ai);
 
 /* ------ Declarations from "httpget.c" ------ */
@@ -131,7 +112,7 @@ extern unsigned int   get1bit(void);
 extern unsigned int   getbits(int);
 extern unsigned int   getbits_fast(int);
 
-extern short *pcm_sample;
+extern unsigned char *pcm_sample;
 extern int pcm_point;
 extern int audiobufsize;
 
@@ -177,9 +158,18 @@ extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
 extern void print_header(struct frame *);
 extern void set_pointer(long);
-extern int synth_1to1 (real *,int,short *);
-extern int synth_2to1 (real *,int,short *);
-extern int synth_4to1 (real *,int,short *);
+extern int synth_1to1 (real *,int,unsigned char *);
+extern int synth_1to1_8bit (real *,int,unsigned char *);
+extern int synth_2to1 (real *,int,unsigned char *);
+extern int synth_2to1_8bit (real *,int,unsigned char *);
+extern int synth_4to1 (real *,int,unsigned char *);
+extern int synth_4to1_8bit (real *,int,unsigned char *);
+extern int synth_1to1_mono (real *,unsigned char *);
+extern int synth_1to1_8bit_mono (real *,unsigned char *);
+extern int synth_2to1_mono (real *,unsigned char *);
+extern int synth_2to1_8bit_mono (real *,unsigned char *);
+extern int synth_4to1_mono (real *,unsigned char *);
+extern int synth_4to1_8bit_mono (real *,unsigned char *);
 extern void rewindNbits(int bits);
 extern int  hsstell(void);
 extern void set_pointer(long);
@@ -189,14 +179,10 @@ extern void huffman_count1(int,int *);
 extern void init_layer3(int);
 extern void init_layer2(void);
 extern void make_decode_tables(long scale);
+extern void make_conv16to8_table(int);
 extern void dct64(real *,real *,real *);
 
-extern int audio_open(struct audio_info_struct *);
-extern int audio_set_rate(struct audio_info_struct *);
-extern int audio_set_channels(struct audio_info_struct *);
-extern int audio_write_sample(struct audio_info_struct *,short *,int);
-extern int audio_close(struct audio_info_struct *);
-
+extern unsigned char *conv16to8;
 extern long freqs[7];
 extern real muls[27][64];
 extern real decwin[512+32];

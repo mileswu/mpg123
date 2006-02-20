@@ -45,7 +45,7 @@ struct ibuf ibufs[2];
 struct ibuf *cibuf;
 int ibufnum=0;
 
-short *pcm_sample;
+unsigned char *pcm_sample;
 int pcm_point = 0;
 int audiobufsize = AUDIOBUFSIZE;
 
@@ -101,13 +101,13 @@ void audio_flush(int outmode, struct audio_info_struct *ai)
   if (pcm_point) {
     switch (outmode) {
       case DECODE_STDOUT:
-        write (1, pcm_sample, pcm_point * 2);
+        write (1, pcm_sample, pcm_point);
         break;
       case DECODE_AUDIO:
         audio_play_samples (ai, pcm_sample, pcm_point);
         break;
       case DECODE_BUFFER:
-        write (buffer_fd[1], pcm_sample, pcm_point * 2);
+        write (buffer_fd[1], pcm_sample, pcm_point);
         break;
     }
     pcm_point = 0;
@@ -183,6 +183,7 @@ int read_frame(struct frame *fr)
 
   if(oldhead != newhead || !oldhead)
   {
+    fr->header_change = 1;
 #if 0
     fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
 #endif
@@ -317,6 +318,8 @@ int read_frame(struct frame *fr)
         return (0);
     }
   }
+  else
+    fr->header_change = 0;
 
   fsizeold=fsize;	/* for Layer3 */
   bsbufold = bsbuf;	

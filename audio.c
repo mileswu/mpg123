@@ -27,20 +27,11 @@
 
 int audio_open(struct audio_info_struct *ai)
 {
-  int fmts = AFMT_S16_LE;
-  int dsp_samplesize = 16;
-  int dsp_stereo;
-  int dsp_speed;
-
   if(!ai)
     return -1;
 
-  dsp_stereo = ai->channels - 1;
-
   if(ai->rate == -1)
-    dsp_speed = 44100;
-  else
-    dsp_speed = ai->rate;
+    ai->rate = 44100;
 
   if(!ai->device)
     ai->device = "/dev/dsp";
@@ -53,10 +44,10 @@ int audio_open(struct audio_info_struct *ai)
     exit(1);
   }
 
-  ioctl(ai->fn, SNDCTL_DSP_SAMPLESIZE,&dsp_samplesize);
-  ioctl(ai->fn, SNDCTL_DSP_STEREO, &dsp_stereo);
-  ioctl(ai->fn, SNDCTL_DSP_SPEED, &dsp_speed);
-  ioctl(ai->fn, SNDCTL_DSP_SETFMT, &fmts);
+  if(audio_reset_parameters(ai) < 0) {
+    close(ai->fn);
+    return -1;
+  }
 
   if(ai->gain >= 0) {
     int e,mask;
@@ -80,6 +71,19 @@ int audio_open(struct audio_info_struct *ai)
   return ai->fn;
 }
 
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+  int ret;
+  ret = ioctl(ai->fn,SNDCTL_DSP_RESET,NULL);
+  if(ret >= 0)
+    ret = audio_set_format(ai);
+  if(ret >= 0)
+    ret = audio_set_channels(ai);
+  if(ret >= 0)
+    ret = audio_set_rate(ai);
+  return ret;
+}
+
 int audio_set_rate(struct audio_info_struct *ai)
 {
   int dsp_samplesize;
@@ -87,9 +91,8 @@ int audio_set_rate(struct audio_info_struct *ai)
   if(ai->rate >= 0)
   {
     dsp_samplesize = ai->rate;
-    ioctl(ai->fn, SNDCTL_DSP_SPEED,&dsp_samplesize);
+    return ioctl(ai->fn, SNDCTL_DSP_SPEED,&dsp_samplesize);
   }
-
   return 0;
 }
 
@@ -99,9 +102,59 @@ int audio_set_channels(struct audio_info_struct *ai)
   return ioctl(ai->fn, SNDCTL_DSP_STEREO, &chan);
 }
 
-int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+int audio_set_format(struct audio_info_struct *ai)
 {
-  return write(ai->fn,buf,len*2);
+  int sample_size,fmts;
+
+  switch(ai->format) {
+    case -1:
+    case AUDIO_FORMAT_SIGNED_16:
+    default:
+      fmts = AFMT_S16_LE;
+      sample_size = 16;
+      break;
+    case AUDIO_FORMAT_UNSIGNED_8:
+      fmts = AFMT_U8;
+      sample_size = 8;
+      break;
+    case AUDIO_FORMAT_SIGNED_8:
+      fmts = AFMT_S8;
+      sample_size = 8;
+      break;
+    case AUDIO_FORMAT_ULAW_8:
+      fmts = AFMT_MU_LAW;
+      sample_size = 8;
+      break;
+  }
+  if(ioctl(ai->fn, SNDCTL_DSP_SAMPLESIZE,&sample_size) < 0)
+    return -1;
+  return ioctl(ai->fn, SNDCTL_DSP_SETFMT, &fmts);
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  int ret = 0;
+  int fmts;
+
+  if(ioctl(ai->fn,SNDCTL_DSP_GETFMTS,&fmts) < 0)
+    return -1;
+
+  if(fmts & AFMT_MU_LAW)
+    ret |= AUDIO_FORMAT_ULAW_8;
+  if(fmts & AFMT_S16_LE)
+    ret |= AUDIO_FORMAT_SIGNED_16;
+  if(fmts & AFMT_U8)
+    ret |= AUDIO_FORMAT_UNSIGNED_8;
+  if(fmts & AFMT_S8)
+    ret |= AUDIO_FORMAT_SIGNED_8;
+
+  return ret;
+}
+
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
+{
+  return write(ai->fn,buf,len);
 }
 
 int audio_close(struct audio_info_struct *ai)
@@ -149,14 +202,13 @@ fprintf(stderr,"%s\n",ad.name);
   }
 #endif
 #endif
+
+  if(audio_reset_parameters(ai) < 0) {
+    return -1;
+  }
+
   if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
     return -1;
-
-  if(ai->rate != -1)
-    ainfo.play.sample_rate = ai->rate;
-  ainfo.play.channels = ai->channels;
-  ainfo.play.encoding = AUDIO_ENCODING_LINEAR;
-  ainfo.play.precision = 16;
 
   switch(ai->output)
   {
@@ -178,6 +230,17 @@ fprintf(stderr,"%s\n",ad.name);
     return -1;
 
   return ai->fn;
+}
+
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+  int ret;
+  ret = audio_set_format(ai);
+  if(ret >= 0)
+    ret = audio_set_channels(ai);
+  if(ret >= 0)
+    ret = audio_set_rate(ai);
+  return ret;
 }
 
 int audio_set_rate(struct audio_info_struct *ai)
@@ -208,9 +271,51 @@ int audio_set_channels(struct audio_info_struct *ai)
   return 0;
 }
 
-int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+int audio_set_format(struct audio_info_struct *ai)
 {
-  return write(ai->fn,buf,len*2);
+  audio_info_t ainfo;
+
+  if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
+    return -1;
+
+  switch(ai->format) {
+    case -1:
+    case AUDIO_FORMAT_SIGNED_16:
+    default:
+      ainfo.play.encoding = AUDIO_ENCODING_LINEAR;
+      ainfo.play.precision = 16;
+      break;
+    case AUDIO_FORMAT_UNSIGNED_8:
+      ainfo.play.encoding = AUDIO_ENCODING_LINEAR8;
+      ainfo.play.precision = 8;
+      break;
+    case AUDIO_FORMAT_SIGNED_8:
+      fprintf(stderr,"Linear signed 8 bit not supported!\n");
+      return -1;
+    case AUDIO_FORMAT_ULAW_8:
+      ainfo.play.encoding = AUDIO_ENCODING_ULAW;
+      ainfo.play.precision = 8;
+      break;
+    case AUDIO_FORMAT_ALAW_8:
+      ainfo.play.encoding = AUDIO_ENCODING_ALAW;
+      ainfo.play.precision = 8;
+      break;
+  }
+
+  if(ioctl(ai->fn, AUDIO_SETINFO, &ainfo) == -1)
+    return -1;
+
+  return 0;
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  return AUDIO_FORMAT_SIGNED_16|AUDIO_FORMAT_ULAW_8;
+}
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
+{
+  return write(ai->fn,buf,len);
 }
 
 int audio_close(struct audio_info_struct *ai)
@@ -241,8 +346,6 @@ int audio_open(struct audio_info_struct *ai)
   if(ai->fn < 0)
     return -1;
 
-  ioctl(ai->fn,AUDIO_SET_DATA_FORMAT,AUDIO_FORMAT_LINEAR16BIT);
-  ioctl(ai->fn,AUDIO_SET_CHANNELS,ai->channels);
 
   ioctl(ai->fn,AUDIO_DESCRIBE,&ades);
 
@@ -289,9 +392,22 @@ int audio_open(struct audio_info_struct *ai)
     fprintf(stderr,"Can't set sample-rate to %ld.\n",ai->rate);
     i = 0;
   }
-  ioctl(ai->fn,AUDIO_SET_SAMPLE_RATE,ades.sample_rate[i]);
+
+  if(audio_reset_parameters(ai) < 0)
+    return -1;
  
   return ai->fn;
+}
+
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+  int ret;
+  ret = audio_set_format(ai);
+  if(ret >= 0)
+    ret = audio_set_channels(ai);
+  if(ret >= 0)
+    ret = audio_set_rate(ai);
+  return ret;
 }
 
 int audio_set_rate(struct audio_info_struct *ai)
@@ -306,9 +422,41 @@ int audio_set_channels(struct audio_info_struct *ai)
   return ioctl(ai->fn,AUDIO_SET_CHANNELS,ai->channels);
 }
 
-int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+int audio_set_format(struct audio_info_struct *ai)
 {
-  return write(ai->fn,buf,len*2);
+  int fmt;
+
+  switch(ai->format) {
+    case -1:
+    case AUDIO_FORMAT_SIGNED_16:
+    default: 
+      fmt = AUDIO_FORMAT_LINEAR16BIT;
+      break;
+    case AUDIO_FORMAT_UNSIGNED_8:
+      fprintf(stderr,"unsigned 8 bit linear not supported\n");
+      return -1;
+    case AUDIO_FORMAT_SIGNED_8:
+      fprintf(stderr,"signed 8 bit linear not supported\n");
+      return -1;
+    case AUDIO_FORMAT_ALAW_8:
+      fmt = AUDIO_FORMAT_ALAW;
+      break;
+    case AUDIO_FORMAT_ULAW_8:
+      fmt = AUDIO_FORMAT_ULAW;
+      break;
+  }
+  return ioctl(ai->fn,AUDIO_SET_DATA_FORMAT,fmt);
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  return AUDIO_FORMAT_SIGNED_16;
+}
+
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
+{
+  return write(ai->fn,buf,len);
 }
 
 int audio_close(struct audio_info_struct *ai)
@@ -321,22 +469,39 @@ int audio_close(struct audio_info_struct *ai)
 
 int audio_open(struct audio_info_struct *ai)
 {
-    ai->config = ALnewconfig();
+  ai->config = ALnewconfig();
 
-    if(ai->channels == 2)
-      ALsetchannels(ai->config, AL_STEREO);
-    else
-      ALsetchannels(ai->config, AL_MONO);
-    ALsetwidth(ai->config, AL_SAMPLE_16);
-    ALsetqueuesize(ai->config, 131069);
+  if(ai->channels == 2)
+    ALsetchannels(ai->config, AL_STEREO);
+  else
+    ALsetchannels(ai->config, AL_MONO);
+  ALsetwidth(ai->config, AL_SAMPLE_16);
+
+  ALsetqueuesize(ai->config, 131069);
     
-    ai->port = ALopenport("mpg132", "w", ai->config);
-    if(ai->port == NULL){
-	fprintf(stderr, "Unable to open audio channel.");
-	exit(-1);
-    }
+  ai->port = ALopenport("mpg132", "w", ai->config);
+  if(ai->port == NULL){
+    fprintf(stderr, "Unable to open audio channel.");
+    exit(-1);
+  }
+
+  audio_reset_parameters(ai);
     
-    return 1;
+  return 1;
+}
+
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+  int ret;
+  ret = audio_set_format(ai);
+  if(ret >= 0)
+    ret = audio_set_channels(ai);
+  if(ret >= 0)
+    ret = audio_set_rate(ai);
+
+/* todo: Set new parameters here */
+
+  return ret;
 }
 
 int audio_set_rate(struct audio_info_struct *ai)
@@ -356,9 +521,23 @@ int audio_set_channels(struct audio_info_struct *ai)
     return 0;
 }
 
-int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+int audio_set_format(struct audio_info_struct *ai)
 {
-    return ALwritesamps(ai->port, buf, len)*2;
+  return 0;
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  return AUDIO_FORMAT_SIGNED_16;
+}
+
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
+{
+  if(ai->format == AUDIO_FORMAT_SIGNED_8)
+    return ALwritesamps(ai->port, buf, len);
+  else
+    return ALwritesamps(ai->port, buf, len>>1)*2;
 }
 
 int audio_close(struct audio_info_struct *ai)
@@ -376,6 +555,11 @@ int audio_open(struct audio_info_struct *ai)
   return -1;
 }
 
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
 int audio_set_rate(struct audio_info_struct *ai)
 {
   return 0;
@@ -386,9 +570,19 @@ int audio_set_channels(struct audio_info_struct *ai)
   return 0;
 }
 
-int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+int audio_set_format(struct audio_info_struct *ai)
 {
-  return len*2;
+  return 0;
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  return AUDIO_FORMAT_SIGNED_16;
+}
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
+{
+  return len;
 }
 
 int audio_close(struct audio_info_struct *ai)

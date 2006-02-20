@@ -5,6 +5,9 @@ real decwin[512+32];
 static real cos64[16],cos32[8],cos16[4],cos8[2],cos4[1];
 real *pnts[] = { cos64,cos32,cos16,cos8,cos4 };
 
+static unsigned char conv16to8_buf[4096];
+unsigned char *conv16to8 = conv16to8_buf + 2048;
+
 static long intwinbase[] = {
      0,    -1,    -1,    -1,    -1,    -1,    -1,    -2,    -2,    -2,
     -2,    -3,    -3,    -4,    -4,    -5,    -5,    -6,    -7,    -7,
@@ -69,4 +72,35 @@ void make_decode_tables(long scaleval)
   }
 }
 
+void make_conv16to8_table(int mode)
+{
+  int i;
+  unsigned char c;
+  if(mode == AUDIO_FORMAT_ULAW_8) {
+    double m=127.0 / log(256.0);
+    for(i=-2048;i<2048;i++) {
+/* dunno whether this is a valid transformation rule ?!?!? */
+      if(i < 0)
+        c = 127 - (int) (log( 1.0 - 255.0 * (double) i*16.0 / 32767.0 ) * m);
+      else
+        c = 255 - (int) (log( 1.0 + 255.0 * (double) i*16.0 / 32767.0 ) * m);
+      conv16to8[i] = c;
+    }
+  }
+  else if(mode == AUDIO_FORMAT_SIGNED_8) {
+    for(i=-2048;i<2048;i++) {
+      conv16to8[i] = i>>4;
+    }
+  }
+  else if(mode == AUDIO_FORMAT_UNSIGNED_8) {
+    for(i=-2048;i<2048;i++) {
+      conv16to8[i] = (i>>4)+128;
+    }
+  }
+  else {
+    for(i=-2048;i<2048;i++) {
+      conv16to8[i] = 0;
+    }
+  }
+}
 

@@ -1,3 +1,14 @@
+0.59h: (MH)
+------
+
+- added '--8bit' option to force 'UNSIGNED 8 BIT' playing
+- pcm buffer type changed to 'unsigned char *' 
+- plays 2:1 and 4:1 with the real frequency (ie 11025/22050 instead
+  of 44100)
+- program (re)sets (changed) frequency for every frame
+- buffer mode is broken
+
+
 0.59g: (MH)
 ------
 - added support for MPEG 2.5 (it's a HACK!) .. mpg123 understands and plays

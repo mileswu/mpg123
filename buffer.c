@@ -56,10 +56,12 @@ void buffer_loop(struct audio_info_struct *ai)
 		if (outmode == DECODE_STDOUT)
 			bytes = write(1, xf->data + xf->readindex, bytes);
 		else if (outmode == DECODE_AUDIO) {
+#if 0
 			if (!(bytes = (bytes >> 1) & (~ 1l)))
 				continue;
+#endif
 			bytes = audio_play_samples(ai,
-				(short *) (xf->data + xf->readindex), bytes);
+				(unsigned char *) (xf->data + xf->readindex), bytes);
 		}
 		xf->readindex = (xf->readindex + bytes) % xf->size;
 		if (xf->wakeme[XF_WRITER])

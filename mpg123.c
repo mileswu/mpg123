@@ -1,5 +1,5 @@
 /* 
- * Mpeg Layer audio decoder V0.59g
+ * Mpeg Layer audio decoder V0.59h
  * -------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
@@ -35,6 +35,9 @@ int quiet      = FALSE;
 int verbose    = 0;
 int doublespeed= 0;
 int halfspeed  = 0;
+int change_always = 1;
+int force_8bit = 0;
+int force_frequency = -1;
 long numframes = -1;
 long startFrame= 0;
 int usebuffer  = 0;
@@ -73,7 +76,7 @@ void init_output(void)
     bufferbytes = (usebuffer * 1024);
     bufferbytes -= bufferbytes % FRAMEBUFUNIT;
     xfermem_init (&buffermem, bufferbytes);
-    pcm_sample = (short *) buffermem->data;
+    pcm_sample = (unsigned char *) buffermem->data;
     pcm_point = 0;
     catchsignal (SIGCHLD, catch_child);
     switch ((buffer_pid = fork())) {
@@ -92,7 +95,7 @@ void init_output(void)
     }
   }
   else {
-    if (!(pcm_sample = (short *) malloc(audiobufsize * 2))) {
+    if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2))) {
       perror ("malloc()");
       exit (1);
     }
@@ -151,11 +154,9 @@ char *get_next_file (int argc, char *argv[])
 void set_synth (char *arg)
 {
     if (*arg == '2') {
-        fr.synth = synth_2to1;
         fr.down_sample = 1;
     }
     else {
-        fr.synth = synth_4to1;
         fr.down_sample = 2;
     }
 }
@@ -203,7 +204,8 @@ topt opts[] = {
     {'m', "singlemix",   0,                  0, &fr.single,  3},
     {0,   "mix",         0,                  0, &fr.single,  3},
     {'g', "gain",        GLO_ARG | GLO_NUM,  0, &ai.gain,    0},
-    {'r', "rate",        GLO_ARG | GLO_NUM,  0, &ai.rate,    0},
+    {'r', "rate",        GLO_ARG | GLO_NUM,  0, &force_frequency,  0},
+    {0,   "8bit",        0,                  0, &force_8bit, 1},
     {0,   "headphones",  0,                  0, &ai.output, AUDIO_OUT_HEADPHONES},
     {0,   "speaker",     0,                  0, &ai.output, AUDIO_OUT_INTERNAL_SPEAKER},
     {0,   "lineout",     0,                  0, &ai.output, AUDIO_OUT_LINE_OUT},
@@ -240,6 +242,7 @@ int main(int argc, char *argv[])
     fr.synth = synth_1to1;
     fr.down_sample = 0;
 
+    ai.format = AUDIO_FORMAT_SIGNED_16;
     ai.gain = ai.rate = ai.output = -1;
     ai.device = NULL;
     ai.channels = 2;
@@ -262,6 +265,51 @@ int main(int argc, char *argv[])
     if (!quiet)
       print_title();
 
+    if(force_8bit) {
+#if 0
+      ai.format = AUDIO_FORMAT_UNSIGNED_8;
+      ai.format = AUDIO_FORMAT_SIGNED_8;
+#endif
+      ai.format = AUDIO_FORMAT_ULAW_8;
+      make_conv16to8_table(ai.format);
+      switch(fr.down_sample) {
+        case 0:
+          fr.synth = synth_1to1_8bit;
+          fr.synth_mono = synth_1to1_8bit_mono;
+          fr.block_size = 64;
+          break;
+        case 1:
+          fr.synth = synth_2to1_8bit;
+          fr.synth_mono = synth_2to1_8bit_mono;
+          fr.block_size = 32;
+          break;
+        case 2:
+          fr.synth = synth_4to1_8bit;
+          fr.synth_mono = synth_4to1_8bit_mono;
+          fr.block_size = 16;
+          break;
+      }
+    }
+    else {
+      switch(fr.down_sample) {
+        case 0:
+          fr.synth = synth_1to1;
+          fr.synth_mono = synth_1to1_mono;
+          fr.block_size = 128;
+          break;
+        case 1:
+          fr.synth = synth_2to1;
+          fr.synth_mono = synth_2to1_mono;
+          fr.block_size = 64;
+          break;
+        case 2:
+          fr.synth = synth_4to1;
+          fr.synth_mono = synth_4to1_mono;
+          fr.block_size = 32;
+          break;
+      }
+    }
+
     make_decode_tables(outscale);
     init_layer2(); /* inits also shared tables with layer1 */
     init_layer3(fr.down_sample);
@@ -283,14 +331,24 @@ int main(int argc, char *argv[])
          crc_error_count   = 0;
          total_error_count = 0;
 
-         if(!frameNum)
+         if((fr.header_change && change_always) || !frameNum)
          {
-           if (!quiet)
+           int reset_audio = 0;
+           if (!quiet && !frameNum)
              print_header(&fr);
-           if(ai.rate == -1) {
-             ai.rate = freqs[fr.sampling_frequency];
+           if(force_frequency < 0) {
+             if(ai.rate != freqs[fr.sampling_frequency]>>(fr.down_sample)) {
+               ai.rate = freqs[fr.sampling_frequency]>>(fr.down_sample);
+               reset_audio = 1;
+             }
+           }
+           else if(ai.rate != force_frequency) {
+             ai.rate = force_frequency;
+             reset_audio = 1;
            }
            init_output();
+           if(reset_audio)
+             audio_reset_parameters(&ai);
          }
          if(frameNum < startFrame || (doublespeed && (frameNum % doublespeed))) {
            if(fr.lay == 3) {
@@ -322,7 +380,7 @@ int main(int argc, char *argv[])
              if (buffermem->wakeme[XF_READER])
                xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
            }
-           pcm_sample = (short *) (buffermem->data + buffermem->freeindex);
+           pcm_sample = (unsigned char *) (buffermem->data + buffermem->freeindex);
            pcm_point = 0;
            while (xfermem_get_freespace(buffermem) < FRAMEBUFUNIT)
              if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
