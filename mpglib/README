@@ -25,6 +25,12 @@ COPYRIGHT of MP3 music:
 SENDING PATCHES:
   Maybe I change the copyright policy (ie some kind of more free BSD licencse).
   Please consider this when sending patches/changes.
+  I also want to have the freedom to sell the code to companies that
+  can not use the code under GPL. So, if you send me significant patches,
+  I need your explicit permission to do this. Of course, there will also 
+  be the GPLed open source version of the 100% same code.
+  For the case you cannot accept this: the code is GPL, it's your freedom 
+  to distribute your changes again under GPL. 
 
 FEEDBACK:
   I'm interessted to here from you, when you use this package as part

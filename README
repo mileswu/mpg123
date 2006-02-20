@@ -13,7 +13,7 @@
 Please read first the important information in the COPYING file.
 
 written/modfied by:
-   Michael Hipp (email: Michael.Hipp@student.uni-tuebingen.de)
+   Michael Hipp (email: hippm@informatik.uni-tuebingen.de)
    Oliver Fromme <oliver.fromme@heim3.tu-clausthal.de>
     (several enhancements, man pages, Makefile, FreeBSD port, License, etc.)
 
@@ -34,6 +34,8 @@ Uses code (or at least ideas) from:
   Steven Tiger Lang: advanced shuffle
   Henrik P Johnson: HTTP auth patch
   Eric B. Mitchell: esd port
+  Ryan R. Prosser <prosser@geocities.com> esd port for Solaris
+  Daniel Kobras <daniel.kobras@student.uni-tuebingen.de>: lot of (DK)-bugfixes
   and more ....
 
 current distribution site for new test versions is:
@@ -52,9 +54,9 @@ and you can get the latest release from here:
 This version plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
 with about 66% CPU load. (on the console, NO X11)
 If your machine isn't fast enough you may try the downsampling
-feature (--2to1 and --4to1 options)
+feature (--2to1 and --4to1 options) 
 Playing in '--singlemix' (stero reduced to mono) also saves some
-CPU cycles, though the whole code is optimized for 'full' stereo playing. 
+CPU cycles, though the whole code is optimized for 'full' stereo playing.
 
 'Benchmarks': (+/- 2%)
 ----------------------
@@ -71,8 +73,8 @@ CPU cycles, though the whole code is optimized for 'full' stereo playing.
 ---------------------------------------------------------------------
 Description:
 
-This isn't a new player. It's a near fully rewritten version based on the
-mpegaudio (FHG-version) package. The DCT algorithm in the
+This isn't a new player. It's a fully rewritten version originally based 
+on the mpegaudio (FHG-version) package. The DCT algorithm in the
 synthesis filter is a rewritten version of the DCT first seen in the maplay
 package, which was written by Tobias Bading (bading@cs.tu-berlin.de). The 
 rewrite was neccassary, because the GPL may not allow this copyright mix.
@@ -85,7 +87,7 @@ The code is fullly rewritten but I'm using sometimes the
 same variable names or similar function names as in the
 original package.
 
-In the current layer3.c I'm using a DCT36 from Jeff Tsay's 
+In the current layer3.c I'm using a DCT36 first seen in Jeff Tsay's 
 (ctsay@pasteur.eecs.berkeley.edu) maplay 1.2+ package. His code is
 under GPL .. I also tried the enhancement from Mikko Tommila. His
 code is also in layer3.c (but it's disabled at the moment, because
@@ -101,6 +103,21 @@ audio player for playing.
 
 I have tested the program with a lot of teststreams, but it's very 
 likely, that there are still a few bugs.
+
+Playing MP3s coming with MIMEType "audio/x-mpegurl" 
+---------------------------------------------------
+For netscape navigator: 
+Go: Preferencs->Navigator->Applications
+ Click 'NEW' Button and fill in the form:
+  Description: MP3 Playlist
+  MIMEType:    audio/x-mpegurl
+  suffix:      m3u
+ Click the 'Application' button below and add a
+  mpg123 -@ %s
+ or maybe better
+  xterm -e mpg123 -@ %s
+ in the application field. Press OK. That's all.
+
 
 NAS notes: (from Martin Denn)
 -----------------------------
@@ -120,7 +137,15 @@ may do a better job.
 
 3DNow notes:
 ------------
-You need a new 'as'. ie. the 'as' from binutils-2.9.1.0.19a
+You need a new 'as'. ie. the 'as' from binutils-2.9.1.0.19a.
+If you don´t have a suitable ´as´, you may wanna try to _copy_ the
+files dct64_3dnow.o and decode_3dnow.o from the precompiled/ 
+directory to the base mpg123 source path and try to compile
+the source.
+A funny side-effect of the 3dnow optimizations is, that now the
+-2 and -4 downsampling is a little slower than full quality, because
+the 3dnow optimization is only enabled for full quality decoding.
+3dnow only works with -DREAL_IS_FLOAT. 
 
 
 have fun,
@@ -156,6 +181,10 @@ related information:
 --------------------
   If you need an mp3 frame re(assembler) and stream debug tool you should
   have a look at the mp3asm program on Olli's mpg123 page.(http://mpg.123.org)
+
+some interessting patent information:
+-------------------------------------
+  http://www.iis.fhg.de/amm/legal/
 
 
 ******************************************************************************

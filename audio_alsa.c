@@ -3,11 +3,12 @@
  * 
  *  Code by Anders Semb Hermansen <ahermans@vf.telia.no>
  *  Cleanups by Jaroslav Kysela <perex@jcu.cz>
+ *              Ville Syrjala <syrjala@sci.fi>
  *
- *  You can use -o <soundcard #>:<device #>...
- *  For example: mpg123 -o 1:0 aaa.mpg
- *               mpg123 -o guspnp:1 aaa.mpg
- * 
+ *  You can use -a <soundcard #>:<device #>...
+ *  For example: mpg123 -a 1:0 aaa.mpg
+ *               mpg123 -a guspnp:1 aaa.mpg
+ *
  * This file comes under GPL license. 
  */
 
@@ -16,6 +17,18 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/asoundlib.h>
+
+#ifdef SND_LITTLE_ENDIAN
+#define SND_PCM_SFMT_S16_NE SND_PCM_SFMT_S16_LE
+#define SND_PCM_SFMT_U16_NE SND_PCM_SFMT_U16_LE
+#define SND_PCM_FMT_S16_NE SND_PCM_FMT_S16_LE
+#define SND_PCM_FMT_U16_NE SND_PCM_FMT_U16_LE
+#else
+#define SND_PCM_SFMT_S16_NE SND_PCM_SFMT_S16_BE
+#define SND_PCM_SFMT_U16_NE SND_PCM_SFMT_U16_BE
+#define SND_PCM_FMT_S16_NE SND_PCM_FMT_S16_BE
+#define SND_PCM_FMT_U16_NE SND_PCM_FMT_U16_BE
+#endif
 
 int audio_open(struct audio_info_struct *ai)
 {
@@ -147,7 +160,7 @@ int audio_set_format(struct audio_info_struct *ai)
 	{
 		case AUDIO_FORMAT_SIGNED_16:
 		default:
-			ai->alsa_format.format=SND_PCM_SFMT_S16_LE;
+			ai->alsa_format.format=SND_PCM_SFMT_S16_NE;
 			break;
 		case AUDIO_FORMAT_UNSIGNED_8:
 			ai->alsa_format.format=SND_PCM_SFMT_U8;
@@ -162,7 +175,7 @@ int audio_set_format(struct audio_info_struct *ai)
 			ai->alsa_format.format=SND_PCM_SFMT_A_LAW;
 			break;
 		case AUDIO_FORMAT_UNSIGNED_16:
-			ai->alsa_format.format=SND_PCM_SFMT_U16_LE;
+			ai->alsa_format.format=SND_PCM_SFMT_U16_NE;
 			break;
 	}
 
@@ -176,7 +189,36 @@ int audio_set_format(struct audio_info_struct *ai)
 
 int audio_get_formats(struct audio_info_struct *ai)
 {
-	return AUDIO_FORMAT_SIGNED_16;
+	int i, err;
+	int fmt = -1;
+	snd_pcm_playback_info_t pi;
+
+	static int fmts[] = {
+		AUDIO_FORMAT_SIGNED_16, AUDIO_FORMAT_UNSIGNED_16,
+		AUDIO_FORMAT_UNSIGNED_8, AUDIO_FORMAT_SIGNED_8,
+		AUDIO_FORMAT_ULAW_8, AUDIO_FORMAT_ALAW_8
+	};
+	static int afmts[] = {
+		SND_PCM_FMT_S16_NE, SND_PCM_FMT_U16_NE,
+		SND_PCM_FMT_U8, SND_PCM_FMT_S8,
+		SND_PCM_FMT_MU_LAW, SND_PCM_FMT_A_LAW
+	};
+
+	if((err=snd_pcm_playback_info(ai->handle, &pi)) < 0 )
+	{
+		fprintf(stderr, "playback info failed: %s\n", snd_strerror(err));
+		return -1;
+	}
+
+	for (i = 0; i < 6; i++) {
+		if (pi.formats & afmts[i]) {
+			if (fmt == -1)
+				fmt = 0;
+			fmt |= fmts[i];
+		}
+	}
+
+	return fmt;
 }
 
 int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)

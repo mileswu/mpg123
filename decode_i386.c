@@ -34,7 +34,6 @@
 }
 #endif
 
-
 int synth_1to1_8bit(real *bandPtr,int channel,unsigned char *samples,int *pnt)
 {
   short samples_tmp[64];

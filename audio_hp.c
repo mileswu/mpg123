@@ -97,6 +97,8 @@ int audio_set_rate(struct audio_info_struct *ai)
 
 int audio_set_channels(struct audio_info_struct *ai)
 {
+  if(ai->channels<0)
+    return 0;
   return ioctl(ai->fn,AUDIO_SET_CHANNELS,ai->channels);
 }
 

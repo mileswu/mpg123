@@ -4,6 +4,8 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+
 #include <fcntl.h>
 
 #ifdef READ_MMAP
@@ -14,11 +16,8 @@
 #endif
 
 #include "mpg123.h"
-#include "tables.h"
 #include "genre.h"
-
-/* max = 1728 */
-#define MAXFRAMESIZE 1792
+#include "common.h"
 
 int tabsel_123[2][3][16] = {
    { {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,},
@@ -32,13 +31,7 @@ int tabsel_123[2][3][16] = {
 
 long freqs[9] = { 44100, 48000, 32000, 22050, 24000, 16000 , 11025 , 12000 , 8000 };
 
-#ifdef I386_ASSEM
-int bitindex;
-unsigned char *wordpointer;
-#else
-static int bitindex;
-static unsigned char *wordpointer;
-#endif
+struct bitstream_info bsi;
 
 static int fsizeold=0,ssize;
 static unsigned char bsspace[2][MAXFRAMESIZE+512]; /* MAXFRAMESIZE */
@@ -46,7 +39,7 @@ static unsigned char *bsbuf=bsspace[1],*bsbufold;
 static int bsnum=0;
 
 static unsigned long oldhead = 0;
-static unsigned long firsthead=0;
+unsigned long firsthead=0;
 
 unsigned char *pcm_sample;
 int pcm_point = 0;
@@ -74,40 +67,13 @@ int playlimit;
 #endif
 
 static int decode_header(struct frame *fr,unsigned long newhead);
-void print_id3_tag(char *buf);
-
-static void get_II_stuff(struct frame *fr)
-{
-  static int translate[3][2][16] = 
-   { { { 0,2,2,2,2,2,2,0,0,0,1,1,1,1,1,0 } ,
-       { 0,2,2,0,0,0,1,1,1,1,1,1,1,1,1,0 } } ,
-     { { 0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0 } ,
-       { 0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0 } } ,
-     { { 0,3,3,3,3,3,3,0,0,0,1,1,1,1,1,0 } ,
-       { 0,3,3,0,0,0,1,1,1,1,1,1,1,1,1,0 } } };
-
-  int table,sblim;
-  static struct al_table *tables[5] = 
-       { alloc_0, alloc_1, alloc_2, alloc_3 , alloc_4 };
-  static int sblims[5] = { 27 , 30 , 8, 12 , 30 };
-
-  if(fr->lsf)
-    table = 4;
-  else
-    table = translate[fr->sampling_frequency][2-fr->stereo][fr->bitrate_index];
-  sblim = sblims[table];
-
-  fr->alloc = tables[table];
-  fr->II_sblimit = sblim;
-}
-
 
 void audio_flush(int outmode, struct audio_info_struct *ai)
 {
   if (pcm_point) {
     switch (outmode) {
-      case DECODE_STDOUT:
-        write (1, pcm_sample, pcm_point);
+      case DECODE_FILE:
+        write (OutputDescriptor, pcm_sample, pcm_point);
         break;
       case DECODE_AUDIO:
         audio_play_samples (ai, pcm_sample, pcm_point);
@@ -145,9 +111,6 @@ void (*catchsignal(int signum, void(*handler)()))()
 }
 #endif
 
-#define HDRCMPMASK 0xfffffd00
-
-
 void read_frame_init (void)
 {
     oldhead = 0;
@@ -164,6 +127,9 @@ int head_check(unsigned long head)
 	return FALSE;
     if( ((head>>10)&0x3) == 0x3 )
 	return FALSE;
+    if ((head & 0xffff0000) == 0xfffe0000)
+      return FALSE;
+
     return TRUE;
 }
 
@@ -182,8 +148,8 @@ int read_frame(struct frame *fr)
   if (param.halfspeed) {
     static int halfphase = 0;
     if (halfphase--) {
-      bitindex = 0;
-      wordpointer = (unsigned char *) bsbuf;
+      bsi.bitindex = 0;
+      bsi.wordpointer = (unsigned char *) bsbuf;
       if (fr->lay == 3)
         memcpy (bsbuf, ssave, ssize);
       return 1;
@@ -216,7 +182,7 @@ init_resync:
 	if(!firsthead && !head_check(newhead) ) {
 		int i;
 
-		fprintf(stderr,"Junk at the beginning\n");
+		fprintf(stderr,"Junk at the beginning %08lx\n",newhead);
 
 		/* I even saw RIFF headers at the beginning of MPEG streams ;( */
 		if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
@@ -231,17 +197,6 @@ init_resync:
 			fprintf(stderr,"Skipped RIFF header!\n");
 			goto read_again;
 		}
-
-#if 0
-		/* search in 32 bit steps through the first 2K */
-		for(i=0;i<512;i++) {
-			if(!rd->head_read(rd,&newhead))
-				return 0;
-			if(head_check(newhead))
-				break;
-		}
-		if(i==512)
-#endif
 		{
 			/* step in byte steps through next 64K */
 			for(i=0;i<65536;i++) {
@@ -249,6 +204,9 @@ init_resync:
 					return 0;
 				if(head_check(newhead))
 					break;
+#if 0
+fprintf(stderr,"%08lx ",newhead);
+#endif
 			}
 			if(i == 65536) {
 				fprintf(stderr,"Giving up searching valid MPEG header\n");
@@ -295,11 +253,15 @@ init_resync:
       else
         return (0);
     }
-    if (!firsthead)
-      firsthead = newhead;
 
-    if(!decode_header(fr,newhead))
-      return 0;
+    if (!firsthead) {
+      if(!decode_header(fr,newhead))
+        goto read_again;
+      firsthead = newhead;
+    }
+    else
+      if(!decode_header(fr,newhead))
+        return 0;
 
   }
   else
@@ -314,8 +276,8 @@ init_resync:
   if(!rd->read_frame_body(rd,bsbuf,fr->framesize))
     return 0;
 
-  bitindex = 0;
-  wordpointer = (unsigned char *) bsbuf;
+  bsi.bitindex = 0;
+  bsi.wordpointer = (unsigned char *) bsbuf;
 
   if (param.halfspeed && fr->lay == 3)
     memcpy (ssave, bsbuf, ssize);
@@ -368,6 +330,9 @@ int back_frame(struct reader *rds,struct frame *fr,int num)
  */
 static int decode_header(struct frame *fr,unsigned long newhead)
 {
+    if(!head_check(newhead))
+      return 0;
+
     if( newhead & (1<<20) ) {
       fr->lsf = (newhead & (1<<19)) ? 0x0 : 0x1;
       fr->mpeg25 = 0;
@@ -406,14 +371,12 @@ static int decode_header(struct frame *fr,unsigned long newhead)
 
     oldhead = newhead;
 
-    if(!fr->bitrate_index)
-    {
+    if(!fr->bitrate_index) {
       fprintf(stderr,"Free format not supported: (head %08lx)\n",newhead);
       return (0);
     }
 
-    switch(fr->lay)
-    {
+    switch(fr->lay) {
       case 1:
 	fr->do_layer = do_layer1;
 #ifdef VARMODESUPPORT
@@ -422,23 +385,18 @@ static int decode_header(struct frame *fr,unsigned long newhead)
           return (0);
         }
 #endif
-        fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ? 
-                         (fr->mode_ext<<2)+4 : 32;
         fr->framesize  = (long) tabsel_123[fr->lsf][0][fr->bitrate_index] * 12000;
         fr->framesize /= freqs[fr->sampling_frequency];
         fr->framesize  = ((fr->framesize+fr->padding)<<2)-4;
         break;
       case 2:
-		fr->do_layer = do_layer2;
+	fr->do_layer = do_layer2;
 #ifdef VARMODESUPPORT
         if (varmode) {
           fprintf(stderr,"Sorry, layer-2 not supported in varmode.\n"); 
           return (0);
         }
 #endif
-        get_II_stuff(fr);
-        fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ?
-                         (fr->mode_ext<<2)+4 : fr->II_sblimit;
         fr->framesize = (long) tabsel_123[fr->lsf][1][fr->bitrate_index] * 144000;
         fr->framesize /= freqs[fr->sampling_frequency];
         fr->framesize += fr->padding - 4;
@@ -451,9 +409,9 @@ static int decode_header(struct frame *fr,unsigned long newhead)
           ssize = (fr->stereo == 1) ? 17 : 32;
         if(fr->error_protection)
           ssize += 2;
-          fr->framesize  = (long) tabsel_123[fr->lsf][2][fr->bitrate_index] * 144000;
-          fr->framesize /= freqs[fr->sampling_frequency]<<(fr->lsf);
-          fr->framesize = fr->framesize + fr->padding - 4;
+        fr->framesize  = (long) tabsel_123[fr->lsf][2][fr->bitrate_index] * 144000;
+        fr->framesize /= freqs[fr->sampling_frequency]<<(fr->lsf);
+        fr->framesize = fr->framesize + fr->padding - 4;
         break; 
       default:
         fprintf(stderr,"Sorry, unknown layer type.\n"); 
@@ -507,7 +465,7 @@ void print_header_compact(struct frame *fr)
 		freqs[fr->sampling_frequency], modes[fr->mode]);
 }
 
-void print_id3_tag(char *buf)
+void print_id3_tag(unsigned char *buf)
 {
 	struct id3tag {
 		char tag[3];
@@ -541,9 +499,9 @@ void print_id3_tag(char *buf)
 		strncpy(genre,"Unknown",30);
 	}
 	
-	fprintf(stderr,"Title  : %30s  Artist: %s\n",title,artist);
-	fprintf(stderr,"Album  : %30s  Year: %4s\n",album,year);
-	fprintf(stderr,"Comment: %30s  Genre: %s\n",comment,genre);
+	fprintf(stderr,"Title  : %-30s  Artist: %s\n",title,artist);
+	fprintf(stderr,"Album  : %-30s  Year  : %4s\n",album,year);
+	fprintf(stderr,"Comment: %-30s  Genre : %s\n",comment,genre);
 }
 
 #if 0
@@ -614,145 +572,17 @@ int split_dir_file (const char *path, char **dname, char **fname)
 	}
 }
 
-
-#if 0
-static void check_buffer_range(int size)
-{
-	int pos = (wordpointer-bsbuf) + (size>>3);
-
-	if( pos >= fsizeold) {
-		fprintf(stderr,"Pointer out of range (%d,%d)!\n",pos,fsizeold);
-	}
-}
-#endif
-
-#if !defined(I386_ASSEM) || defined(DEBUG_GETBITS)
-#ifdef _gcc_
-inline 
-#endif
-unsigned int getbits(int number_of_bits)
-{
-  unsigned long rval;
-
-#ifdef DEBUG_GETBITS
-fprintf(stderr,"g%d",number_of_bits);
-#endif
-
-  if(!number_of_bits)
-    return 0;
-
-#if 0
-   check_buffer_range(number_of_bits+bitindex);
-#endif
-
-  {
-    rval = wordpointer[0];
-    rval <<= 8;
-    rval |= wordpointer[1];
-    rval <<= 8;
-    rval |= wordpointer[2];
-#if 0
-    rval = ((unsigned int) wordpointer[0] << 16)+((unsigned int) wordpointer[1]<<8)+
-                 (unsigned int) wordpointer[2];
-#endif
-    rval <<= bitindex;
-    rval &= 0xffffff;
-
-    bitindex += number_of_bits;
-
-    rval >>= (24-number_of_bits);
-
-    wordpointer += (bitindex>>3);
-    bitindex &= 7;
-  }
-
-#ifdef DEBUG_GETBITS
-fprintf(stderr,":%x ",rval);
-#endif
-  return rval;
-}
-
-#ifdef _gcc_
-inline
-#endif
-unsigned int getbits_fast(int number_of_bits)
-{
-  unsigned long rval;
-
-#ifdef DEBUG_GETBITS
-fprintf(stderr,"g%d",number_of_bits);
-#endif
-
-#if 0
-   check_buffer_range(number_of_bits+bitindex);
-#endif
-
-  {
-    rval = wordpointer[0];
-    rval <<= 8;	
-    rval |= wordpointer[1];
-    rval <<= bitindex;
-    rval &= 0xffff;
-#if 0
-    rval = ((unsigned int) high << (8-bitindex) )+((unsigned int) (unsigned char) wordpointer[1]);
-#endif
-    bitindex += number_of_bits;
-
-    rval >>= (16-number_of_bits);
-
-    wordpointer += (bitindex>>3);
-    bitindex &= 7;
-  }
-
-
-#ifdef DEBUG_GETBITS
-fprintf(stderr,":%x ",rval);
-#endif
-
-
-  return rval;
-}
-
-#ifdef _gcc_
-inline 
-#endif
-unsigned int get1bit(void)
-{
-  unsigned char rval;
-
-#ifdef DEBUG_GETBITS
-fprintf(stderr,"g%d",1);
-#endif
-
-#if 0
-   check_buffer_range(1+bitindex);
-#endif
-
-  rval = *wordpointer << bitindex;
-
-  bitindex++;
-  wordpointer += (bitindex>>3);
-  bitindex &= 7;
-
-#ifdef DEBUG_GETBITS
-fprintf(stderr,":%d ",rval>>7);
-#endif
-
-  return rval>>7;
-}
-#endif
-
 void set_pointer(long backstep)
 {
-  wordpointer = bsbuf + ssize - backstep;
+  bsi.wordpointer = bsbuf + ssize - backstep;
   if (backstep)
-    memcpy(wordpointer,bsbufold+fsizeold-backstep,backstep);
-  bitindex = 0; 
+    memcpy(bsi.wordpointer,bsbufold+fsizeold-backstep,backstep);
+  bsi.bitindex = 0; 
 }
 
 /********************************/
 
-static double compute_bpf(struct frame *fr)
+double compute_bpf(struct frame *fr)
 {
 	double bpf;
 
@@ -774,7 +604,7 @@ static double compute_bpf(struct frame *fr)
 	return bpf;
 }
 
-static double compute_tpf(struct frame *fr)
+double compute_tpf(struct frame *fr)
 {
 	static int bs[4] = { 0,384,1152,1152 };
 	double tpf;
@@ -784,15 +614,61 @@ static double compute_tpf(struct frame *fr)
 	return tpf;
 }
 
-void print_stat(struct frame *fr,int no,long buffsize,
-	struct audio_info_struct *ai)
+/*
+ * Returns number of frames queued up in output buffer, i.e. 
+ * offset between currently played and currently decoded frame.
+ */
+
+long compute_buffer_offset(struct frame *fr)
+{
+	long bufsize;
+	
+	/*
+	 * buffermem->buf[0] holds output sampling rate,
+	 * buffermem->buf[1] holds number of channels,
+	 * buffermem->buf[2] holds audio format of output.
+	 */
+	
+	if(!param.usebuffer || !(bufsize=xfermem_get_usedspace(buffermem))
+		|| !buffermem->buf[0] || !buffermem->buf[1])
+		return 0;
+
+	bufsize = (long)((double) bufsize / buffermem->buf[0] / 
+			buffermem->buf[1] / compute_tpf(fr));
+	
+	if((buffermem->buf[2] & AUDIO_FORMAT_MASK) == AUDIO_FORMAT_16)
+		return bufsize/2;
+	else
+		return bufsize;
+}
+
+void print_stat(struct frame *fr,int no,long buffsize,struct audio_info_struct *ai)
 {
 	double bpf,tpf,tim1,tim2;
 	double dt = 0.0;
 	int sno,rno;
+	char outbuf[256];
 
 	if(!rd || !fr) 
 		return;
+
+	outbuf[0] = 0;
+
+#ifndef GENERIC
+	{
+		struct timeval t;
+		fd_set serr;
+		int n,errfd = fileno(stderr);
+
+		t.tv_sec=t.tv_usec=0;
+
+		FD_ZERO(&serr);
+		FD_SET(errfd,&serr);
+		n = select(errfd+1,NULL,&serr,NULL,&t);
+		if(n <= 0)
+			return;
+	}
+#endif
 
 	bpf = compute_bpf(fr);
 	tpf = compute_tpf(fr);
@@ -810,27 +686,30 @@ void print_stat(struct frame *fr,int no,long buffsize,
 	  rno = (int)((double)(rd->filelen-t)/bpf);
           sno = (int)((double)t/bpf);
         }
- 
-	fprintf(stderr,"\rFrame# %5d [%5d], ",sno,rno);
+
+	sprintf(outbuf+strlen(outbuf),"\rFrame# %5d [%5d], ",sno,rno);
 
 	tim1 = sno*tpf-dt;
 	tim2 = rno*tpf+dt;
-
 #if 0
 	tim1 = tim1 < 0 ? 0.0 : tim1;
 #endif
 	tim2 = tim2 < 0 ? 0.0 : tim2;
 
-	fprintf(stderr,"Time: %02d:%02d.%02d [%02d:%02d.%02d], ",
-			(int)tim1/60,
-			(int)tim1%60,
-			(int)(tim1*100)%100,
-			(int)tim2/60,
-			(int)tim2%60,
-			(int)(tim2*100)%100);
+	sprintf(outbuf+strlen(outbuf),"Time: %02u:%02u.%02u [%02u:%02u.%02u], ",
+			(unsigned int)tim1/60,
+			(unsigned int)tim1%60,
+			(unsigned int)(tim1*100)%100,
+			(unsigned int)tim2/60,
+			(unsigned int)tim2%60,
+			(unsigned int)(tim2*100)%100);
+
 	if(param.usebuffer)
-		fprintf(stderr,"[%8ld] ",(long)buffsize);
-	fflush(stderr); /* hmm not really nec. */
+		sprintf(outbuf+strlen(outbuf),"[%8ld] ",(long)buffsize);
+	write(fileno(stderr),outbuf,strlen(outbuf));
+#if 0
+	fflush(out); /* hmm not really nec. */
+#endif
 }
 
 int get_songlen(struct frame *fr,int no)

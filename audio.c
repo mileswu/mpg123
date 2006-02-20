@@ -103,7 +103,7 @@ void audio_capabilities(struct audio_info_struct *ai)
 	audio_close(&ai1);
 
 	if(param.verbose > 1) {
-		fprintf(stderr,"\nAudio capabilties:\n        |");
+		fprintf(stderr,"\nAudio capabilities:\n        |");
 		for(j=0;j<NUM_ENCODINGS;j++) {
 			fprintf(stderr," %5s |",audio_val2name[j].sname);
 		}
@@ -258,4 +258,9 @@ char *audio_encoding_name(int format)
 	return "Unknown";
 }
 
+#if !defined(SOLARIS) && !defined(__NetBSD__) || defined(NAS)
+void audio_queueflush(struct audio_info_struct *ai)
+{
+}
+#endif
 

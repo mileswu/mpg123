@@ -124,6 +124,8 @@ int do_layer1(struct frame *fr,int outmode,struct audio_info_struct *ai)
   real fraction[2][SBLIMIT];
   int single = fr->single;
 
+  fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ? (fr->mode_ext<<2)+4 : 32;
+
   if(stereo == 1 || single == 3)
     single = 0;
 

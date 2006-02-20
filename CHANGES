@@ -1,3 +1,29 @@
+0.59r: (MH)
+-----
+- applied audio_alib changes from Ralf Hildebrandt <R.Hildebrandt@TU-BS.DE>
+- some 'paetsches' from DK
+- minor optimizations in layer3 (dequantize/huffman) 
+- BSDOS 4.0 with gcc added to Makefile (<sms@moe.2bsd.com>)
+- Solaris-ESD patch from Ryan Prosser <prosser@wam.umd.edu>
+- Added Frontend changes from Bertrand Petit <elrond@phoe.netdev.net>
+- more DK 'paetsches' (final dk7-clubhaus edition), includes extended term 
+  control
+- SGI audio fix for non RAD machines from Erik Mouw <J.A.K.Mouw@its.tudelft.nl>
+- fixed ugly bug in layer3 dequant for bt==2 (may cause high frequency clitchs)
+- AMD-3DNow optimizations in decode and dct64
+- OS/2 reworked from Samuel Audet (see audio_os2.c for more)
+- added freebsd-esd make-entry from Daniel O'Connor (darius@guppy.dons.net.au)
+- added enhanced head_check from D. Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>
+- applied 'xterm-title-patch' from "Wilson, Jeff D" <jeff.wilson@wilcom.com>
+- more esd changes from Robert Bihlmeyer <robbe@orcus.priv.at>
+- applied Hannu Napari's <Hannu.Napari@hut.fi> SGI audio patches
+- minor changes in httpget.c and mpg123.c 
+- added native AIX support from Juergen.Schoew@unix-ag.uni-siegen.de
+- applied playlist patch from <psst@euskalnet.net>
+- more SGI audio patches from Gilles Zunino <Gilles.Zunino@hei.fupl.asso.fr>
+- applied esdserver patch from Matthew Parslow <roy@alpha.alphalink.com.au>
+- added some fixes for control_generic
+
 0.59q: (MH)
 ------
 - ESD fixes

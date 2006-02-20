@@ -20,6 +20,4 @@ Of course, there are some known bugs:
   SGI completly untested
   SUNOS 4.x completly untested
 
-- Doesn't play VBR (var bitrate) streams
-
 

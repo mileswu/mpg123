@@ -166,6 +166,8 @@ int cdr_open(struct audio_info_struct *ai, char *cdrfilename)
 
   if(open_file(cdrfilename) < 0)
     return -1;
+
+  return 0;
 }
 
 int wav_open(struct audio_info_struct *ai, char *wavfilename)
@@ -178,7 +180,6 @@ int wav_open(struct audio_info_struct *ai, char *wavfilename)
    long2littleendian(1,RIFF.WAVE.fmt.FormatTag,sizeof(RIFF.WAVE.fmt.FormatTag));
 
    if(ai->format == AUDIO_FORMAT_SIGNED_16) {
-      static long i,a=0,b=0,c=0;
       long2littleendian(bps=16,RIFF.WAVE.fmt.BitsPerSample,sizeof(RIFF.WAVE.fmt.BitsPerSample));
       flipendian = testEndian();
    }
@@ -267,6 +268,8 @@ int au_close(void)
      long2bigendian(datalen,auhead.datalen,sizeof(auhead.datalen));
      fwrite(&auhead, sizeof(auhead),1,wavfp); 
    }
+
+  return 0;
 }
 
 int cdr_close(void)

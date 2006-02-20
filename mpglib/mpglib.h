@@ -27,7 +27,6 @@ struct mpstr {
 	int bsnum;
 	real synth_buffs[2][2][0x110];
         int  synth_bo;
-	
 };
 
 #define BOOL int

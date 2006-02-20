@@ -1,7 +1,7 @@
 /* 
- * Mpeg Layer audio decoder (see version.h for version number)
+ * Mpeg Audio Player (see version.h for version number)
  * ------------------------
- * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
+ * copyright (c) 1995,1996,1997,1998,1999 by Michael Hipp, All rights reserved.
  * See also 'README' !
  *
  */
@@ -14,7 +14,14 @@
 #include <sys/resource.h>
 #endif
 
-/* #define SET_RT   */
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+
+#if 0
+#define SET_RT 
+#endif
+
 
 #ifdef SET_RT
 #include <sched.h>
@@ -22,6 +29,8 @@
 
 #include "mpg123.h"
 #include "getlopt.h"
+#include "buffer.h"
+#include "term.h"
 
 #include "version.h"
 
@@ -38,6 +47,9 @@ struct parameter param = {
   0 ,     /* second level buffer size */
   TRUE ,  /* resync after stream error */
   0 ,     /* verbose level */
+#ifdef TERM_CONTROL
+  FALSE , /* term control */
+#endif
   -1 ,     /* force mono */
   0 ,     /* force stereo */
   0 ,     /* force 8bit */
@@ -52,6 +64,7 @@ struct parameter param = {
 };
 
 char *listname = NULL;
+char *listnamedir = NULL;
 char *equalfile = NULL;
 long outscale  = 32768;
 long numframes = -1;
@@ -65,7 +78,8 @@ int *shuffleord= NULL;
 int shuffle_listsize = 0;
 
 static int intflag = FALSE;
-static int remflag = FALSE;
+
+int OutputDescriptor;
 
 #if !defined(WIN32) && !defined(GENERIC)
 static void catch_child(void)
@@ -79,31 +93,18 @@ static void catch_interrupt(void)
 }
 #endif
 
-static char remote_buffer[1024];
 static struct frame fr;
 struct audio_info_struct ai;
 txfermem *buffermem = NULL;
 #define FRAMEBUFUNIT (18 * 64 * 4)
 
-void print_rheader(struct frame *fr);
 void set_synth_functions(struct frame *fr);
-
-
-#if !defined(WIN32) && !defined(GENERIC)
-static void catch_remote(void)
-{
-    remflag = TRUE;
-    intflag = TRUE;
-    if(param.usebuffer)
-        kill(buffer_pid,SIGINT);
-}
-#endif
 
 char *handle_remote(void)
 {
 	switch(frontend_type) {
 		case FRONTEND_SAJBER:
-#ifdef FRONTEND
+#if defined(FRONTEND) && !defined(NOSAJBER)
 			control_sajber(&fr);
 #endif
 			break;
@@ -113,6 +114,7 @@ char *handle_remote(void)
 #endif
 			break;
 		default:
+#if 0
 			fgets(remote_buffer,1024,stdin);
 			remote_buffer[strlen(remote_buffer)-1]=0;
   
@@ -122,8 +124,11 @@ char *handle_remote(void)
 			}
 
 #if !defined(WIN32) && !defined(GENERIC)
-			if(param.usebuffer)
-				kill(buffer_pid,SIGINT);
+			if(param.usebuffer) 
+				buffer_resync();	
+#endif
+#else
+			control_generic(&fr);
 #endif
 			break;
 	}
@@ -142,7 +147,6 @@ void init_output(void)
   if (param.usebuffer) {
     unsigned int bufferbytes;
     sigset_t newsigset, oldsigset;
-
     if (param.usebuffer < 32)
       param.usebuffer = 32; /* minimum is 32 Kbytes! */
     bufferbytes = (param.usebuffer * 1024);
@@ -158,8 +162,14 @@ void init_output(void)
     switch ((buffer_pid = fork())) {
       case -1: /* error */
         perror("fork()");
+#ifdef TERM_CONTROL
+	if(param.term_ctrl)
+		term_restore();
+#endif
         exit(1);
       case 0: /* child */
+        if(rd)
+          rd->close(rd); /* child doesn't need the input stream */
         xfermem_init_reader (buffermem);
         buffer_loop (&ai, &oldsigset);
         xfermem_done_reader (buffermem);
@@ -175,6 +185,10 @@ void init_output(void)
 	/* + 1024 for NtoM rate converter */
     if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2 + 1024))) {
       perror ("malloc()");
+#ifdef TERM_CONTROL
+      if(param.term_ctrl)
+      	term_restore();
+#endif
       exit (1);
 #ifndef NOXFERMEM
     }
@@ -185,6 +199,10 @@ void init_output(void)
     case DECODE_AUDIO:
       if(audio_open(&ai) < 0) {
         perror("audio");
+#ifdef TERM_CONTROL
+	if(param.term_ctrl)
+		term_restore();
+#endif
         exit(1);
       }
       break;
@@ -207,7 +225,7 @@ void shuffle_files(int numfiles)
     srand(time(NULL));
     if(shuffleord)
       free(shuffleord);
-    shuffleord = malloc((numfiles + 1) * sizeof(int));
+    shuffleord = (int *) malloc((numfiles + 1) * sizeof(int));
     if (!shuffleord) {
 	perror("malloc");
 	exit(1);
@@ -241,6 +259,17 @@ char *find_next_file (int argc, char *argv[])
 {
     static FILE *listfile = NULL;
     static char line[1024];
+    char linetmp [1024];
+    char * slashpos;
+    int i;
+
+    /* Get playlist dirname to append it to the files in playlist */
+    if (listname) {
+        if ((slashpos=strrchr(listname, '/'))) {
+            listnamedir=strdup (listname);
+            listnamedir[1 + slashpos - listname] = 0;
+        }
+    }
 
     if (listname || listfile) {
         if (!listfile) {
@@ -255,6 +284,10 @@ char *find_next_file (int argc, char *argv[])
             }
             else if (!(listfile = fopen(listname, "rb"))) {
                 perror (listname);
+#ifdef TERM_CONTROL
+		if(param.term_ctrl)
+			term_restore();
+#endif
                 exit (1);
             }
             if (param.verbose)
@@ -264,8 +297,19 @@ char *find_next_file (int argc, char *argv[])
         do {
             if (fgets(line, 1023, listfile)) {
                 line[strcspn(line, "\t\n\r")] = '\0';
+#if !defined(WIN32)
+                /* MS-like directory format */
+                for (i=0;line[i]!='\0';i++)
+                    if (line [i] == '\\')
+                        line [i] = '/';
+#endif
                 if (line[0]=='\0' || line[0]=='#')
                     continue;
+		if ((listnamedir) && (line[0]!='/') && (line[0]!='\\')){
+                    strcpy (linetmp, listnamedir);
+                    strcat (linetmp, line);
+		    strcpy (line, linetmp);
+                }
                 return (line);
             }
             else {
@@ -294,13 +338,13 @@ void init_input (int argc, char *argv[])
     while ((tempstr = find_next_file(argc, argv))) {
 	if (shuffle_listsize + 2 > mallocsize) {
 	    mallocsize += 8;
-	    shufflist = realloc(shufflist, mallocsize * sizeof(char *));
+	    shufflist = (char **) realloc(shufflist, mallocsize * sizeof(char *));
 	    if (!shufflist) {
 		perror("realloc");
 		exit(1);
 	    }
 	}
-	if (!(shufflist[shuffle_listsize] = malloc(strlen(tempstr) + 1))) {
+	if (!(shufflist[shuffle_listsize] = (char *) malloc(strlen(tempstr) + 1))) {
 	    perror("malloc");
 	    exit(1);
 	}
@@ -309,7 +353,7 @@ void init_input (int argc, char *argv[])
     }
     if (shuffle_listsize) {
 	if (shuffle_listsize + 1 < mallocsize) {
-	    shufflist = realloc(shufflist, (shuffle_listsize + 1) * sizeof(char *));
+	    shufflist = (char **) realloc(shufflist, (shuffle_listsize + 1) * sizeof(char *));
 	}
 	shufflist[shuffle_listsize] = NULL;
     }
@@ -320,9 +364,6 @@ char *get_next_file(int argc, char **argv)
 {
     static int curfile = 0;
     char *newfile;
-
-    if (param.remote)
-	return handle_remote();
 
     if (!param.shuffle) {
 	return find_next_file(argc, argv);
@@ -344,13 +385,6 @@ char *get_next_file(int argc, char **argv)
 
     return newfile;
 }
-
-#ifdef VARMODESUPPORT
-void set_varmode (char *arg)
-{
-    audiobufsize = ((audiobufsize >> 1) + 63) & 0xffffc0;
-}
-#endif
 
 static void set_output_h(char *a)
 {
@@ -409,6 +443,26 @@ void set_au(char *arg)
   strncpy(param.filename,arg,255);
   param.filename[255] = 0;
 }
+static void SetOutFile(char *Arg)
+{
+  param.outmode=DECODE_FILE;
+  OutputDescriptor=open(Arg,O_WRONLY,0);
+  if(OutputDescriptor==-1) {
+    fprintf(stderr,"Can't open %s for writing (%s).\n",Arg,strerror(errno));
+    exit(1);
+  }
+}
+static void SetOutStdout(char *Arg)
+{
+  param.outmode=DECODE_FILE;
+  OutputDescriptor=1;
+}
+static void SetOutStdout1(char *Arg)
+{
+  param.outmode=DECODE_AUDIOFILE;
+  OutputDescriptor=1;
+}
+
 void not_compiled(char *arg)
 {
   fprintf(stderr,"Option '-T / --realtime' not compiled into this binary\n");
@@ -421,7 +475,9 @@ topt opts[] = {
     {'2', "2to1",        0,                  0, &param.down_sample, 1},
     {'4', "4to1",        0,                  0, &param.down_sample, 2},
     {'t', "test",        0,                  0, &param.outmode, DECODE_TEST},
-    {'s', "stdout",      0,                  0, &param.outmode, DECODE_STDOUT},
+    {'s', "stdout",      0,       SetOutStdout, &param.outmode, DECODE_FILE},
+    {'S', "STDOUT",      0,       SetOutStdout1, &param.outmode, DECODE_AUDIOFILE},
+    {'O', "outfile",     GLO_ARG | GLO_CHAR, SetOutFile, NULL, NULL},
     {'c', "check",       0,                  0, &param.checkrange, TRUE},
     {'v', "verbose",     0,        set_verbose, 0,           0},
     {'q', "quiet",       0,                  0, &param.quiet,      TRUE},
@@ -444,8 +500,8 @@ topt opts[] = {
     {'o', "output",      GLO_ARG | GLO_CHAR, set_output, 0,  0},
     {'f', "scale",       GLO_ARG | GLO_LONG, 0, &outscale,   0},
     {'n', "frames",      GLO_ARG | GLO_LONG, 0, &numframes,  0},
-#ifdef VARMODESUPPORT
-    {'v', "var",         0,        set_varmode, &varmode,    TRUE},
+#ifdef TERM_CONTROL
+    {'C', "control",	 0,		     0, &param.term_ctrl, TRUE},
 #endif
     {'b', "buffer",      GLO_ARG | GLO_LONG, 0, &param.usebuffer,  0},
     {'R', "remote",      0,                  0, &param.remote,     TRUE},
@@ -462,7 +518,7 @@ topt opts[] = {
     {'u', "auth",        GLO_ARG | GLO_CHAR, 0, &httpauth,   0},
 #endif
 #if defined(SET_RT)
-    {'T', "realtime",    0,                  0, &param.relatime, TRUE },
+    {'T', "realtime",    0,                  0, &param.realtime, TRUE },
 #else
     {'T', "realtime",    0,       not_compiled, 0,           0 },    
 #endif
@@ -498,7 +554,7 @@ static void reset_audio(void)
 		buffermem->buf[0] = ai.rate; 
 		buffermem->buf[1] = ai.channels; 
 		buffermem->buf[2] = ai.format;
-		kill (buffer_pid, SIGUSR1);
+		buffer_reset();
 	}
 	else 
 #endif
@@ -511,6 +567,10 @@ static void reset_audio(void)
 		audio_close (&ai);
 		if (audio_open(&ai) < 0) {
 			perror("audio");
+#ifdef TERM_CONTROL
+			if(param.term_ctrl)
+				term_restore();
+#endif
 			exit(1);
 		}
 	}
@@ -529,11 +589,6 @@ void play_frame(int init,struct frame *fr)
 	long old_rate,old_format,old_channels;
 
 	if(fr->header_change || init) {
-
-#if !defined(WIN32) && !defined(GENERIC)
-		if(param.remote)
-			print_rheader(fr);
-#endif
 
 		if (!param.quiet && init) {
 			if (param.verbose)
@@ -717,8 +772,8 @@ int main(int argc, char *argv[])
 	char *fname;
 #if !defined(WIN32) && !defined(GENERIC)
 	struct timeval start_time, now;
-#endif
 	unsigned long secdiff;
+#endif	
 	int init;
 
 #ifdef OS2
@@ -729,15 +784,21 @@ int main(int argc, char *argv[])
 		fprintf(stderr,"Ouch SHORT has size of %d bytes (required: '2')\n",(int)sizeof(short));
 		exit(1);
 	}
+	if(sizeof(long) < 4) {
+		fprintf(stderr,"Ouch LONG has size of %d bytes (required: at least 4)\n",(int)sizeof(long));
+	}
 
-	if(!strcmp("sajberplay",argv[0]))
+	(prgName = strrchr(argv[0], '/')) ? prgName++ : (prgName = argv[0]);
+
+#ifndef NOSAJBER
+	if(!strcmp("sajberplay",prgName))
 		frontend_type = FRONTEND_SAJBER;
-	if(!strcmp("mpg123m",argv[0]))
+#endif
+	if(!strcmp("mpg123m",prgName))
 		frontend_type = FRONTEND_TK3PLAY;
 
 	audio_info_struct_init(&ai);
 
-	(prgName = strrchr(argv[0], '/')) ? prgName++ : (prgName = argv[0]);
 
 	while ((result = getlopt(argc, argv, opts)))
 	switch (result) {
@@ -758,8 +819,6 @@ int main(int argc, char *argv[])
 	if (param.remote) {
 		param.verbose = 0;        
 		param.quiet = 1;
-		catchsignal(SIGUSR1, catch_remote);
-		fprintf(stderr,"@R MPG123\n");        
 	}
 #endif
 
@@ -806,7 +865,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr,"Can't open equalizer file '%s'\n",equalfile);
 	}
 
-#if !defined(WIN32) && !defined(GENERIC) && !defined(MINT)
+#if !defined(WIN32) && !defined(GENERIC) && !defined(MINT) && !defined(__EMX__) && !defined(OS2)
 	if(param.aggressive) { /* tst */
 		int mypid = getpid();
 		setpriority(PRIO_PROCESS,mypid,-20);
@@ -835,7 +894,7 @@ int main(int argc, char *argv[])
 #if !defined(WIN32) && !defined(GENERIC)
 	catchsignal (SIGINT, catch_interrupt);
 
-	if(frontend_type) {
+	if(frontend_type || param.remote) {
 		handle_remote();
 		exit(0);
 	}
@@ -854,20 +913,39 @@ int main(int argc, char *argv[])
 				&dirname, &filename))
 				fprintf(stderr, "\nDirectory: %s", dirname);
 			fprintf(stderr, "\nPlaying MPEG stream from %s ...\n", filename);
+
+#if !defined(GENERIC)
+{
+     const char *term_type;
+         term_type = getenv("TERM");
+         if (!strcmp(term_type,"xterm"))
+         {
+           fprintf(stderr, "\033]0;%s\007", filename);
+         }
+}
+#endif
+
 		}
 
 #if !defined(WIN32) && !defined(GENERIC)
-		gettimeofday (&start_time, NULL);
+#ifdef TERM_CONTROL
+		if(!param.term_ctrl)
+#endif
+			gettimeofday (&start_time, NULL);
 #endif
 		read_frame_init();
 
 		init = 1;
 		newFrame = startFrame;
 #ifdef TERM_CONTROL
-		term_init();
+		if(param.term_ctrl)
+			term_init();
 #endif
 		leftFrames = numframes;
 		for(frameNum=0;read_frame(&fr) && leftFrames && !intflag;frameNum++) {
+#ifdef TERM_CONTROL			
+tc_hack:
+#endif
 			if(frameNum < startFrame || (param.doublespeed && (frameNum % param.doublespeed))) {
 				if(fr.lay == 3)
 					set_pointer(512);
@@ -881,7 +959,7 @@ int main(int argc, char *argv[])
 			if(param.verbose) {
 #ifndef NOXFERMEM
 				if (param.verbose > 1 || !(frameNum & 0x7))
-					print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
+					print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai); 
 				if(param.verbose > 2 && param.usebuffer)
 					fprintf(stderr,"[%08x %08x]",buffermem->readindex,buffermem->freeindex);
 #else
@@ -890,7 +968,18 @@ int main(int argc, char *argv[])
 #endif
 			}
 #ifdef TERM_CONTROL
-			term_control();
+			if(!param.term_ctrl) {
+				continue;
+			} else {
+				long offset;
+				if((offset=term_control(&fr))) {
+					if(!rd->back_frame(rd, &fr, -offset)) {
+						frameNum+=offset;
+						if (frameNum < 0)
+							frameNum = 0;
+					}
+				}
+			}
 #endif
 
       }
@@ -899,14 +988,35 @@ int main(int argc, char *argv[])
 	if(param.usebuffer) {
 		int s;
 		while ((s = xfermem_get_usedspace(buffermem))) {
-        		struct timeval wait100 = {0, 100000};
-			if(buffermem->wakeme[XF_READER] == TRUE)
-				break;
+			struct timeval wait170 = {0, 170000};
+
+			buffer_ignore_lowmem();
+			
 			if(param.verbose)
-				print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
-			select(0, NULL, NULL, NULL, &wait100);
+				print_stat(&fr,frameNum,s,&ai);
+#ifdef TERM_CONTROL
+			if(param.term_ctrl) {
+				long offset;
+				if((offset=term_control(&fr))) {
+					if((!rd->back_frame(rd, &fr, -offset)) 
+						&& read_frame(&fr)) {
+						frameNum+=offset;
+						if (frameNum < 0)
+							frameNum = 0;
+						goto tc_hack;	/* Doh! Gag me with a spoon! */
+					}
+				}
+			}
+#endif
+			select(0, NULL, NULL, NULL, &wait170);
 		}
 	}
+#endif
+	if(param.verbose)
+		print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai); 
+#ifdef TERM_CONTROL
+	if(param.term_ctrl)
+		term_restore();
 #endif
 
 	if (!param.quiet) {
@@ -918,31 +1028,45 @@ int main(int argc, char *argv[])
 		fprintf(stderr,"\n[%d:%02d] Decoding of %s finished.\n", secs / 60,
 			secs % 60, filename);
 	}
-	rd->close(rd);
 
+	rd->close(rd);
+#if 0
 	if(param.remote)
 		fprintf(stderr,"@R MPG123\n");        
 	if (remflag) {
 		intflag = FALSE;
 		remflag = FALSE;
 	}
-
+#endif
+	
       if (intflag) {
+
+/* 
+ * When using TERM_CONTROL, there is 'q' to terminate a list of songs, so
+ * no pressing need to keep up this first second SIGINT hack that was too
+ * often mistaken as a bug. [dk]
+ */
 #if !defined(WIN32) && !defined(GENERIC)
-        gettimeofday (&now, NULL);
-        secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
-        if (now.tv_usec >= start_time.tv_usec)
-          secdiff += (now.tv_usec - start_time.tv_usec) / 1000;
-        else
-          secdiff -= (start_time.tv_usec - now.tv_usec) / 1000;
-        if (secdiff < 1000)
-          break;
+#ifdef TERM_CONTROL
+	if(!param.term_ctrl)
+#endif
+        {
+		gettimeofday (&now, NULL);
+        	secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
+        	if (now.tv_usec >= start_time.tv_usec)
+          		secdiff += (now.tv_usec - start_time.tv_usec) / 1000;
+        	else
+          		secdiff -= (start_time.tv_usec - now.tv_usec) / 1000;
+        	if (secdiff < 1000)
+          		break;
+	}
 #endif
         intflag = FALSE;
       }
     }
 #ifndef NOXFERMEM
     if (param.usebuffer) {
+      buffer_end();
       xfermem_done_writer (buffermem);
       waitpid (buffer_pid, NULL, 0);
       xfermem_done (buffermem);
@@ -1012,6 +1136,7 @@ static void usage(char *dummy)  /* print syntax & exit */
 #endif
    fprintf(stderr,"   -z    shuffle play (with wildcards)  -Z    random play\n");
    fprintf(stderr,"   -u a  HTTP authentication string     -E f  Equalizer, data from file\n");
+   fprintf(stderr,"   -C    enable control keys\n");
    fprintf(stderr,"See the manpage %s(1) or call %s with --longhelp for more information.\n", prgName,prgName);
    exit(1);
 }
@@ -1029,9 +1154,10 @@ static void long_usage(char *d)
   fprintf(o," -4     --4to1             4:1 Downsampling\n");
   fprintf(o," -t     --test             \n");
   fprintf(o," -s     --stdout           \n");
+  fprintf(o," -S     --STDOUT           Play AND output stream (not implemented yet)\n");
   fprintf(o," -c     --check            \n");
   fprintf(o," -v[*]  --verbose          Increase verboselevel\n");
-  fprintf(o," -q     --quiet            Enables quite mode\n");
+  fprintf(o," -q     --quiet            Enables quiet mode\n");
   fprintf(o," -y     --resync           DISABLES resync on error\n");
   fprintf(o," -0     --left --single0   Play only left channel\n");
   fprintf(o," -1     --right --single1  Play only right channel\n");
@@ -1046,12 +1172,12 @@ static void long_usage(char *d)
   fprintf(o," -o l   --lineout          Output to lineout\n");
   fprintf(o," -f <n> --scale <n>        Scale output samples (soft gain)\n");
   fprintf(o," -n     --frames <n>       Play only <n> frames of every stream\n");
-#ifdef VARMODESUPPORT
-  fprintf(o," -v     --var              Varmode\n");
-#endif
   fprintf(o," -b <n> --buffer <n>       Set play buffer (\"output cache\")\n");
+#ifdef TERM_CONTROL
+  fprintf(o," -C     --control          Enable control keys\n");
+#endif
 #if 0
-  fprintf(o," -R     --remote\n");
+  fprintf(o," -R     --remote		Generic remote interface\n");
 #endif
   fprintf(o," -d     --doublespeed      Play only every second frame\n");
   fprintf(o," -h     --halfspeed        Play every frame twice\n");

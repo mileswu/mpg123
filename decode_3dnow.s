@@ -21,6 +21,8 @@
 / by KIMURA Takuhiro <kim@hannah.ipc.miyakyo-u.ac.jp> - until 31.Mar.1998
 /                    <kim@comtec.co.jp>               - after  1.Apr.1998
 
+/ Enhancments for q-word operation by Michael Hipp
+
 .bss
 	.comm	buffs,4352,4
 .data
@@ -82,328 +84,175 @@ synth_1to1_3dnow:
 	movl %eax,%ecx
 	subl %edx,%ecx
 	movl $16,%ebp
+
 .L55:
-	movd (%ecx),%mm0
-	psllq $32,%mm0
-	movd (%ebx),%mm1
-	psllq $32,%mm1
-	movd 8(%ecx),%mm2
-	pfadd %mm2,%mm0
-	movd 8(%ebx),%mm3
-	pfadd %mm3,%mm1
+	movq (%ecx),%mm4
+	movq (%ebx),%mm3
+        movq 8(%ecx),%mm0
+        movq 8(%ebx),%mm1
+	pfmul %mm3,%mm4
 
-	movd 4(%ecx),%mm5
-	psllq $32,%mm5
+        movq 16(%ecx),%mm2
+        pfmul %mm1,%mm0
+        movq 16(%ebx),%mm3
+	pfadd %mm0,%mm4
 
-	pfmul %mm1,%mm0
+        movq 24(%ecx),%mm0
+        pfmul %mm2,%mm3
+        movq 24(%ebx),%mm1
+        pfadd %mm3,%mm4
 
-	movd 4(%ebx),%mm2
-	psllq $32,%mm2
-	movd 12(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 12(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
+        movq 32(%ecx),%mm2
+        pfmul %mm1,%mm0
+        movq 32(%ebx),%mm3
+        pfadd %mm0,%mm4
 
-	movd 16(%ecx),%mm1
-	psllq $32,%mm1
+        movq 40(%ecx),%mm0
+        pfmul %mm2,%mm3
+        movq 40(%ebx),%mm1
+        pfadd %mm3,%mm4
 
-	pfsub %mm5,%mm0
+        movq 48(%ecx),%mm2
+        pfmul %mm1,%mm0
+        movq 48(%ebx),%mm3
+        pfadd %mm0,%mm4
 
-	movd 16(%ebx),%mm2
-	psllq $32,%mm2
-	movd 24(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 24(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
+        movq 56(%ecx),%mm0
+        pfmul %mm2,%mm3
+        movq 56(%ebx),%mm1
+        pfadd %mm3,%mm4
 
-	movd 20(%ecx),%mm5
-	psllq $32,%mm5
+        pfmul %mm1,%mm0
+        pfadd %mm0,%mm4
 
-	pfadd %mm1,%mm0
+	movq %mm4,%mm0
+	psrlq $32,%mm0
+	pfsub %mm0,%mm4
 
-	movd 20(%ebx),%mm2
-	psllq $32,%mm2
-	movd 28(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 28(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
+	pf2id %mm4,%mm4
+	movd %mm4,%eax
 
-	movd 32(%ecx),%mm1
-	psllq $32,%mm1
-
-	pfsub %mm5,%mm0
-
-	movd 32(%ebx),%mm2
-	psllq $32,%mm2
-	movd 40(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 40(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
-	
-	movd 36(%ecx),%mm5
-	psllq $32,%mm5
-
-	pfadd %mm1,%mm0
-
-	movd 36(%ebx),%mm2
-	psllq $32,%mm2
-	movd 44(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 44(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
-	
-	movd 48(%ecx),%mm1
-	psllq $32,%mm1
-
-	pfsub %mm5,%mm0
-
-	movd 48(%ebx),%mm2
-	psllq $32,%mm2
-	movd 56(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 56(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
-
-	movd 52(%ecx),%mm5
-	psllq $32,%mm5
-
-	pfadd %mm1,%mm0
-
-	movd 52(%ebx),%mm2
-	psllq $32,%mm2
-	movd 60(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 60(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
-	pfsub %mm5,%mm0
-	
-	pfacc %mm0,%mm0
-	pf2id %mm0,%mm0
-	movd %mm0,%eax
-
-	cmpl $32767,%eax
-	jg 1f
-	cmpl $-32768,%eax
-	jl 2f
+	sar	$16,%eax	/ new clip
 	movw %ax,(%esi)
-	jmp 4f
-1:	movw $32767,(%esi)
-	jmp 3f
-2:	movw $-32768,(%esi)
-3:	incl %edi
-4:
-.L54:
+
 	addl $64,%ebx
 	subl $-128,%ecx
 	addl $4,%esi
 	decl %ebp
 	jnz .L55
 
-	movd (%ecx),%mm0
-	psllq $32,%mm0
+/ --- end of loop 1 ---
+
+	movd (%ecx),%mm2
 	movd (%ebx),%mm1
-	psllq $32,%mm1
-	movd 8(%ecx),%mm2
-	pfadd %mm2,%mm0
-	movd 8(%ebx),%mm3
-	pfadd %mm3,%mm1
+	pfmul %mm1,%mm2
 
-	movd 16(%ecx),%mm5
-	psllq $32,%mm5
+	movd 8(%ecx),%mm0
+	movd 8(%ebx),%mm1
+	pfmul %mm0,%mm1
+	pfadd %mm1,%mm2
 
-	pfmul %mm1,%mm0
+        movd 16(%ecx),%mm0
+        movd 16(%ebx),%mm1
+        pfmul %mm0,%mm1
+        pfadd %mm1,%mm2
 
-	movd 16(%ebx),%mm2
-	psllq $32,%mm2
-	movd 24(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 24(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
+        movd 24(%ecx),%mm0
+        movd 24(%ebx),%mm1
+        pfmul %mm0,%mm1
+        pfadd %mm1,%mm2
 
-	movd 32(%ecx),%mm1
-	psllq $32,%mm1
+        movd 32(%ecx),%mm0
+        movd 32(%ebx),%mm1
+        pfmul %mm0,%mm1
+        pfadd %mm1,%mm2
 
-	pfadd %mm5,%mm0
+        movd 40(%ecx),%mm0
+        movd 40(%ebx),%mm1
+        pfmul %mm0,%mm1
+        pfadd %mm1,%mm2
 
-	movd 32(%ebx),%mm2
-	psllq $32,%mm2
-	movd 40(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 40(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
-	
-	movd 48(%ecx),%mm5
-	psllq $32,%mm5
+        movd 48(%ecx),%mm0
+        movd 48(%ebx),%mm1
+        pfmul %mm0,%mm1
+        pfadd %mm1,%mm2
 
-	pfadd %mm1,%mm0
+        movd 56(%ecx),%mm0
+        movd 56(%ebx),%mm1
+        pfmul %mm0,%mm1
+        pfadd %mm1,%mm2
 
-	movd 48(%ebx),%mm2
-	psllq $32,%mm2
-	movd 56(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 56(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
-	pfadd %mm5,%mm0
-	
-	pfacc %mm0,%mm0
-	pf2id %mm0,%mm0
-	movd %mm0,%eax
+	pf2id %mm2,%mm2
+	movd %mm2,%eax
 
-	cmpl $32767,%eax
-	jg 1f
-	cmpl $-32768,%eax
-	jl 2f
+	sar $16,%eax	/ new clip
+
 	movw %ax,(%esi)
-	jmp 4f
-1:	movw $32767,(%esi)
-	jmp 3f
-2:	movw $-32768,(%esi)
-3:	incl %edi
-4:
-.L62:
+
 	addl $-64,%ebx
 	addl $4,%esi
-	movl 16(%esp),%edx
-	leal -128(%ecx,%edx,8),%ecx
+	addl $256,%ecx
 	movl $15,%ebp
+
 .L68:
-	movd -4(%ecx),%mm0
-	psllq $32,%mm0
-	movd (%ebx),%mm1
-	psllq $32,%mm1
-	movd -8(%ecx),%mm2
-	pfadd %mm2,%mm0
-	movd 4(%ebx),%mm3
-	pfadd %mm3,%mm1
-	pfmul %mm1,%mm0
-	movq %mm0,%mm4
-		
-	movd -12(%ecx),%mm5
-	psllq $32,%mm5
+	psubd 	  %mm0,%mm0
 
-	pfsub %mm4,%mm0
+	movq    (%ebx),%mm1
+	movq    (%ecx),%mm2
+	pfmul     %mm1,%mm2
+	pfsub     %mm2,%mm0
 
-	movd 8(%ebx),%mm2
-	psllq $32,%mm2
+	movq   8(%ebx),%mm3
+	movq   8(%ecx),%mm4
+	pfmul     %mm3,%mm4
+	pfsub     %mm4,%mm0
 
-	pfsub %mm4,%mm0
+        movq  16(%ebx),%mm1
+        movq  16(%ecx),%mm2
+        pfmul     %mm1,%mm2
+        pfsub     %mm2,%mm0
 
-	movd -16(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 12(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
+        movq  24(%ebx),%mm3
+        movq  24(%ecx),%mm4
+        pfmul     %mm3,%mm4
+        pfsub     %mm4,%mm0
 
-	movd -20(%ecx),%mm1
-	psllq $32,%mm1
+        movq  32(%ebx),%mm1
+        movq  32(%ecx),%mm2
+        pfmul     %mm1,%mm2
+        pfsub     %mm2,%mm0
 
-	pfsub %mm5,%mm0
+        movq  40(%ebx),%mm3
+        movq  40(%ecx),%mm4
+        pfmul     %mm3,%mm4
+        pfsub     %mm4,%mm0
 
-	movd 16(%ebx),%mm2
-	psllq $32,%mm2
-	movd -24(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 20(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
-	
-	movd -28(%ecx),%mm5
-	psllq $32,%mm5
+        movq  48(%ebx),%mm1
+        movq  48(%ecx),%mm2
+        pfmul     %mm1,%mm2
+        pfsub     %mm2,%mm0
 
-	pfsub %mm1,%mm0
+        movq  56(%ebx),%mm3
+        movq  56(%ecx),%mm4
+        pfmul     %mm3,%mm4
+        pfsub     %mm4,%mm0
 
-	movd 24(%ebx),%mm2
-	psllq $32,%mm2
-	movd -32(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 28(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
+	pfacc     %mm0,%mm0
 
-	movd -36(%ecx),%mm1
-	psllq $32,%mm1
-
-	pfsub %mm5,%mm0
-
-	movd 32(%ebx),%mm2
-	psllq $32,%mm2
-	movd -40(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 36(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
-
-	movd -44(%ecx),%mm5
-	psllq $32,%mm5
-
-	pfsub %mm1,%mm0
-
-	movd 40(%ebx),%mm2
-	psllq $32,%mm2
-	movd -48(%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 44(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
-
-	movd -52(%ecx),%mm1
-	psllq $32,%mm1
-
-	pfsub %mm5,%mm0
-
-	movd 48(%ebx),%mm2
-	psllq $32,%mm2
-	movd -56(%ecx),%mm3
-	pfadd %mm3,%mm1
-	movd 52(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm1
-
-	movd -60(%ecx),%mm5
-	psllq $32,%mm5
-
-	pfsub %mm1,%mm0
-
-	movd 56(%ebx),%mm2
-	psllq $32,%mm2
-	movd (%ecx),%mm3
-	pfadd %mm3,%mm5
-	movd 60(%ebx),%mm4
-	pfadd %mm4,%mm2
-	pfmul %mm2,%mm5
-	pfsub %mm5,%mm0
-
-	pfacc %mm0,%mm0
 	pf2id %mm0,%mm0
 	movd %mm0,%eax
 
-	cmpl $32767,%eax
-	jg 1f
-	cmpl $-32768,%eax
-	jl 2f
+	sar $16,%eax	/ new clip
+
 	movw %ax,(%esi)
-	jmp 4f
-1:	movw $32767,(%esi)
-	jmp 3f
-2:	movw $-32768,(%esi)
-3:	incl %edi
-4:
-.L67:
+
 	addl $-64,%ebx
-	addl $-128,%ecx
+	subl $-128,%ecx
 	addl $4,%esi
 	decl %ebp
 	jnz .L68
+
+/ --- end of loop 2
 
 	femms
 

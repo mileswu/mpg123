@@ -55,7 +55,7 @@
  * used :
  * 
  * int audio_open(struct audio_info_struct *ai);
- * int audio_play_samples(struct audio_info_struct *ai,short *buf,int len);
+ * int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len);
  * int audio_close(struct audio_info_struct *ai);
  * 
  * unused :
@@ -168,7 +168,7 @@ int audio_close(struct audio_info_struct *ai)
  * deserv to be inline
  */
 
-inline int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+inline int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
 {
   return write(ai->fn,buf,len*2);
 }
@@ -186,6 +186,12 @@ int audio_set_rate(struct audio_info_struct *ai) {
 int audio_set_channels(struct audio_info_struct *ai) {
  return 0;
 }
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  return AUDIO_FORMAT_SIGNED_16;
+}
+
 
 /**************************************************************************
  * T H A T ' S    A L L   F O L K S

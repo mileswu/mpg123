@@ -15,9 +15,9 @@ Have fun!
 Some additional remarks:
 
  - There is currently no direct audio hardware support for the
-   "dec", "aix" and "generic" targets.  That means that you
-   have to use the "-s" commandline option to write the decoded
-   audio data to stdout.
+   "dec" and "generic" targets.  That means that you have to use
+   the "-s" commandline option to write the decoded audio data
+   to stdout.
 
  - On Solaris, use Sun's SparcWorks compiler ("make solaris")
    if at all possible.  It generates faster code than gcc, so

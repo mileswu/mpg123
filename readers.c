@@ -5,6 +5,8 @@
 #include <fcntl.h>
 
 #include "mpg123.h"
+#include "buffer.h"
+#include "common.h"
 
 #ifdef READ_MMAP
 #include <sys/mman.h>
@@ -37,20 +39,16 @@ static int fullread(int fd,unsigned char *buf,int count)
 
 static int default_init(struct reader *rds)
 {
-  int len;
   char buf[128];
-  len = get_fileinfo(rds,buf);
-  
-  rds->filelen = -1;
+
   rds->filepos = 0;
+  rds->filelen = get_fileinfo(rds,buf);
   
-  if(len > 0) {
+  if(rds->filelen > 0) {
     if(!strncmp(buf,"TAG",3)) {
       rds->flags |= READER_ID3TAG;
       memcpy(rds->id3buf,buf,128);
     }
-    rds->filelen = len;
-    rds->filepos = 0;
   }
   return 0;
 }
@@ -69,10 +67,11 @@ static int stream_back_bytes(struct reader *rds,int bytes)
 {
   if(lseek(rds->filept,-bytes,SEEK_CUR) < 0)
     return -1;
+  if(param.usebuffer)
+	  buffer_resync();
   return 0;
 }
 
-#if 0
 static int stream_back_frame(struct reader *rds,struct frame *fr,int num)
 {
 	long bytes;
@@ -84,6 +83,18 @@ static int stream_back_frame(struct reader *rds,struct frame *fr,int num)
 
 	bytes = (fr->framesize+8)*(num+2);
 
+	/* Skipping back/forth requires a bit more work in buffered mode. 
+	 * See mapped_back_frame(). 
+	 */
+	if(param.usebuffer)
+		bytes += (long)(xfermem_get_usedspace(buffermem) /
+			(buffermem->buf[0] * buffermem->buf[1]
+				* (buffermem->buf[2] & AUDIO_FORMAT_MASK ?
+					16.0 : 8.0 ))
+				* (tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index] << 10));
+/*
+		bytes += (long)(compute_buffer_offset(fr)*compute_bpf(fr));
+*/	
 	if(lseek(rds->filept,-bytes,SEEK_CUR) < 0)
 		return -1;
 
@@ -110,9 +121,11 @@ static int stream_back_frame(struct reader *rds,struct frame *fr,int num)
 		set_pointer(512);
 	}
 
+	if(param.usebuffer)
+		buffer_resync();
+	
 	return 0;
 }
-#endif
 
 static int stream_head_read(struct reader *rds,unsigned long *newhead)
 {
@@ -143,7 +156,16 @@ static int stream_head_shift(struct reader *rds,unsigned long *head)
 
 static int stream_skip_bytes(struct reader *rds,int len)
 {
-  return lseek(rds->filept,len,SEEK_CUR);
+  if (!param.usebuffer)
+  	return lseek(rds->filept,len,SEEK_CUR);
+
+  else {
+
+	int ret = lseek(rds->filept,len,SEEK_CUR);
+	buffer_resync();
+	return ret;
+
+  }
 }
 
 static int stream_read_frame_body(struct reader *rds,unsigned char *buf,
@@ -169,11 +191,13 @@ static long stream_tell(struct reader *rds)
 static void stream_rewind(struct reader *rds)
 {
   lseek(rds->filept,0,SEEK_SET);
+  if(param.usebuffer) 
+	  buffer_resync();
 }
 
 /*
  * returns length of a file (if filept points to a file)
- * reads last to 128 bytes information into buffer
+ * reads the last 128 bytes information into buffer
  */
 static int get_fileinfo(struct reader *rds,char *buf)
 {
@@ -221,7 +245,7 @@ static int mapped_init(struct reader *rds)
 	  memcpy(rds->id3buf,buf,128);
 	}
 
-        mappnt = mapbuf = 
+        mappnt = mapbuf = (unsigned char *)
 		mmap(NULL, len, PROT_READ, MAP_SHARED , rds->filept, 0);
 	if(!mapbuf || mapbuf == MAP_FAILED)
 		return -1;
@@ -238,11 +262,13 @@ static int mapped_init(struct reader *rds)
 static void mapped_rewind(struct reader *rds)
 {
 	mappnt = mapbuf;
+	if (param.usebuffer) 
+		buffer_resync();	
 }
 
 static void mapped_close(struct reader *rds)
 {
-	munmap(mapbuf,mapend-mapbuf);
+	munmap((void *)mapbuf,mapend-mapbuf);
 	if (rds->flags & READER_FD_OPENED)
 		close(rds->filept);
 }
@@ -278,26 +304,21 @@ static int mapped_skip_bytes(struct reader *rds,int len)
   if(mappnt + len > mapend)
     return FALSE;
   mappnt += len;
+  if (param.usebuffer)
+	  buffer_resync();
   return TRUE;
 }
 
 static int mapped_read_frame_body(struct reader *rds,unsigned char *buf,
 				  int size)
 {
-#if 1
+  if(size <= 0) {
+    fprintf(stderr,"Ouch. Read_frame called with size <= 0\n");
+    return FALSE;
+  }
   if(mappnt + size > mapend)
     return FALSE;
-#else
-  long l;
-  if(size > (mapend-mappnt)) {
-    l = mapend-mappnt;
-    memcpy(buf,mappnt,l);
-    memset(buf+l,0,size-l);
-  }
-  else
-#endif
-    memcpy(buf,mappnt,size);
-
+  memcpy(buf,mappnt,size);
   mappnt += size;
 
   return TRUE;
@@ -308,19 +329,35 @@ static int mapped_back_bytes(struct reader *rds,int bytes)
     if( (mappnt - bytes) < mapbuf || (mappnt - bytes + 4) > mapend)
         return -1;
     mappnt -= bytes;
+    if(param.usebuffer)
+	    buffer_resync();
     return 0;
 }
 
-#if 0
 static int mapped_back_frame(struct reader *rds,struct frame *fr,int num)
 {
     long bytes;
     unsigned long newhead;
 
+
     if(!firsthead)
         return 0;
 
     bytes = (fr->framesize+8)*(num+2);
+
+    /* Buffered mode is a bit trickier. From the size of the buffered
+     * output audio stream we have to make a guess at the number of frames
+     * this corresponds to.
+     */
+    if(param.usebuffer) 
+		bytes += (long)(xfermem_get_usedspace(buffermem) /
+			(buffermem->buf[0] * buffermem->buf[1] 
+				* (buffermem->buf[2] & AUDIO_FORMAT_MASK ?
+			16.0 : 8.0 )) 
+			* (tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index] << 10));
+/*
+	    	bytes += (long)(compute_buffer_offset(fr)*compute_bpf(fr));  
+*/
 
     if( (mappnt - bytes) < mapbuf || (mappnt - bytes + 4) > mapend)
         return -1;
@@ -344,9 +381,11 @@ static int mapped_back_frame(struct reader *rds,struct frame *fr,int num)
     if(fr->lay == 3)
         set_pointer(512);
 
+    if(param.usebuffer)
+	    buffer_resync();
+    
     return 0;
 }
-#endif
 
 static long mapped_tell(struct reader *rds)
 {
@@ -369,6 +408,7 @@ struct reader readers[] = {
    NULL,
    NULL,
    NULL,
+   NULL,
    NULL } ,
 #endif
 #ifdef READ_MMAP
@@ -379,9 +419,10 @@ struct reader readers[] = {
    mapped_skip_bytes,
    mapped_read_frame_body,
    mapped_back_bytes,
+   mapped_back_frame,
    mapped_tell,
-   mapped_rewind } ,
-#endif
+   mapped_rewind } , 
+#endif 
  { default_init,
    stream_close,
    stream_head_read,
@@ -389,6 +430,7 @@ struct reader readers[] = {
    stream_skip_bytes,
    stream_read_frame_body,
    stream_back_bytes,
+   stream_back_frame,
    stream_tell,
    stream_rewind } ,
  { NULL, }
@@ -413,7 +455,10 @@ void open_stream(char *bs_filenam,int fd)
 	}
 	else if (!strncmp(bs_filenam, "http://", 7)) 
 		filept = http_open(bs_filenam);
-	else if ( (filept = open(bs_filenam, O_RDONLY)) < 0) {
+#ifndef O_BINARY
+#define O_BINARY (0)
+#endif
+	else if ( (filept = open(bs_filenam, O_RDONLY|O_BINARY)) < 0) {
 		perror (bs_filenam);
 		exit(1);
 	}
@@ -439,19 +484,5 @@ void open_stream(char *bs_filenam,int fd)
       print_id3_tag(rd->id3buf);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

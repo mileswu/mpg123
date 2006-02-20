@@ -133,6 +133,9 @@ struct parameter {
   long usebuffer;	/* second level buffer size */
   int tryresync;  /* resync stream after error */
   int verbose;    /* verbose level */
+#ifdef TERM_CONTROL
+  int term_ctrl;
+#endif
   int force_mono;
   int force_stereo;
   int force_8bit;
@@ -154,6 +157,7 @@ struct reader {
   int  (*skip_bytes)(struct reader *,int len);
   int  (*read_frame_body)(struct reader *,unsigned char *,int size);
   int  (*back_bytes)(struct reader *,int bytes);
+  int  (*back_frame)(struct reader *,struct frame *,int num);
   long (*tell)(struct reader *);
   void (*rewind)(struct reader *);
   long filelen;
@@ -174,8 +178,14 @@ extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
 
 #ifndef NOXFERMEM
-extern void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset);
+extern void buffer_loop(struct audio_info_struct *ai,sigset_t *oldsigset);
 #endif
+
+/* ----- Declarations from "audio_esd.c"  ------ */
+extern char *esdserver;
+
+
+
 
 /* ------ Declarations from "httpget.c" ------ */
 
@@ -191,18 +201,24 @@ extern void (*catchsignal(int signum, void(*handler)()))();
 
 extern void print_header(struct frame *);
 extern void print_header_compact(struct frame *);
+extern void print_id3_tag(unsigned char *buf);
 
 extern int split_dir_file(const char *path, char **dname, char **fname);
 
 extern unsigned int   get1bit(void);
 extern unsigned int   getbits(int);
 extern unsigned int   getbits_fast(int);
+extern void           backbits(int);
+extern int            getbitoffset(void);
+extern int            getbyte(void);
 
 extern void set_pointer(long);
 
 extern unsigned char *pcm_sample;
 extern int pcm_point;
 extern int audiobufsize;
+
+extern int OutputDescriptor;
 
 #ifdef VARMODESUPPORT
 extern int varmode;
@@ -287,8 +303,7 @@ extern int  hsstell(void);
 extern void set_pointer(long);
 extern void huffman_decoder(int ,int *);
 extern void huffman_count1(int,int *);
-extern void print_stat(struct frame *fr,int no,long buffsize,
-        struct audio_info_struct *ai);
+extern void print_stat(struct frame *fr,int no,long buffsize,struct audio_info_struct *ai);
 extern int get_songlen(struct frame *fr,int no);
 
 extern void init_layer3(int);
@@ -299,17 +314,32 @@ extern void dct64(real *,real *,real *);
 
 extern void synth_ntom_set_step(long,long);
 
+extern void control_generic(struct frame *fr);
 extern void control_sajber(struct frame *fr);
 extern void control_tk3play(struct frame *fr);
 
+extern int cdr_open(struct audio_info_struct *ai, char *ame);
+extern int au_open(struct audio_info_struct *ai, char *name);
 extern int wav_open(struct audio_info_struct *ai, char *wavfilename);
 extern int wav_write(unsigned char *buf,int len);
+extern int cdr_close(void);
+extern int au_close(void);
 extern int wav_close(void);
+
+extern int au_open(struct audio_info_struct *ai, char *aufilename);
+extern int au_close(void);
+
+extern int cdr_open(struct audio_info_struct *ai, char *cdrfilename);
+extern int cdr_close(void);
 
 extern unsigned char *conv16to8;
 extern long freqs[9];
 extern real muls[27][64];
+#ifdef USE_3DNOW
+extern real decwin[2*(512+32)];
+#else
 extern real decwin[512+32];
+#endif
 extern real *pnts[5];
 
 extern real equalizer[2][32];

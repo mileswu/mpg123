@@ -21,6 +21,10 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 
+#ifdef AIX
+#include <sys/select.h>
+#endif
+
 #include "mpg123.h"
 
 #ifndef USE_MMAP
@@ -87,7 +91,7 @@ void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 	(*xf)->data = ((byte *) *xf) + sizeof(txfermem) + msize;
 	(*xf)->metadata = ((byte *) *xf) + sizeof(txfermem);
 	(*xf)->size = bufsize;
-	(*xf)->metasize = msize;
+	(*xf)->metasize = msize + skipbuf;
 	preload = bufsize>>3;
 }
 
@@ -123,7 +127,7 @@ int xfermem_get_freespace (txfermem *xf)
 
 	if(!xf)
 		return 0;
-	
+
 	if ((freeindex = xf->freeindex) < 0
 			|| (readindex = xf->readindex) < 0)
 		return (0);
@@ -232,7 +236,7 @@ int xfermem_block (int readwrite, txfermem *xf)
 
 extern int errno;
 
-void xfermem_init (txfermem **xf, int bufsize, int msize)
+void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 {
   return 0;
 }

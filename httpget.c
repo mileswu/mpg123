@@ -19,6 +19,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/errno.h>
+#include <ctype.h>
+
 extern int errno;
 
 #include "mpg123.h"
@@ -48,8 +50,25 @@ void writestring (int fd, char *string)
 
 void readstring (char *string, int maxlen, FILE *f)
 {
+#if 0
 	char *result;
+#endif
+	int pos = 0;
 
+	while(1) {
+		if( read(fileno(f),string+pos,1) == 1) {
+			pos++;
+			if(string[pos-1] == '\n') {
+				string[pos] = 0;
+				break;
+			}
+		}
+		else if(errno != EINTR) {
+			fprintf (stderr, "Error reading from socket or unexpected EOF.\n");
+			exit(1);
+		}
+	}
+#if 0
 	do {
 		result = fgets(string, maxlen, f);
 	} while (!result  && errno == EINTR);
@@ -57,6 +76,8 @@ void readstring (char *string, int maxlen, FILE *f)
 		fprintf (stderr, "Error reading from socket or unexpected EOF.\n");
 		exit (1);
 	}
+#endif
+
 }
 
 void encode64 (char *source,char *destination)
@@ -87,6 +108,30 @@ void encode64 (char *source,char *destination)
       destination[n++] = '=';
   }
   destination[n++] = 0;
+}
+
+/* VERY  simple auth-from-URL grabber */
+int getauthfromURL(char *url,char *auth)
+{
+  char *pos;
+
+  *auth = 0;
+
+  if (!(strncmp(url, "http://", 7)))
+    url += 7;
+
+  if( (pos = strchr(url,'@')) ) {
+    int i;
+    for(i=0;i<pos-url;i++) {
+      if( url[i] == '/' )
+         return 0;
+    }
+    strncpy(auth,url,pos-url);
+    auth[pos-url] = 0;
+    strcpy(url,pos+1);
+    return 1;
+  }
+  return 0;
 }
 
 char *url2hostport (char *url, char **hname, unsigned long *hip, unsigned int *port)
@@ -136,6 +181,7 @@ unsigned int proxyport;
 #define ACCEPT_HEAD "Accept: audio/mpeg, audio/x-mpegurl, */*\r\n"
 
 char *httpauth = NULL;
+char httpauth1[256];
 
 int http_open (char *url)
 {
@@ -154,6 +200,7 @@ int http_open (char *url)
 				if (!(proxyurl = getenv("http_proxy")))
 					proxyurl = getenv("HTTP_PROXY");
 		if (proxyurl && proxyurl[0] && strcmp(proxyurl, "none")) {
+			host = NULL;
 			if (!(url2hostport(proxyurl, &host, &proxyip, &proxyport))) {
 				fprintf (stderr, "Unknown proxy host \"%s\".\n",
 					host ? host : "");
@@ -174,6 +221,9 @@ int http_open (char *url)
 	}
 	strncpy (purl, url, 1023);
 	purl[1023] = '\0';
+
+        getauthfromURL(purl,httpauth1);
+
 	do {
 		strcpy (request, "GET ");
 		if (proxyip != INADDR_NONE) {
@@ -184,20 +234,24 @@ int http_open (char *url)
 			myip = proxyip;
 		}
 		else {
+			host = NULL;
 			if (!(sptr = url2hostport(purl, &host, &myip, &myport))) {
 				fprintf (stderr, "Unknown host \"%s\".\n",
 					host ? host : "");
 				exit (1);
 			}
-			if (host)
-				free (host);
 			strcat (request, sptr);
 		}
 		sprintf (request + strlen(request),
 			" HTTP/1.0\r\nUser-Agent: %s/%s\r\n",
 			prgName, prgVersion);
+		if (host) {
+			sprintf(request + strlen(request),
+				"Host: %s:%u\r\n", host, myport);
+			free (host);
+		}
+
 		strcat (request, ACCEPT_HEAD);
-		strcat (request, "\r\n");
 		server.sin_family = AF_INET;
 		server.sin_port = htons(myport);
 		server.sin_addr.s_addr = myip;
@@ -210,13 +264,17 @@ int http_open (char *url)
 			exit (1);
 		}
 
-		if (httpauth) {
+		if (strlen(httpauth1) || httpauth) {
 			char buf[1023];
 			strcat (request,"Authorization: Basic ");
-			encode64(httpauth,buf);
+                        if(strlen(httpauth1))
+                          encode64(httpauth1,buf);
+                        else
+			  encode64(httpauth,buf);
 			strcat (request,buf);
 			strcat (request,"\r\n");
 		}
+		strcat (request, "\r\n");
 
 		writestring (sock, request);
 		if (!(myfile = fdopen(sock, "rb"))) {

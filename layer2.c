@@ -6,6 +6,7 @@
  */
 
 #include "mpg123.h"
+#include "l2tables.h"
 
 static int grp_3tab[32 * 3] = { 0, };   /* used: 27 */
 static int grp_5tab[128 * 3] = { 0, };  /* used: 125 */
@@ -224,6 +225,32 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
 
 }
 
+static void II_select_table(struct frame *fr)
+{
+  static int translate[3][2][16] =
+   { { { 0,2,2,2,2,2,2,0,0,0,1,1,1,1,1,0 } ,
+       { 0,2,2,0,0,0,1,1,1,1,1,1,1,1,1,0 } } ,
+     { { 0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0 } ,
+       { 0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0 } } ,
+     { { 0,3,3,3,3,3,3,0,0,0,1,1,1,1,1,0 } ,
+       { 0,3,3,0,0,0,1,1,1,1,1,1,1,1,1,0 } } };
+
+  int table,sblim;
+  static struct al_table *tables[5] =
+       { alloc_0, alloc_1, alloc_2, alloc_3 , alloc_4 };
+  static int sblims[5] = { 27 , 30 , 8, 12 , 30 };
+
+  if(fr->lsf)
+    table = 4;
+  else
+    table = translate[fr->sampling_frequency][2-fr->stereo][fr->bitrate_index];
+  sblim = sblims[table];
+
+  fr->alloc      = tables[table];
+  fr->II_sblimit = sblim;
+}
+
+
 int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
 {
   int clip=0;
@@ -233,6 +260,10 @@ int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
   unsigned int bit_alloc[64];
   int scale[192];
   int single = fr->single;
+
+  II_select_table(fr);
+  fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ?
+     (fr->mode_ext<<2)+4 : fr->II_sblimit;
 
   if(stereo == 1 || single == 3)
     single = 0;

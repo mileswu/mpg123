@@ -11,11 +11,14 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <limits.h>
+
 #include <sys/socket.h>
 
 #include "control_tk3play.h"
 
 #include "mpg123.h"
+#include "buffer.h"
 
 int mode = MODE_STOPPED;
 int init = 0;
@@ -29,6 +32,10 @@ extern int buffer_pid;
 extern long startFrame;
 extern long outscale;
 int rewindspeed;
+
+#ifndef PATH_MAX
+#define PATH_MAX 1024
+#endif
 
 int tk3play_sendmsg(int type, float data)
 {
@@ -117,7 +124,7 @@ float calc_time(void)
 
 int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 {
-  char filename[1000];
+  char filename[PATH_MAX];
   fd_set readfds;
   char *line;
   int n, scann, ok;
@@ -127,7 +134,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 
   FD_ZERO(&readfds);
   FD_SET(0,&readfds);
-  n = select(32,&readfds,NULL,NULL,timeout);
+  n = select(fileno(stdin)+1,&readfds,NULL,NULL,timeout);
   if (n == 0) return 0;
   scann = scanf("%d %d",&rtype,&rdata);
   while (scann == 2) {
@@ -138,7 +145,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 
     case PLAY_STOP:
       if (mode != MODE_STOPPED) {
-	kill(buffer_pid,SIGINT);
+	buffer_resync();
 	if (mode == MODE_PLAYING_AND_DECODING ||
             mode == MODE_PLAYING_OLD_DECODING_NEW) {
 	  rd->close(rd);
@@ -151,13 +158,13 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
     case PLAY_PAUSE:
       if (mode != MODE_STOPPED) {
 	if (mode == MODE_PAUSED) {
-	  kill(buffer_pid,SIGCONT);
+	  buffer_start();
 	  mode = oldmode;
 	}
 	else {
 	  oldmode = mode;
 	  mode = MODE_PAUSED;
-	  kill(buffer_pid,SIGSTOP);
+	  buffer_stop();
 	}
       }
       /* tk3play_sendmsg(MSG_RESPONSE,PLAY_PAUSE); */
@@ -167,14 +174,15 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 
   case MSG_SONG:
     fcntl(0,F_SETFL,0);
-    line = gets(filename);
-    line = gets(filename);
+    line = fgets(filename,PATH_MAX,stdin);
+    line = fgets(filename,PATH_MAX,stdin);
     fcntl(0,F_SETFL,O_NONBLOCK);
 
     if (line == NULL) {
       fprintf(stderr,"Error reading filename!\n");
       exit(1);
     }
+    *(filename+strlen(filename)-1)=0;
 
     if (mode == MODE_PLAYING_AND_DECODING ||
 	mode == MODE_PLAYING_OLD_DECODING_NEW) {
@@ -206,7 +214,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 
   case MSG_JUMPTO:
     if (buffer_used() > 0)
-       kill(buffer_pid,SIGINT);
+       buffer_resync();
 
     ok = 1;
     if (rdata < framecnt) {
@@ -249,7 +257,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
   case MSG_QUIT:
 #ifndef OS2
     if (param.usebuffer) {
-      kill(buffer_pid,SIGINT);
+      buffer_resync();
       xfermem_done_writer (buffermem);
       waitpid (buffer_pid, NULL, 0);
       xfermem_done (buffermem);
