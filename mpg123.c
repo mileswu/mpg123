@@ -1,5 +1,5 @@
 /* 
- * Mpeg Layer audio decoder V0.59c
+ * Mpeg Layer audio decoder V0.59g
  * -------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
@@ -20,9 +20,7 @@
 #include "mpg123.h"
 #include "getlopt.h"
 
-char *prgVersion = "0.59c";
-char *prgDate = "97/04/16";
-char *prgName;
+#include "version.h"
 
 static void usage(char *dummy);
 static void print_title(void);
@@ -33,8 +31,8 @@ char *listname = NULL;
 long outscale  = 32768;
 int checkrange = FALSE;
 int tryresync  = FALSE;
-int verbose    = FALSE;
 int quiet      = FALSE;
+int verbose    = 0;
 int doublespeed= 0;
 int halfspeed  = 0;
 long numframes = -1;
@@ -152,10 +150,14 @@ char *get_next_file (int argc, char *argv[])
 
 void set_synth (char *arg)
 {
-    if (*arg == '2')
+    if (*arg == '2') {
         fr.synth = synth_2to1;
-    else
+        fr.down_sample = 1;
+    }
+    else {
         fr.synth = synth_4to1;
+        fr.down_sample = 2;
+    }
 }
 
 #ifdef VARMODESUPPORT
@@ -178,6 +180,11 @@ void set_output (char *arg)
     }
 }
 
+void set_verbose (char *arg)
+{
+    verbose++;
+}
+
 topt opts[] = {
     {'k', "skip",        GLO_ARG | GLO_NUM,  0, &startFrame, 0},
     {'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &ai.device,  0},
@@ -186,7 +193,7 @@ topt opts[] = {
     {'t', "test",        0,                  0, &outmode, DECODE_TEST},
     {'s', "stdout",      0,                  0, &outmode, DECODE_STDOUT},
     {'c', "check",       0,                  0, &checkrange, TRUE},
-    {'v', "verbose",     0,                  0, &verbose,    TRUE},
+    {'v', "verbose",     0,        set_verbose, 0,           0},
     {'q', "quiet",       0,                  0, &quiet,      TRUE},
     {'y', "resync",      0,                  0, &tryresync,  TRUE},
     {'0', "single0",     0,                  0, &fr.single,  0},
@@ -231,6 +238,7 @@ int main(int argc, char *argv[])
 
     fr.single = -1; /* both channels */
     fr.synth = synth_1to1;
+    fr.down_sample = 0;
 
     ai.gain = ai.rate = ai.output = -1;
     ai.device = NULL;
@@ -256,7 +264,7 @@ int main(int argc, char *argv[])
 
     make_decode_tables(outscale);
     init_layer2(); /* inits also shared tables with layer1 */
-    init_layer3();
+    init_layer3(fr.down_sample);
     catchsignal (SIGINT, catch_interrupt);
 
     while ((fname = get_next_file(argc, argv))) {
@@ -268,6 +276,7 @@ int main(int argc, char *argv[])
                 fname ? fname : "standard input");
 
       gettimeofday (&start_time, NULL);
+      read_frame_init();
       for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) 
       {
          stereo = fr.stereo;
@@ -296,14 +305,14 @@ int main(int argc, char *argv[])
 
          switch(fr.lay)
          {
-           case 1:
-             clip = do_layer1(&fr,outmode,&ai);
+           case 3:
+             clip = do_layer3(&fr,outmode,&ai);
              break;
            case 2:
              clip = do_layer2(&fr,outmode,&ai);
              break;
-           case 3:
-             clip = do_layer3(&fr,outmode,&ai);
+           case 1:
+             clip = do_layer1(&fr,outmode,&ai);
              break;
          }
          if (usebuffer) {
@@ -313,6 +322,8 @@ int main(int argc, char *argv[])
              if (buffermem->wakeme[XF_READER])
                xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
            }
+           pcm_sample = (short *) (buffermem->data + buffermem->freeindex);
+           pcm_point = 0;
            while (xfermem_get_freespace(buffermem) < FRAMEBUFUNIT)
              if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
                intflag = TRUE;
@@ -320,12 +331,14 @@ int main(int argc, char *argv[])
              }
            if (intflag)
              break;
-           pcm_sample = (short *) (buffermem->data + buffermem->freeindex);
-           pcm_point = 0;
          }
 
-         if(verbose)
-           fprintf(stderr, "\r{%4lu} ",frameNum);
+         if(verbose) {
+           if (verbose > 1 || !(frameNum & 0xf))
+             fprintf(stderr, "\r{%4lu} ",frameNum);
+           if (verbose > 1 && usebuffer)
+             fprintf (stderr, "%7d ", xfermem_get_usedspace(buffermem));
+         }
          if(clip > 0 && checkrange)
            fprintf(stderr,"%d samples clipped\n", clip);
       }
@@ -378,7 +391,7 @@ static void usage(char *dummy)  /* print syntax & exit */
    print_title();
    fprintf(stderr,"\nusage: %s [option(s)] [file(s) | URL(s) | -]\n", prgName);
    fprintf(stderr,"supported options [defaults in brackets]:\n");
-   fprintf(stderr,"   -v    verbose                        -q    quiet\n");
+   fprintf(stderr,"   -v    increase verbosity level       -q    quiet (don't print title)\n");
    fprintf(stderr,"   -t    testmode (no output)           -s    write to stdout\n");
    fprintf(stderr,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
    fprintf(stderr,"   -c    check range violations         -y    try to resync on errors\n");

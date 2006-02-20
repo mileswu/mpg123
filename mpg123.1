@@ -1,5 +1,5 @@
-.\" @(#)mpg123.1 0.01 10-Apr-1997 OF; from mpg123 archive
-.TH mpg123 1 "10 Apr 1997"
+.\" @(#)mpg123.1 0.01 21-Apr-1997 OF; from mpg123 archive
+.TH mpg123 1 "21 Apr 1997"
 .SH NAME
 mpg123 \- play audio MPEG 1.0/2.0 file (layers 1, 2 and 3)
 .SH SYNOPSIS
@@ -78,7 +78,8 @@ Check for filter range violations, and report them for each frame
 if any occur.
 .TP
 .BR \-v ", " \-\^\-verbose
-Verbose.  Displays the frame numbers during decoding.
+Increase the verbosity level.  For example, displays the frame
+numbers during decoding.
 .TP
 .BR \-q ", " \-\^\-quiet
 Quiet.  Suppress diagnostic messages.
@@ -115,7 +116,7 @@ system activity, which would normally cause the audio output
 to be interrupted.  
 You should specify a buffer size of at least 1024 
 (i.e. 1 Mb, which equals about 6 seconds of audio data) or more; 
-less than about 500 does not make much sense.  The default is 0, 
+less than about 300 does not make much sense.  The default is 0, 
 which turns buffering off.
 .TP
 \fB\-k \fInum\fR, \fB\-\^\-skip \fInum
@@ -264,11 +265,9 @@ of skipping to the next file, press Ctrl-C twice in short
 succession (within about one second).
 .P
 Note that the result of pressing Ctrl-C might not be audible
-immediately, due to audio data buffering in the audio device
-and in
-.BR mpg123 's
-internal communication pipes.  This delay is system dependent,
-but it is usually not more than one or two seconds.
+immediately, due to audio data buffering in the audio device.
+This delay is system dependent, but it is usually not more
+than one or two seconds.
 .SH "SEE ALSO"
 .BR lynx (1),
 .BR sox (1),
@@ -315,7 +314,7 @@ option to use a buffer of at least 1000 Kbytes.
 .TP
 Known bugs and limitations:
 .br
-MPEG-2, Layer1 and 2 not tested. May not work. (Layer3 should work)
+MPEG-2, Layer 1 and 2 not tested. May not work. (Layer 3 should work.)
 .br
 Free format streams are not supported.
 .br
@@ -324,7 +323,7 @@ Layer-1 support is not heavily tested.
 No CRC error checking is performed.
 .br
 There is currently no support for audio hardware on
-DEC Digital Unix and IBM AIX, therefore the
+DEC Digital Unix, Ultrix and IBM AIX, therefore the
 .B \-s
 option has to be used on those platforms.
 .SH AUTHORS
@@ -344,6 +343,8 @@ Tobias Bading <bading@cs.tu-berlin.de> (subband synthesis)
 Jeff Tsay <ctsay@pasteur.eecs.berkeley.edu> (DCT36)
 .br
 Thomas Woerner (SGI Audio)
+.br
+Damien Clermonte <clermond@esiee.fr> (HP-UX audio fixes)
 .br
 Oliver Fromme <oliver.fromme@heim3.tu-clausthal.de>
 .P

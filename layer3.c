@@ -20,11 +20,14 @@ static real aa_ca[8],aa_cs[8];
 static real COS1[12][6];
 static real win[4][36];
 static real win1[4][36];
-static real gainpow2[256+118];
+static real gainpow2[256+118+4];
 static real COS9[9];
 static real COS6_1,COS6_2;
 static real tfcos36[9];
 static real tfcos12[3];
+#ifdef NEW_DCT9
+static real cos9[3],cos18[3];
+#endif
 
 struct bandInfoStruct {
   int longIdx[23];
@@ -33,40 +36,55 @@ struct bandInfoStruct {
   int shortDiff[13];
 };
 
-struct bandInfoStruct bandInfo[6] = { 
+int longLimit[7][23];
+int shortLimit[7][14];
+
+struct bandInfoStruct bandInfo[7] = { 
+
+/* MPEG 1.0 */
  { {0,4,8,12,16,20,24,30,36,44,52,62,74, 90,110,134,162,196,238,288,342,418,576},
    {4,4,4,4,4,4,6,6,8, 8,10,12,16,20,24,28,34,42,50,54, 76,158},
    {0,4*3,8*3,12*3,16*3,22*3,30*3,40*3,52*3,66*3, 84*3,106*3,136*3,192*3},
    {4,4,4,4,6,8,10,12,14,18,22,30,56} } ,
+
  { {0,4,8,12,16,20,24,30,36,42,50,60,72, 88,106,128,156,190,230,276,330,384,576},
    {4,4,4,4,4,4,6,6,6, 8,10,12,16,18,22,28,34,40,46,54, 54,192},
    {0,4*3,8*3,12*3,16*3,22*3,28*3,38*3,50*3,64*3, 80*3,100*3,126*3,192*3},
    {4,4,4,4,6,6,10,12,14,16,20,26,66} } ,
+
  { {0,4,8,12,16,20,24,30,36,44,54,66,82,102,126,156,194,240,296,364,448,550,576} ,
    {4,4,4,4,4,4,6,6,8,10,12,16,20,24,30,38,46,56,68,84,102, 26} ,
    {0,4*3,8*3,12*3,16*3,22*3,30*3,42*3,58*3,78*3,104*3,138*3,180*3,192*3} ,
    {4,4,4,4,6,8,12,16,20,26,34,42,12} }  ,
 
+/* MPEG 2.0 */
  { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576},
    {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 } ,
    {0,4*3,8*3,12*3,18*3,24*3,32*3,42*3,56*3,74*3,100*3,132*3,174*3,192*3} ,
    {4,4,4,6,6,8,10,14,18,26,32,42,18 } } ,
+
  { {0,6,12,18,24,30,36,44,54,66,80,96,114,136,162,194,232,278,330,394,464,540,576},
    {6,6,6,6,6,6,8,10,12,14,16,18,22,26,32,38,46,52,64,70,76,36 } ,
    {0,4*3,8*3,12*3,18*3,26*3,36*3,48*3,62*3,80*3,104*3,136*3,180*3,192*3} ,
    {4,4,4,6,8,10,12,14,18,24,32,44,12 } } ,
+
  { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576},
    {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 },
-   {0,4*3,8*3,12*3,16*3,22*3,30*3,42*3,58*3,78*3,104*3,138*3,180*3,192*3} ,
-   {4,4,4,4,6,8,12,16,20,26,34,42,12 } }
+   {0,4*3,8*3,12*3,18*3,26*3,36*3,48*3,62*3,80*3,104*3,134*3,174*3,192*3},
+   {4,4,4,6,8,10,12,14,18,24,30,40,18 } } ,
+
+/* MPEG 2.5, wrong! table (it's just a copy of MPEG 2.0/44.1kHz) */
+ { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576},
+   {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 } ,
+   {0,4*3,8*3,12*3,18*3,24*3,32*3,42*3,56*3,74*3,100*3,132*3,174*3,192*3} ,
+   {4,4,4,6,6,8,10,14,18,26,32,42,18 } } ,
 };
 
-
-static int mapbuf0[6][152];
-static int mapbuf1[6][156];
-static int mapbuf2[6][44];
-static int *map[6][3];
-static int *mapend[6][3];
+static int mapbuf0[7][152];
+static int mapbuf1[7][156];
+static int mapbuf2[7][44];
+static int *map[7][3];
+static int *mapend[7][3];
 
 static unsigned int n_slen2[512]; /* MPEG 2.0 slen for 'normal' mode */
 static unsigned int i_slen2[256]; /* MPEG 2.0 slen for intensity stereo */
@@ -77,11 +95,11 @@ static real pow1_1[2][16],pow2_1[2][16],pow1_2[2][16],pow2_2[2][16];
 /* 
  * init tables for layer-3 
  */
-void init_layer3(void)
+void init_layer3(int down_samp)
 {
   int i,j,k,l;
 
-  for(i=-256;i<118;i++)
+  for(i=-256;i<118+4;i++)
     gainpow2[i+256] = pow((double)2.0,-0.25 * (double) (i+210) );
 
   for(i=0;i<8207;i++)
@@ -119,7 +137,16 @@ void init_layer3(void)
 
   COS6_1 = cos( M_PI / 6.0 * (double) 1);
   COS6_2 = cos( M_PI / 6.0 * (double) 2);
- 
+
+#ifdef NEW_DCT9
+  cos9[0] = cos(1.0*M_PI/9.0);
+  cos9[1] = cos(5.0*M_PI/9.0);
+  cos9[2] = cos(7.0*M_PI/9.0);
+  cos18[0] = cos(1.0*M_PI/18.0);
+  cos18[1] = cos(11.0*M_PI/18.0);
+  cos18[2] = cos(13.0*M_PI/18.0);
+#endif
+
   for(i=0;i<12;i++)
   {
     win[2][i]  = 0.5 * sin( M_PI / 24.0 * (double) (2*i+1) ) / cos ( M_PI * (double) (2*i+7) / 24.0 );
@@ -159,7 +186,7 @@ void init_layer3(void)
     }
   }
 
-  for(j=0;j<6;j++)
+  for(j=0;j<7;j++)
   {
    struct bandInfoStruct *bi = &bandInfo[j];
    int *mp;
@@ -211,6 +238,19 @@ void init_layer3(void)
 
   }
 
+  for(j=0;j<7;j++) {
+    for(i=0;i<23;i++) {
+      longLimit[j][i] = (bandInfo[j].longIdx[i] - 1 + 8) / 18 + 1;
+      if(longLimit[j][i] > (SBLIMIT >> down_samp) )
+        longLimit[j][i] = SBLIMIT >> down_samp;
+    }
+    for(i=0;i<14;i++) {
+      shortLimit[j][i] = (bandInfo[j].shortIdx[i] - 1) / 18 + 1;
+      if(shortLimit[j][i] > (SBLIMIT >> down_samp) )
+        shortLimit[j][i] = SBLIMIT >> down_samp;
+    }
+  }
+
   for(i=0;i<5;i++) {
     for(j=0;j<6;j++) {
       for(k=0;k<6;k++) {
@@ -230,7 +270,8 @@ void init_layer3(void)
   for(i=0;i<4;i++) {
     for(j=0;j<3;j++) {
       int n = j + i * 3;
-      i_slen2[n+244] = i|(j<<3)|(5<<12);
+      i_slen2[n+244] = i|(j<<3) | (5<<12);
+      n_slen2[n+500] = i|(j<<3) | (2<<12) | (1<<15);
     }
   }
 
@@ -252,21 +293,16 @@ void init_layer3(void)
       }
     }
   }
-  for(i=0;i<4;i++) {
-    for(j=0;j<3;j++) {
-      int n = j + i * 3;
-      n_slen2[n+500] = i|(j<<3)|(2<<12)|(1<<15);
-    }
-  }
 }
 
 /*
  * read additional side information
  */
 static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
- int ms_stereo,long sfreq)
+ int ms_stereo,long sfreq,int single)
 {
    int ch, gr;
+   int powdiff = (single == 3) ? 4 : 0;
 
    si->main_data_begin = getbits(9);
    if (stereo == 1)
@@ -287,7 +323,7 @@ static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
 
        gr_info->part2_3_length = getbits(12);
        gr_info->big_values = getbits_fast(9);
-       gr_info->pow2gain = gainpow2+256 - getbits_fast(8);
+       gr_info->pow2gain = gainpow2+256 - getbits_fast(8) + powdiff;
        if(ms_stereo)
          gr_info->pow2gain += 2;
        gr_info->scalefac_compress = getbits_fast(4);
@@ -338,9 +374,10 @@ static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
  * Side Info for MPEG 2.0 / LSF
  */
 static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
- int ms_stereo,long sfreq)
+ int ms_stereo,long sfreq,int single)
 {
-   int ch, gr;
+   int ch;
+   int powdiff = (single == 3) ? 4 : 0;
 
    si->main_data_begin = getbits(8);
    if (stereo == 1)
@@ -348,15 +385,13 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
    else 
      si->private_bits = getbits_fast(2);
 
-   for (gr=0; gr<1; gr++) 
+   for (ch=0; ch<stereo; ch++) 
    {
-     for (ch=0; ch<stereo; ch++) 
-     {
-       register struct gr_info_s *gr_info = &(si->ch[ch].gr[gr]);
+       register struct gr_info_s *gr_info = &(si->ch[ch].gr[0]);
 
        gr_info->part2_3_length = getbits(12);
        gr_info->big_values = getbits_fast(9);
-       gr_info->pow2gain = gainpow2+256 - getbits_fast(8);
+       gr_info->pow2gain = gainpow2+256 - getbits_fast(8) + powdiff;
        if(ms_stereo)
          gr_info->pow2gain += 2;
        gr_info->scalefac_compress = getbits(9);
@@ -384,8 +419,9 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
 /* check this again! */
          if(gr_info->block_type == 2)
            gr_info->region1start = 36>>1;
-         else
+         else {
            gr_info->region1start = 54>>1;
+         }
          gr_info->region2start = 576>>1;
        }
        else 
@@ -402,7 +438,6 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
        }
        gr_info->scalefac_scale = get1bit();
        gr_info->count1table_select = get1bit();
-     }
    }
 }
 
@@ -505,8 +540,6 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
   int nnul;
   int numbits = 0;
 
-  int sv;
-
   static unsigned char stab[3][6][4] = {
    { { 6, 5, 5,5 } , { 6, 5, 7,3 } , { 11,10,0,0} ,
      { 7, 7, 7,0 } , { 6, 6, 6,3 } , {  8, 8,5,0} } ,
@@ -536,8 +569,6 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
     nnul = 1;
     pnt = stab[0][(slen>>12)&0x7];
   }
-
-sv = (slen>>12)&0x7;
 
   for(i=0;i<4;i++) {
     int num = slen & 0x7;
@@ -752,6 +783,13 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
     gr_info->maxband[1] = max[1]+1;
     gr_info->maxband[2] = max[2]+1;
     gr_info->maxbandl = max[3]+1;
+
+    {
+      int rmax = max[0] > max[1] ? max[0] : max[1];
+      rmax = (rmax > max[2] ? rmax : max[2]) + 1;
+      gr_info->maxb = rmax ? shortLimit[sfreq][rmax] : longLimit[sfreq][max[3]+1];
+    }
+
   }
   else {
     int *pretab = gr_info->preflag ? pretab1 : pretab2;
@@ -863,6 +901,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
     }
 
     gr_info->maxbandl = max+1;
+    gr_info->maxb = longLimit[sfreq][gr_info->maxbandl];
   }
 
   while( part2remain > 16 ) {
@@ -1108,6 +1147,12 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
     gr_info->maxband[1] = max[1]+1;
     gr_info->maxband[2] = max[2]+1;
     gr_info->maxbandl = max[3]+1;
+
+    {
+      int rmax = max[0] > max[1] ? max[0] : max[1];
+      rmax = (rmax > max[2] ? rmax : max[2]) + 1;
+      gr_info->maxb = rmax ? shortLimit[sfreq][rmax] : longLimit[sfreq][max[3]+1];
+    }
   }
   else {
     int *pretab = gr_info->preflag ? pretab1 : pretab2;
@@ -1245,6 +1290,7 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
     }
 
     gr_info->maxbandl = max+1;
+    gr_info->maxb = longLimit[sfreq][gr_info->maxbandl];
   }
 
   while ( part2remain > 16 ) {
@@ -1415,11 +1461,11 @@ static void III_antialias(real xr[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info)
    {
       if(!gr_info->mixed_block_flag) 
         return;
-      else
-       sblim = 1; 
+      sblim = 1; 
    }
-   else
-     sblim = SBLIMIT-1;
+   else {
+     sblim = gr_info->maxb-1;
+   }
 
    /* 31 alias-reduction operations between each pair of sub-bands */
    /* with 8 butterflies between each pair                         */
@@ -1433,6 +1479,7 @@ static void III_antialias(real xr[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info)
        int ss;
        real *cs=aa_cs,*ca=aa_ca;
        real *xr2 = xr1;
+
        for(ss=7;ss>=0;ss--)
        {       /* upper and lower butterfly inputs */
          register real bu = *--xr2,bd = *xr1;
@@ -1443,38 +1490,180 @@ static void III_antialias(real xr[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info)
   }
 }
 
-/* This is an optimized DCT from Jeff Tsay's maplay 1.2+ package.
- I've done the 'manual unroll ;)' and saved one multiplication
- by doing it together with the window mul. (MH)
-
-This uses Byeong Gi Lee's Fast Cosine Transform algorithm, but the
-9 point IDCT needs to be reduced further. Unfortunately, I don't
-know how to do that, because 9 is not an even number. - Jeff.*/
+/* 
+// This is an optimized DCT from Jeff Tsay's maplay 1.2+ package.
+// Saved one multiplication by doing the 'twiddle factor' stuff
+// together with the window mul. (MH)
+//
+// This uses Byeong Gi Lee's Fast Cosine Transform algorithm, but the
+// 9 point IDCT needs to be reduced further. Unfortunately, I don't
+// know how to do that, because 9 is not an even number. - Jeff.
+//
+//////////////////////////////////////////////////////////////////
+//
+// 9 Point Inverse Discrete Cosine Transform
+//
+// This piece of code is Copyright 1997 Mikko Tommila and is freely usable
+// by anybody. The algorithm itself is of course in the public domain.
+//
+// Again derived heuristically from the 9-point WFTA.
+//
+// The algorithm is optimized (?) for speed, not for small rounding errors or
+// good readability.
+//
+// 36 additions, 11 multiplications
+//
+// Again this is very likely sub-optimal.
+//
+// The code is optimized to use a minimum number of temporary variables,
+// so it should compile quite well even on 8-register Intel x86 processors.
+// This makes the code quite obfuscated and very difficult to understand.
+//
+// References:
+// [1] S. Winograd: "On Computing the Discrete Fourier Transform",
+//     Mathematics of Computation, Volume 32, Number 141, January 1978,
+//     Pages 175-199
+*/
 
 /*------------------------------------------------------------------*/
 /*                                                                  */
 /*    Function: Calculation of the inverse MDCT                     */
-/*    In the case of short blocks the 3 output vectors are already  */
-/*    overlapped and added in this modul.                           */
-/*                                                                  */
-/*    New layer3                                                    */
 /*                                                                  */
 /*------------------------------------------------------------------*/
 
 static void dct36(real *inbuf,real *o1,real *o2,real *wintab,real *tsbuf)
 {
- {
-  register real *in = inbuf;
+#ifdef NEW_DCT9
+  real tmp[18];
+#endif
 
-  in[17]+=in[16]; in[16]+=in[15]; in[15]+=in[14];
-  in[14]+=in[13]; in[13]+=in[12]; in[12]+=in[11];
-  in[11]+=in[10]; in[10]+=in[9];  in[9] +=in[8];
-  in[8] +=in[7];  in[7] +=in[6];  in[6] +=in[5];
-  in[5] +=in[4];  in[4] +=in[3];  in[3] +=in[2];
-  in[2] +=in[1];  in[1] +=in[0];
+  {
+    register real *in = inbuf;
 
-  in[17]+=in[15]; in[15]+=in[13]; in[13]+=in[11]; in[11]+=in[9];
-  in[9] +=in[7];  in[7] +=in[5];  in[5] +=in[3];  in[3] +=in[1];
+    in[17]+=in[16]; in[16]+=in[15]; in[15]+=in[14];
+    in[14]+=in[13]; in[13]+=in[12]; in[12]+=in[11];
+    in[11]+=in[10]; in[10]+=in[9];  in[9] +=in[8];
+    in[8] +=in[7];  in[7] +=in[6];  in[6] +=in[5];
+    in[5] +=in[4];  in[4] +=in[3];  in[3] +=in[2];
+    in[2] +=in[1];  in[1] +=in[0];
+
+    in[17]+=in[15]; in[15]+=in[13]; in[13]+=in[11]; in[11]+=in[9];
+    in[9] +=in[7];  in[7] +=in[5];  in[5] +=in[3];  in[3] +=in[1];
+
+
+#ifdef NEW_DCT9
+    {
+      real t0, t1, t2, t3, t4, t5, t6, t7;
+
+      t1 = COS6_2 * in[12];
+      t2 = COS6_2 * (in[8] + in[16] - in[4]);
+
+      t3 = in[0] + t1;
+      t4 = in[0] - t1 - t1;
+      t5 = t4 - t2;
+
+      t0 = cos9[0] * (in[4] + in[8]);
+      t1 = cos9[1] * (in[8] - in[16]);
+
+      tmp[4] = t4 + t2 + t2;
+      t2 = cos9[2] * (in[4] + in[16]);
+
+      t6 = t3 - t0 - t2;
+      t0 += t3 + t1;
+      t3 += t2 - t1;
+
+      t2 = cos18[0] * (in[2]  + in[10]);
+      t4 = cos18[1] * (in[10] - in[14]);
+      t7 = COS6_1 * in[6];
+
+      t1 = t2 + t4 + t7;
+      tmp[0] = t0 + t1;
+      tmp[8] = t0 - t1;
+      t1 = cos18[2] * (in[2] + in[14]);
+      t2 += t1 - t7;
+
+      tmp[3] = t3 + t2;
+      t0 = COS6_1 * (in[10] + in[14] - in[2]);
+      tmp[5] = t3 - t2;
+
+      t4 -= t1 + t7;
+
+      tmp[1] = t5 - t0;
+      tmp[7] = t5 + t0;
+      tmp[2] = t6 + t4;
+      tmp[6] = t6 - t4;
+    }
+
+    {
+      real t0, t1, t2, t3, t4, t5, t6, t7;
+
+      t1 = COS6_2 * in[13];
+      t2 = COS6_2 * (in[9] + in[17] - in[5]);
+
+      t3 = in[1] + t1;
+      t4 = in[1] - t1 - t1;
+      t5 = t4 - t2;
+
+      t0 = cos9[0] * (in[5] + in[9]);
+      t1 = cos9[1] * (in[9] - in[17]);
+
+      tmp[13] = (t4 + t2 + t2) * tfcos36[17-13];
+      t2 = cos9[2] * (in[5] + in[17]);
+
+      t6 = t3 - t0 - t2;
+      t0 += t3 + t1;
+      t3 += t2 - t1;
+
+      t2 = cos18[0] * (in[3]  + in[11]);
+      t4 = cos18[1] * (in[11] - in[15]);
+      t7 = COS6_1 * in[7];
+
+      t1 = t2 + t4 + t7;
+      tmp[17] = (t0 + t1) * tfcos36[17-17];
+      tmp[9]  = (t0 - t1) * tfcos36[17-9];
+      t1 = cos18[2] * (in[3] + in[15]);
+      t2 += t1 - t7;
+
+      tmp[14] = (t3 + t2) * tfcos36[17-14];
+      t0 = COS6_1 * (in[11] + in[15] - in[3]);
+      tmp[12] = (t3 - t2) * tfcos36[17-12];
+
+      t4 -= t1 + t7;
+
+      tmp[16] = (t5 - t0) * tfcos36[17-16];
+      tmp[10] = (t5 + t0) * tfcos36[17-10];
+      tmp[15] = (t6 + t4) * tfcos36[17-15];
+      tmp[11] = (t6 - t4) * tfcos36[17-11];
+   }
+
+#define MACRO(v) { \
+    real tmpval; \
+    real sum0 = tmp[(v)]; \
+    real sum1 = tmp[17-(v)]; \
+    out2[9+(v)] = (tmpval = sum0 + sum1) * w[27+(v)]; \
+    out2[8-(v)] = tmpval * w[26-(v)]; \
+    sum0 -= sum1; \
+    ts[SBLIMIT*(8-(v))] = out1[8-(v)] + sum0 * w[8-(v)]; \
+    ts[SBLIMIT*(9+(v))] = out1[9+(v)] + sum0 * w[9+(v)]; }
+
+{
+   register real *out2 = o2;
+   register real *w = wintab;
+   register real *out1 = o1;
+   register real *ts = tsbuf;
+
+   MACRO(0);
+   MACRO(1);
+   MACRO(2);
+   MACRO(3);
+   MACRO(4);
+   MACRO(5);
+   MACRO(6);
+   MACRO(7);
+   MACRO(8);
+}
+
+#else
 
   {
 
@@ -1560,7 +1749,9 @@ static void dct36(real *inbuf,real *o1,real *o2,real *wintab,real *tsbuf)
 		MACRO0(4);
 	}
   }
- }
+#endif
+
+  }
 }
 
 /*
@@ -1703,7 +1894,6 @@ static void dct12(real *in,real *rawout1,real *rawout2,register real *wi,registe
   }
 }
 
-
 /*
  * III_hybrid:
  *   we still need a faster DCT for the dct36 
@@ -1715,7 +1905,8 @@ static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
    static real block[2][2][SBLIMIT*SSLIMIT] = { { { 0, } } };
    static int blc[2]={0,0};
    real *rawout1,*rawout2;
-   int bt1,bt2;
+   int bt;
+   int sb = 0;
 
    {
      int b = blc[ch];
@@ -1725,41 +1916,41 @@ static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
      blc[ch] = b;
    }
 
-   bt1 = gr_info->mixed_block_flag ? 0 : gr_info->block_type;
-   bt2 = gr_info->block_type;
-
-   if(bt2 == 2) {
-     int sb;
-     if(!bt1) {
-         dct36(fsIn[0],rawout1,rawout2,win[0],tspnt);
-         dct36(fsIn[1],rawout1+18,rawout2+18,win1[0],tspnt+1);
-     } 
-     else {
-         dct12(fsIn[0],rawout1,rawout2,win[2],tspnt); /* only called with bt==2 */
-         dct12(fsIn[1],rawout1+18,rawout2+18,win1[2],tspnt+1);
-     }
+  
+   if(gr_info->mixed_block_flag) {
+     sb = 2;
+     dct36(fsIn[0],rawout1,rawout2,win[0],tspnt);
+     dct36(fsIn[1],rawout1+18,rawout2+18,win1[0],tspnt+1);
      rawout1 += 36; rawout2 += 36; tspnt += 2;
-     for (sb=2; sb<SBLIMIT; sb+=2,tspnt+=2,rawout1+=36,rawout2+=36) {
-         dct12(fsIn[sb],rawout1,rawout2,win[2],tspnt);
-         dct12(fsIn[sb+1],rawout1+18,rawout2+18,win1[2],tspnt+1);
+   }
+ 
+   bt = gr_info->block_type;
+   if(bt == 2) {
+     for (; sb<gr_info->maxb; sb+=2,tspnt+=2,rawout1+=36,rawout2+=36) {
+       dct12(fsIn[sb],rawout1,rawout2,win[2],tspnt);
+       dct12(fsIn[sb+1],rawout1+18,rawout2+18,win1[2],tspnt+1);
      }
    }
    else {
-     int sb;
-     dct36(fsIn[0],rawout1,rawout2,win[bt1],tspnt);
-     dct36(fsIn[1],rawout1+18,rawout2+18,win1[bt1],tspnt+1);
-     rawout1 += 36; rawout2 += 36; tspnt += 2;
-     for (sb=2; sb<SBLIMIT; sb+=2,tspnt+=2,rawout1+=36,rawout2+=36) {
-       dct36(fsIn[sb],rawout1,rawout2,win[bt2],tspnt);
-       dct36(fsIn[sb+1],rawout1+18,rawout2+18,win1[bt2],tspnt+1);
+     for (; sb<gr_info->maxb; sb+=2,tspnt+=2,rawout1+=36,rawout2+=36) {
+       dct36(fsIn[sb],rawout1,rawout2,win[bt],tspnt);
+       dct36(fsIn[sb+1],rawout1+18,rawout2+18,win1[bt],tspnt+1);
      }
-  }
+   }
+
+   for(;sb<SBLIMIT;sb++,tspnt++) {
+     int i;
+     for(i=0;i<SSLIMIT;i++) {
+       tspnt[i*SBLIMIT] = *rawout1++;
+       *rawout2++ = 0.0;
+     }
+   }
 }
 
 int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 {
   int gr, ch, ss,clip=0;
-  int scalefacs[2][39];	/* max 39 for short[13][3] mode, mixed: 38, long: 22 */
+  int scalefacs[39]; /* max 39 for short[13][3] mode, mixed: 38, long: 22 */
   struct III_sideinfo sideinfo;
   int stereo = fr->stereo;
   int single = fr->single;
@@ -1769,7 +1960,7 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
   if(stereo == 1) {
     stereo1 = 1;
-    single = 0; 
+    single = 0;
   }
   else if(single >= 0)
     stereo1 = 1;
@@ -1781,11 +1972,11 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
   if(fr->lsf) {
     granules = 1;
-    III_get_side_info_2(&sideinfo,stereo,ms_stereo,sfreq);
+    III_get_side_info_2(&sideinfo,stereo,ms_stereo,sfreq,single);
   }
   else {
     granules = 2;
-    III_get_side_info_1(&sideinfo,stereo,ms_stereo,sfreq);
+    III_get_side_info_1(&sideinfo,stereo,ms_stereo,sfreq,single);
   }
 
   set_pointer(sideinfo.main_data_begin);
@@ -1799,44 +1990,56 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
       struct gr_info_s *gr_info = &(sideinfo.ch[0].gr[gr]);
       long part2bits;
       if(fr->lsf)
-        part2bits = III_get_scale_factors_2(scalefacs[0],gr_info,0);
+        part2bits = III_get_scale_factors_2(scalefacs,gr_info,0);
       else
-        part2bits = III_get_scale_factors_1(scalefacs[0],gr_info);
-      if(III_dequantize_sample(hybridIn[0], scalefacs[0],gr_info,sfreq,part2bits))
+        part2bits = III_get_scale_factors_1(scalefacs,gr_info);
+      if(III_dequantize_sample(hybridIn[0], scalefacs,gr_info,sfreq,part2bits))
         return clip;
     }
     if(stereo == 2) {
       struct gr_info_s *gr_info = &(sideinfo.ch[1].gr[gr]);
       long part2bits;
       if(fr->lsf) 
-        part2bits = III_get_scale_factors_2(scalefacs[1],gr_info,i_stereo);
+        part2bits = III_get_scale_factors_2(scalefacs,gr_info,i_stereo);
       else
-        part2bits = III_get_scale_factors_1(scalefacs[1],gr_info);
+        part2bits = III_get_scale_factors_1(scalefacs,gr_info);
       if(ms_stereo) {
-        if(III_dequantize_sample_ms(hybridIn,scalefacs[1],gr_info,sfreq,part2bits))
+        if(III_dequantize_sample_ms(hybridIn,scalefacs,gr_info,sfreq,part2bits))
           return clip;
       }
       else {
-        if(III_dequantize_sample(hybridIn[1],scalefacs[1],gr_info,sfreq,part2bits))
+        if(III_dequantize_sample(hybridIn[1],scalefacs,gr_info,sfreq,part2bits))
           return clip;
       }
 
       if(i_stereo)
-        III_i_stereo(hybridIn,scalefacs[1],gr_info,sfreq,ms_stereo,fr->lsf);
+        III_i_stereo(hybridIn,scalefacs,gr_info,sfreq,ms_stereo,fr->lsf);
 
-      if(single >= 0) {
-        if(single == 3) {
-          register int i;
-          register real *in0 = (real *) hybridIn[0],*in1 = (real *) hybridIn[1];
-          for(i=0;i<SSLIMIT*SBLIMIT;i++,in0++)
-              *in0 = (*in0 + *in1++) * 0.5;
-        }
-        if(single == 1) {
-          register int i;
-          register real *in0 = (real *) hybridIn[0],*in1 = (real *) hybridIn[1];
-          for(i=0;i<SSLIMIT*SBLIMIT;i++)
-            *in0++ = *in1++;
-        }
+
+      if(ms_stereo || i_stereo || (single == 3) ) {
+        if(gr_info->maxb > sideinfo.ch[0].gr[gr].maxb) 
+          sideinfo.ch[0].gr[gr].maxb = gr_info->maxb;
+        else
+          gr_info->maxb = sideinfo.ch[0].gr[gr].maxb;
+      }
+
+      switch(single) {
+        case 3:
+          {
+            register int i;
+            register real *in0 = (real *) hybridIn[0],*in1 = (real *) hybridIn[1];
+            for(i=0;i<SSLIMIT*gr_info->maxb;i++,in0++)
+              *in0 = (*in0 + *in1++); /* *0.5 done by pow-scale */ 
+          }
+          break;
+        case 1:
+          {
+            register int i;
+            register real *in0 = (real *) hybridIn[0],*in1 = (real *) hybridIn[1];
+            for(i=0;i<SSLIMIT*gr_info->maxb;i++)
+              *in0++ = *in1++;
+          }
+          break;
       }
     }
 

@@ -27,7 +27,7 @@ nothing-specified:
 	@echo "make hpux            HP/UX 7xx"
 	@echo "make sgi             SGI running IRIX"
 	@echo "make dec             DEC Unix (tested: 3.2 and 4.0), OSF/1"
-	@echo "make ultrix          DEC Ultrix (still buggy)"
+	@echo "make ultrix          DEC Ultrix (tested: 4.4)"
 	@echo "make aix             IBM AIX (tested: 4.1)"
 	@echo "make generic         try this one if your system isn't listed above"
 	@echo ""
@@ -43,10 +43,8 @@ linux-devel:
         mpg123
 
 linux:
-	$(MAKE) OBJECTS='decode_i386.o dct64_i386.o getbits.o' linux-generic
-
-linux-generic:
 	$(MAKE) CC=gcc LDFLAGS= \
+		OBJECTS='decode_i386.o dct64_i386.o getbits.o' \
 		CFLAGS='-DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486 \
 			-fomit-frame-pointer -funroll-all-loops \
 			-finline-functions -ffast-math' \
@@ -59,29 +57,29 @@ linux-generic:
 #CFLAGS='-DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486 -fomit-frame-pointer -funroll-all-loops -finline-functions -ffast-math -malign-loops=2 -malign-jumps=2 -malign-functions=2'
 
 freebsd:
-	$(MAKE) OBJECTS='decode_i386.o dct64_i386.o getbits_.o' freebsd-generic
-
-freebsd-generic:
 	$(MAKE) CC=cc LDFLAGS= \
+		OBJECTS='decode_i386.o dct64_i386.o getbits_.o' \
 		CFLAGS='-Wall -ansi -pedantic -O4 -m486 -fomit-frame-pointer \
 			-funroll-all-loops -ffast-math -DROT_I386 \
-			-DI386_ASSEM -DREAL_IS_FLOAT' \
+			-DI386_ASSEM -DREAL_IS_FLOAT -DUSE_MMAP' \
 		mpg123
 
 solaris:
 	$(MAKE) CC=cc LDFLAGS='-lsocket -lnsl' OBJECTS='decode.o dct64.o' \
-		CFLAGS='-fast -native -xO5 -DSOLARIS -DREAL_IS_FLOAT' \
+		CFLAGS='-fast -native -xO5 -DSOLARIS -DREAL_IS_FLOAT \
+			-DUSE_MMAP' \
 		mpg123
 
 solaris-gcc:
 	$(MAKE) CC=gcc LDFLAGS='-lsocket -lnsl' OBJECTS='decode.o dct64.o' \
-		CFLAGS='-O2 -Wall -DSOLARIS -DREAL_IS_FLOAT \
+		CFLAGS='-O2 -Wall -DSOLARIS -DREAL_IS_FLOAT -DUSE_MMAP \
 			-funroll-all-loops -finline-functions' \
 		mpg123
 
 sunos:
 	$(MAKE) CC=gcc LDFLAGS= OBJECTS='decode.o dct64.o' \
-		CFLAGS='-O2 -DSUNOS -DREAL_IS_FLOAT -funroll-loops' \
+		CFLAGS='-O2 -DSUNOS -DREAL_IS_FLOAT -DUSE_MMAP \
+			-funroll-loops' \
 		mpg123
 
 hpux:
@@ -96,7 +94,7 @@ sgi:
 
 dec:
 	$(MAKE) CC=cc LDFLAGS= OBJECTS='decode.o dct64.o' \
-		CFLAGS='-std1 -warnprotos -O4' \
+		CFLAGS='-std1 -warnprotos -O4 -DUSE_MMAP' \
 		mpg123
 
 ultrix:
@@ -134,7 +132,7 @@ decode_2to1.o:	mpg123.h
 decode_4to1.o:	mpg123.h
 decode_i386.o:	mpg123.h
 common.o:	mpg123.h tables.h
-mpg123.o:	mpg123.h getlopt.h xfermem.h
+mpg123.o:	mpg123.h getlopt.h xfermem.h version.h
 audio.o:	mpg123.h
 buffer.o:	mpg123.h xfermem.h
 getbits.o:	mpg123.h

@@ -38,12 +38,6 @@ int synth_2to1(real *bandPtr,int channel,short *samples)
     buf = buffs[1];
   }
 
-  {
-    int i; /* knowing that band 16 to 31 is zero could simplify the dct64 */
-    for(i=16;i<32;i++)
-      bandPtr[i] = 0.0;
-  }
-
   if(bo & 0x1) {
     b0 = buf[0];
     bo1 = bo;

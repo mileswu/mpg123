@@ -94,6 +94,8 @@ void I_step_two(real fraction[2][SBLIMIT],unsigned int balloc[2*SBLIMIT],
       else
         *f0++ = *f1++ = 0.0;
     }
+    for(i=SBLIMIT>>fr->down_sample;i<32;i++)
+      fraction[0][i] = fraction[1][i] = 0.0;
   }
   else {
     register real *f0 = fraction[0];
@@ -108,6 +110,8 @@ void I_step_two(real fraction[2][SBLIMIT],unsigned int balloc[2*SBLIMIT],
       else
         *f0++ = 0.0;
     }
+    for(i=SBLIMIT>>fr->down_sample;i<32;i++)
+      fraction[0][i] = 0.0;
   }
 }
 

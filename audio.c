@@ -233,41 +233,51 @@ void audio_queueflush (struct audio_info_struct *ai)
 int audio_open(struct audio_info_struct *ai)
 {
   struct audio_describe ades;
-  struct audio_gains again;
+  struct audio_gain again;
   int i,audio;
-
-  if(ai->gain == -1)
-    ai->gain = 0;
-  if(ai->output == -1)
-    ai->output = AUDIO_OUT_INTERNAL_SPEAKER;
-  if(ai->rate == -1)
-    ai->rate = 44100;
 
   ai->fn = open("/dev/audio",O_RDWR);
 
   if(ai->fn < 0)
     return -1;
 
-  ioctl(ai->fn,AUDIO_DESCRIBE,&ades);
-
-  if(ai->gain > again.transmit_gain)
-  {
-    fprintf(stderr,"your gainvalue was to high -> set to maximum.\n");
-    ai->gain = again.transmit_gain;
-  }
-  ioctl(ai->fn,AUDIO_GET_GAINS,&again);
-  again.transmit_gain = ai->gain;
-  ioctl(ai->fn,AUDIO_SET_GAINS,&again);
-   
-  if(ai->output == AUDIO_OUT_INTERNAL_SPEAKER)
-    ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_SPEAKER);
-  else if(ai->output == AUDIO_OUT_HEADPHONES)
-    ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_HEADPHONE);
-  else if(ai->output == AUDIO_OUT_LINE_OUT)
-    ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_LINE);
-
   ioctl(ai->fn,AUDIO_SET_DATA_FORMAT,AUDIO_FORMAT_LINEAR16BIT);
   ioctl(ai->fn,AUDIO_SET_CHANNELS,ai->channels);
+
+  ioctl(ai->fn,AUDIO_DESCRIBE,&ades);
+
+  if(ai->gain != -1)
+  {
+     if(ai->gain > ades.max_transmit_gain)
+     {
+       fprintf(stderr,"your gainvalue was to high -> set to maximum.\n");
+       ai->gain = ades.max_transmit_gain;
+     }
+     if(ai->gain < ades.min_transmit_gain)
+     {
+       fprintf(stderr,"your gainvalue was to low -> set to minimum.\n");
+       ai->gain = ades.min_transmit_gain;
+     }
+     again.channel_mask = AUDIO_CHANNEL_0 | AUDIO_CHANNEL_1;
+     ioctl(ai->fn,AUDIO_GET_GAINS,&again);
+     again.cgain[0].transmit_gain = ai->gain;
+     again.cgain[1].transmit_gain = ai->gain;
+     again.channel_mask = AUDIO_CHANNEL_0 | AUDIO_CHANNEL_1;
+     ioctl(ai->fn,AUDIO_SET_GAINS,&again);
+  }
+  
+  if(ai->output != -1)
+  {
+     if(ai->output == AUDIO_OUT_INTERNAL_SPEAKER)
+       ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_SPEAKER);
+     else if(ai->output == AUDIO_OUT_HEADPHONES)
+       ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_HEADPHONE);
+     else if(ai->output == AUDIO_OUT_LINE_OUT)
+       ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_LINE);
+  }
+  
+  if(ai->rate == -1)
+    ai->rate = 44100;
 
   for(i=0;i<ades.nrates;i++)
   {

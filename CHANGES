@@ -1,3 +1,17 @@
+0.59g: (MH)
+------
+- added support for MPEG 2.5 (it's a HACK!) .. mpg123 understands and plays
+  2.5 but it does it wrong. (you will hear this!) 
+- Fixed wrong values in BandInfo struct for 32kHz mode
+- Some performance improvements and minor changes and bug-fixes.
+- Tried the new imdct from the maplay1.2+ (version 1.81) package. (but 
+  it was slightly slower on my system, currently disabled)
+
+0.59f: (OF)
+------
+HP-UX audio fix (provided by Damien Clermonte).
+Buffering (-b option) hopefully fixed.  Please test!
+
 0.59e:
 ------
 added Audio MPEG 2.0 support (but near untested) (MH)

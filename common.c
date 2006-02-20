@@ -17,7 +17,7 @@ static int tabsel_123[2][3][16] = {
      {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,} }
 };
 
-long freqs[6] = { 44100, 48000, 32000, 22050, 24000, 16000 };
+long freqs[7] = { 44100, 48000, 32000, 22050, 24000, 16000 , 11025 };
 
 #ifdef I386_ASSEM
 int bitindex;
@@ -127,6 +127,13 @@ void (*catchsignal(int signum, void(*handler)()))()
   return (old_sa.sa_handler);
 }
 
+static unsigned long oldhead = 0;
+
+void read_frame_init (void)
+{
+    oldhead = 0;
+}
+
 #define HDRCMPMASK 0xfffffddf
 
 int read_frame(struct frame *fr)
@@ -140,7 +147,7 @@ int read_frame(struct frame *fr)
   static int jsb_table[3][4] =  { { 4, 8, 12, 16 }, { 4, 8, 12, 16}, { 0, 4, 8, 16} };
 */
 
-  static unsigned long oldhead=0,newhead;
+  static unsigned long newhead;
   static unsigned long firsthead=0;
 
   static unsigned char ssave[34];
@@ -180,13 +187,10 @@ int read_frame(struct frame *fr)
     fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
 #endif
 
-    if( (newhead & 0xfff00000) != 0xfff00000)
+    if( (newhead & 0xffe00000) != 0xffe00000)
     {
-      if((newhead & 0xfff80000) == 0xffe00000)
-        fprintf(stderr,"MPEG '2.5' Audio not supported!\n");
-      else
-        fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
-                newhead,ftell(filept)-4);
+      fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
+              newhead,ftell(filept)-4);
       if (tryresync && oldhead) {
             /* Read more bytes until we find something that looks
                reasonably like a valid header.  This is not a
@@ -215,7 +219,15 @@ int read_frame(struct frame *fr)
     if (!firsthead)
       firsthead = newhead;
 
-    fr->lsf = (newhead & (1<<19)) ? 0x0 : 0x1;
+    if( newhead & (1<<20) ) {
+      fr->lsf = (newhead & (1<<19)) ? 0x0 : 0x1;
+      fr->mpeg25 = 0;
+    }
+    else {
+      fr->lsf = 1;
+      fr->mpeg25 = 1;
+    }
+    
     if (!tryresync || !oldhead) {
           /* If "tryresync" is true, assume that certain
              parameters do not change within the stream! */
@@ -225,9 +237,13 @@ int read_frame(struct frame *fr)
         fprintf(stderr,"Stream error\n");
         exit(1);
       }
-      fr->sampling_frequency = ((newhead>>10)&0x3) | (fr->lsf*3);
+      if(fr->mpeg25)
+        fr->sampling_frequency = 6;
+      else
+        fr->sampling_frequency = ((newhead>>10)&0x3) + (fr->lsf*3);
       fr->error_protection = ((newhead>>16)&0x1)^0x1;
     }
+
     fr->padding = ((newhead>>9)&0x1);
     fr->extension = ((newhead>>8)&0x1);
     fr->copyright = ((newhead>>3)&0x1);
@@ -329,10 +345,10 @@ void print_header(struct frame *fr)
 {
 	static char *modes[4] = { "Stereo", "Joint-Stereo", "Dual-Channel", "Single-Channel" };
 	static char *layers[4] = { "Unknown" , "I", "II", "III" };
-    static char *mpeg_type[2] = { "MPEG 1.0" , "MPEG 2.0" };
+    static char *mpeg_type[4] = { "MPEG 1.0" , "MPEG 2.0" , "MPEG 2.5" , "MPEG 2.5"  };
  
 	fprintf(stderr,"%s, Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF: %d\n",
-        mpeg_type[fr->lsf],
+        mpeg_type[2*fr->mpeg25+fr->lsf],
 		layers[fr->lay],freqs[fr->sampling_frequency],
 		modes[fr->mode],fr->mode_ext,fsize+4);
 	fprintf(stderr,"Channels: %d, copyright: %s, original: %s, CRC: %s, emphasis: %d.\n",

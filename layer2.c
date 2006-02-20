@@ -215,6 +215,9 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
 */
     }
 
+    if(sblimit > (SBLIMIT>>fr->down_sample) )
+      sblimit = SBLIMIT>>fr->down_sample;
+
     for(i=sblimit;i<SBLIMIT;i++)
       for (j=0;j<stereo;j++)
         fraction[j][0][i] = fraction[j][1][i] = fraction[j][2][i] = 0.0;

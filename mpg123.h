@@ -70,6 +70,8 @@ struct frame {
     int single;
     int II_sblimit;
     int lsf;
+    int mpeg25;
+    int down_sample;
     int lay;
     int error_protection;
     int bitrate_index;
@@ -154,6 +156,7 @@ struct III_sideinfo
       unsigned subblock_gain[3];
       unsigned maxband[3];
       unsigned maxbandl;
+      unsigned maxb;
       unsigned region1start;
       unsigned region2start;
       unsigned preflag;
@@ -167,6 +170,7 @@ struct III_sideinfo
 
 extern void open_stream(char *);
 extern void close_stream(char *);
+extern void read_frame_init (void);
 extern int read_frame(struct frame *fr);
 extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
@@ -182,7 +186,7 @@ extern void set_pointer(long);
 extern void huffman_decoder(int ,int *);
 extern void huffman_count1(int,int *);
 
-extern void init_layer3(void);
+extern void init_layer3(int);
 extern void init_layer2(void);
 extern void make_decode_tables(long scale);
 extern void dct64(real *,real *,real *);
@@ -193,7 +197,7 @@ extern int audio_set_channels(struct audio_info_struct *);
 extern int audio_write_sample(struct audio_info_struct *,short *,int);
 extern int audio_close(struct audio_info_struct *);
 
-extern long freqs[6];
+extern long freqs[7];
 extern real muls[27][64];
 extern real decwin[512+32];
 extern real *pnts[5];

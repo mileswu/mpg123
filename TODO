@@ -1,6 +1,5 @@
 Layer-1 support not heavily tested .. 
-i-stereo in Level-3 seems to work now, but I have to optimize it.
-l3: exchange the DCTs in III_Hybrid by a faster version.
+I-stereo in Level-3 seems to work now, but I have to optimize it.
 general optimizations in Level-3 code.
 add a few more audio-systems/machines. (done by Oliver Fromme)
 add CRC check.

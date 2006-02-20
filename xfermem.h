@@ -18,10 +18,6 @@
 #define TRUE  1
 #endif
 
-#if defined(__linux__) || defined(linux) || defined(ultrix) || defined(__ultrix)
-#define USE_SYSV_SHMEM
-#endif
-
 typedef unsigned char byte;
 
 typedef struct {
