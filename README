@@ -1,9 +1,9 @@
 **********************************************************************
-* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59m                                * 
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59n                                * 
 *                                                                    *
 * (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                      *
 * Layer-3 realtime only with a 'fast' machine                        *
-* Since April 97, 128kbit j-stereo should work on a 486DX4-100.      *
+* Since April 97, 128kbit j-stereo should work on a 486DX4-120.      *
 * With 2:1 down-sampling or using the downmix-mode even a 486DX2-66  *
 * should play such a stream in realtime!                             *
 *                                                                    *
@@ -62,7 +62,7 @@ CPU cycles, though the whole code is optimized for 'full' stereo playing.
 (Compiled with: -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486
    -fomit-frame-pointer -funroll-all-loops -finline-functions -ffast-math)
 
-  full quality:     (stero)     66% (-> should work on 486DX4-100)
+  full quality:     (stero)     66% (-> may work on 486DX4-100)
                     (singlemix) 38% (-> should work on 486DX2-66)
   2:1 downsampling: (stereo)    48%
                     (singlemix) 30% (-> should work on 486DX-50)

@@ -439,10 +439,12 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
 /* check this again! */
          if(gr_info->block_type == 2)
            gr_info->region1start = 36>>1;
+         else if(sfreq == 8)
+/* check this for 2.5 and sfreq=8 */
+           gr_info->region1start = 108>>1;
          else
            gr_info->region1start = 54>>1;
          gr_info->region2start = 576>>1;
-/* check this for 2.5 and sfreq=8 */
        }
        else 
        {
@@ -588,12 +590,12 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
     int num = slen & 0x7;
     slen >>= 3;
     if(num) {
-      for(j=0;j<pnt[i];j++)
+      for(j=0;j<(int)(pnt[i]);j++)
         *scf++ = getbits(num);
       numbits += pnt[i] * num;
     }
     else {
-      for(j=0;j<pnt[i];j++)
+      for(j=0;j<(int)(pnt[i]);j++)
         *scf++ = 0;
     }
   }
@@ -2046,8 +2048,12 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
   else
     stereo1 = 2;
 
-  ms_stereo = (fr->mode == MPG_MD_JOINT_STEREO) && (fr->mode_ext & 0x2);
-  i_stereo = (fr->mode == MPG_MD_JOINT_STEREO) && (fr->mode_ext & 0x1);
+  if(fr->mode == MPG_MD_JOINT_STEREO) {
+    ms_stereo = fr->mode_ext & 0x2;
+    i_stereo  = fr->mode_ext & 0x1;
+  }
+  else
+    ms_stereo = i_stereo = 0;
 
   if(fr->lsf) {
     granules = 1;
@@ -2130,13 +2136,13 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
     for(ss=0;ss<SSLIMIT;ss++) {
       if(single >= 0) {
-        clip += (fr->synth_mono)(hybridOut[0][ss],pcm_sample+pcm_point);
+        clip += (fr->synth_mono)(hybridOut[0][ss],pcm_sample,&pcm_point);
       }
       else {
-        clip += (fr->synth)(hybridOut[0][ss],0,pcm_sample+pcm_point);
-        clip += (fr->synth)(hybridOut[1][ss],1,pcm_sample+pcm_point);
+        int p1 = pcm_point;
+        clip += (fr->synth)(hybridOut[0][ss],0,pcm_sample,&p1);
+        clip += (fr->synth)(hybridOut[1][ss],1,pcm_sample,&pcm_point);
       }
-      pcm_point += fr->block_size;
 
 #ifdef VARMODESUPPORT
       if (playlimit < 128) {

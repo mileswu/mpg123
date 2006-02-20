@@ -1,11 +1,10 @@
-/*
- * Mpeg Layer-1,2,3 audio decoder
+/* 
+ * Mpeg Layer-1,2,3 audio decoder 
  * ------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README'
- * version for slower machines .. decodes only every fourth sample
- * dunno why it sounds THIS annoying (maybe we should adapt the window?)
- * absolutely not optimized for this operation
+ *
+ * N->M down/up sampling. Not optimized for speed.
  */
 
 #include <stdlib.h>
@@ -19,102 +18,127 @@
   else if( (sum) < -32768.0) { *(samples) = -0x8000; (clip)++; } \
   else { *(samples) = sum; }
 
-int synth_4to1_8bit(real *bandPtr,int channel,unsigned char *samples,int *pnt)
+#define NTOM_MUL (32768)
+static unsigned long ntom_val[2] = { NTOM_MUL>>1,NTOM_MUL>>1 };
+static unsigned long ntom_step = NTOM_MUL;
+
+
+void synth_ntom_set_step(unsigned long n,unsigned long m)
 {
-  short samples_tmp[16];
+	if(n >= 96000 || m >= 96000 || m == 0 || n == 0) {
+		fprintf(stderr,"NtoM converter: illegal rates\n");
+		exit(1);
+	}
+
+	n *= NTOM_MUL;
+	ntom_step = n / m;
+
+	if(ntom_step > 8*NTOM_MUL) {
+		fprintf(stderr,"max. 1:8 conversion allowed!\n");
+		exit(1);
+	}
+
+	ntom_val[0] = ntom_val[1] = NTOM_MUL>>1;
+}
+
+int synth_ntom_8bit(real *bandPtr,int channel,unsigned char *samples,int *pnt)
+{
+  short samples_tmp[8*64];
   short *tmp1 = samples_tmp + channel;
   int i,ret;
   int pnt1 = 0;
 
-  ret = synth_4to1(bandPtr,channel,(unsigned char *) samples_tmp,&pnt1);
+  ret = synth_ntom(bandPtr,channel,(unsigned char *) samples_tmp,&pnt1);
   samples += channel + *pnt;
 
-  for(i=0;i<8;i++) {
+  for(i=0;i<(pnt1>>2);i++) {
     *samples = conv16to8[*tmp1>>AUSHIFT];
     samples += 2;
     tmp1 += 2;
   }
-  *pnt += 16;
+  *pnt += pnt1>>1;
 
   return ret;
 }
 
-int synth_4to1_8bit_mono(real *bandPtr,unsigned char *samples,int *pnt)
+int synth_ntom_8bit_mono(real *bandPtr,unsigned char *samples,int *pnt)
 {
-  short samples_tmp[16];
+  short samples_tmp[8*64];
   short *tmp1 = samples_tmp;
   int i,ret;
   int pnt1 = 0;
 
-  ret = synth_4to1(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
+  ret = synth_ntom(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
   samples += *pnt;
 
-  for(i=0;i<8;i++) {
+  for(i=0;i<(pnt1>>21);i++) {
     *samples++ = conv16to8[*tmp1>>AUSHIFT];
     tmp1 += 2;
   }
-  *pnt += 8;
-
+  *pnt += pnt1 >> 2;
+  
   return ret;
 }
 
-
-int synth_4to1_8bit_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
+int synth_ntom_8bit_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
 {
-  short samples_tmp[16];
+  short samples_tmp[8*64];
   short *tmp1 = samples_tmp;
   int i,ret;
   int pnt1 = 0;
 
-  ret = synth_4to1(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
+  ret = synth_ntom(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
   samples += *pnt;
 
-  for(i=0;i<8;i++) {
+  for(i=0;i<(pnt1>>2);i++) {
     *samples++ = conv16to8[*tmp1>>AUSHIFT];
     *samples++ = conv16to8[*tmp1>>AUSHIFT];
     tmp1 += 2;
   }
-  *pnt += 16;
+  *pnt += pnt1 >> 1;
 
   return ret;
 }
 
-int synth_4to1_mono(real *bandPtr,unsigned char *samples,int *pnt)
+int synth_ntom_mono(real *bandPtr,unsigned char *samples,int *pnt)
 {
-  short samples_tmp[16];
+  short samples_tmp[8*64];
   short *tmp1 = samples_tmp;
   int i,ret;
   int pnt1 = 0;
 
-  ret = synth_4to1(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
+  ret = synth_ntom(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
   samples += *pnt;
 
-  for(i=0;i<8;i++) {
+  for(i=0;i<(pnt1>>2);i++) {
     *( (short *)samples) = *tmp1;
     samples += 2;
     tmp1 += 2;
   }
-  *pnt += 16;
+  *pnt += pnt1 >> 1;
 
   return ret;
 }
 
-int synth_4to1_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
+
+int synth_ntom_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
 {
   int i,ret;
+  int pnt1 = 0;
 
-  ret = synth_4to1(bandPtr,0,samples,pnt);
-  samples = samples + *pnt - 32;
-
-  for(i=0;i<8;i++) {
+  ret = synth_ntom(bandPtr,0,samples,&pnt1);
+  
+  for(i=0;i<(pnt1>>2);i++) {
     ((short *)samples)[1] = ((short *)samples)[0];
     samples+=4;
   }
+  *pnt += pnt1;
 
   return ret;
 }
 
-int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
+
+int synth_ntom(real *bandPtr,int channel,unsigned char *out,int *pnt)
 {
   static real buffs[2][2][0x110];
   static const int step = 2;
@@ -124,9 +148,10 @@ int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
   real *b0,(*buf)[0x110];
   int clip = 0; 
   int bo1;
+  int ntom = ntom_val[channel];
 
   if(param.equalizer)
-    do_equalizer(bandPtr,channel);
+	do_equalizer(bandPtr,channel);
 
   if(!channel) {
     bo--;
@@ -135,6 +160,7 @@ int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
   }
   else {
     samples++;
+    out += 2; /* to compute the right *pnt value */
     buf = buffs[1];
   }
 
@@ -149,13 +175,22 @@ int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
     dct64(buf[0]+bo,buf[1]+bo+1,bandPtr);
   }
 
+
   {
     register int j;
     real *window = decwin + 16 - bo1;
-
-    for (j=4;j;j--,b0+=0x30,window+=0x70)
+ 
+    for (j=16;j;j--,window+=0x10)
     {
       real sum;
+
+      ntom += ntom_step;
+      if(ntom < NTOM_MUL) {
+        window += 16;
+        b0 += 16;
+        continue;
+      }
+
       sum  = *window++ * *b0++;
       sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
@@ -173,14 +208,15 @@ int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
       sum += *window++ * *b0++;
       sum -= *window++ * *b0++;
 
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-#if 0
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-#endif
+      while(ntom >= NTOM_MUL) {
+        WRITE_SAMPLE(samples,sum,clip);
+        samples += step;
+        ntom -= NTOM_MUL;
+      }
     }
 
+    ntom += ntom_step;
+    if(ntom >= NTOM_MUL)
     {
       real sum;
       sum  = window[0x0] * b0[0x0];
@@ -191,19 +227,28 @@ int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
       sum += window[0xA] * b0[0xA];
       sum += window[0xC] * b0[0xC];
       sum += window[0xE] * b0[0xE];
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-#if 0
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-#endif
-      b0-=0x40,window-=0x80;
+
+      while(ntom >= NTOM_MUL) {
+        WRITE_SAMPLE(samples,sum,clip);
+        samples += step;
+        ntom -= NTOM_MUL;
+      }
     }
+
+    b0-=0x10,window-=0x20;
     window += bo1<<1;
 
-    for (j=3;j;j--,b0-=0x50,window-=0x70)
+    for (j=15;j;j--,b0-=0x20,window-=0x10)
     {
       real sum;
+
+      ntom += ntom_step;
+      if(ntom < NTOM_MUL) {
+        window -= 16;
+        b0 += 16;
+        continue;
+      }
+
       sum = -*(--window) * *b0++;
       sum -= *(--window) * *b0++;
       sum -= *(--window) * *b0++;
@@ -221,16 +266,16 @@ int synth_4to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
       sum -= *(--window) * *b0++;
       sum -= *(--window) * *b0++;
 
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-#if 0
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-#endif
+      while(ntom >= NTOM_MUL) {
+        WRITE_SAMPLE(samples,sum,clip);
+        samples += step;
+        ntom -= NTOM_MUL;
+      }
     }
   }
-  
-  *pnt += 32;
+
+  ntom_val[channel] = ntom;
+  *pnt = ((unsigned char *) samples - out);
 
   return clip;
 }

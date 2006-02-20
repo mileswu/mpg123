@@ -37,6 +37,7 @@ extern int errno;
 void xfermem_init (txfermem **xf, int bufsize, int msize)
 {
 	int regsize = bufsize + msize + sizeof(txfermem);
+	extern int preload;
 
 #ifdef USE_MMAP
 #  ifdef MAP_ANON
@@ -87,6 +88,7 @@ void xfermem_init (txfermem **xf, int bufsize, int msize)
 	(*xf)->metadata = ((byte *) *xf) + sizeof(txfermem);
 	(*xf)->size = bufsize;
 	(*xf)->metasize = msize;
+	preload = bufsize>>3;
 }
 
 void xfermem_done (txfermem *xf)
@@ -137,6 +139,7 @@ int xfermem_get_usedspace (txfermem *xf)
 		return (xf->size - (readindex - freeindex));
 }
 
+#if 0
 int xfermem_write (txfermem *xf, byte *data, int count)
 {
 	int nbytes;
@@ -162,6 +165,7 @@ int xfermem_read (txfermem *xf, byte *data, int count)
 
 	if ((nbytes = xfermem_get_usedspace(xf))> count)
 		nbytes = count;
+
 	if (nbytes) {
 		if (xf->readindex + nbytes > xf->size) {
 			int first = xf->size - xf->readindex;
@@ -174,6 +178,7 @@ int xfermem_read (txfermem *xf, byte *data, int count)
 	}
 	return (nbytes);
 }
+#endif
 
 int xfermem_getcmd (int fd, int block)
 {
@@ -221,7 +226,7 @@ int xfermem_getcmd (int fd, int block)
 
 int xfermem_putcmd (int fd, byte cmd)
 {
-	for (;;)
+	for (;;) {
 		switch (write(fd, &cmd, 1)) {
 			case 1:
 				return (1);
@@ -229,6 +234,7 @@ int xfermem_putcmd (int fd, byte cmd)
 				if (errno != EINTR)
 					return (-1);
 		}
+	}
 }
 
 int xfermem_block (int readwrite, txfermem *xf)

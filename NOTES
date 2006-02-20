@@ -1,0 +1,32 @@
+Bug reports, patches:
+---------------------
+  Please always check the latest version from my home page
+  before reporting a bug.
+  If you send me a patch, please use the 'unified' version.
+  (diff -u ...)
+
+TODO:
+
+A few notes on how mpg123 tries to select a 'good' 
+audio encoding and frequency. (not yet implemented!!)
+
+- mpg123 tries to set the settings you specify on the command line
+  in the order of its appearence (exclusiv .. no fallback then)
+
+- after this, mpg123 tries to set 
+    1. the number of channels (or fallback to mono if stereo isn't possible)
+    2. the audioformat to 16 bit (or fallback to 8bit)
+    3. the "best" frequency: (in this order)
+        - the exact stream frequency or fallback to
+        - 2:1 frequency or fallback to
+        - 4:1 frequency or try the
+        - nearest frequency lower than the frequency of your stream
+       mpg123 automagically converts the rate. 
+
+So, if you think (or even know), that your hardware supports a higher
+frequency only with eg. mono,8bit you must force mpg123 to play mono 
+and 8bit. ("--8bit -m") etc....
+
+       
+
+

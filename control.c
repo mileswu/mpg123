@@ -63,7 +63,7 @@ void control_sajber(struct frame *fr)
 			if(n == 0) {
 				if(!read_frame(fr)) {
 					mode = MODE_STOPPED;
-					close_stream();
+					rd->close();
 					sajber_sendmsg(MSG_NEXT,0);
 					continue;
 				}
@@ -83,7 +83,7 @@ void control_sajber(struct frame *fr)
 				framecnt++;
 				if(!(framecnt & 0xf)) {
 					sajber_sendmsg(MSG_FRAMES,framecnt);
-					sajber_sendmsg(MSG_POSITION,tell_stream());
+					sajber_sendmsg(MSG_POSITION,rd->tell());
 				}
 			}
 		}
@@ -132,7 +132,9 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 							sajber_sendmsg(MSG_RESPONSE,REWIND_BEGIN);
 							break;
 						case REWIND_STEP:
-							if(back_frame(fr,16) == 0)
+							if(!rd->back_frame)
+								break;
+							if(rd->back_frame(fr,16) == 0)
 								framecnt -= 16;
 							else
 								framecnt = 0;
@@ -143,10 +145,13 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 							break;
 						case PLAY_STOP:
 							mode = MODE_STOPPED;
-							close_stream();
+							rd->close();
 							break;
 						case PLAY_PAUSE:
-							mode = MODE_PAUSED;
+							if (mode == MODE_PAUSED)
+								mode = MODE_PLAYING;
+							else
+								mode = MODE_PAUSED;
 							break;
 					}
 					break;
@@ -154,7 +159,7 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 					break;
 				case MSG_SONG:
 					if(mode == MODE_PLAYING) {
-						close_stream();
+						rd->close();
 						mode = MODE_STOPPED;
 					}
 

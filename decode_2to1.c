@@ -18,97 +18,113 @@
   else if( (sum) < -32768.0) { *(samples) = -0x8000; (clip)++; } \
   else { *(samples) = sum; }
 
-int synth_2to1_8bit(real *bandPtr,int channel,unsigned char *samples)
+int synth_2to1_8bit(real *bandPtr,int channel,unsigned char *samples,int *pnt)
 {
   short samples_tmp[32];
   short *tmp1 = samples_tmp + channel;
   int i,ret;
+  int pnt1 = 0;
 
-  samples += channel;
-  ret = synth_2to1(bandPtr,channel,(unsigned char *) samples_tmp);
+  ret = synth_2to1(bandPtr,channel,(unsigned char *) samples_tmp,&pnt1);
+  samples += channel + *pnt;
 
   for(i=0;i<16;i++) {
-    *samples = conv16to8[*tmp1>>4];
+    *samples = conv16to8[*tmp1>>AUSHIFT];
     samples += 2;
     tmp1 += 2;
   }
+  *pnt += 32;
 
   return ret;
 }
 
-int synth_2to1_8bit_mono(real *bandPtr,unsigned char *samples)
+int synth_2to1_8bit_mono(real *bandPtr,unsigned char *samples,int *pnt)
 {
   short samples_tmp[32];
   short *tmp1 = samples_tmp;
   int i,ret;
+  int pnt1 = 0;
 
-  ret = synth_2to1(bandPtr,0,(unsigned char *) samples_tmp);
+  ret = synth_2to1(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
+  samples += *pnt;
 
   for(i=0;i<16;i++) {
-    *samples++ = conv16to8[*tmp1>>4];
+    *samples++ = conv16to8[*tmp1>>AUSHIFT];
     tmp1 += 2;
   }
+  *pnt += 16;
 
   return ret;
 }
 
 
-int synth_2to1_8bit_mono2stereo(real *bandPtr,unsigned char *samples)
+int synth_2to1_8bit_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
 {
   short samples_tmp[32];
   short *tmp1 = samples_tmp;
   int i,ret;
+  int pnt1 = 0;
 
-  ret = synth_2to1(bandPtr,0,(unsigned char *) samples_tmp);
+  ret = synth_2to1(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
+  samples += *pnt;
 
   for(i=0;i<16;i++) {
-    *samples++ = conv16to8[*tmp1>>4];
-    *samples++ = conv16to8[*tmp1>>4];
+    *samples++ = conv16to8[*tmp1>>AUSHIFT];
+    *samples++ = conv16to8[*tmp1>>AUSHIFT];
     tmp1 += 2;
   }
+  *pnt += 32;
 
   return ret;
 }
 
-int synth_2to1_mono(real *bandPtr,unsigned char *samples)
+int synth_2to1_mono(real *bandPtr,unsigned char *samples,int *pnt)
 {
   short samples_tmp[32];
   short *tmp1 = samples_tmp;
   int i,ret;
+  int pnt1=0;
 
-  ret = synth_2to1(bandPtr,0,(unsigned char *) samples_tmp);
+  ret = synth_2to1(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
+  samples += *pnt;
 
   for(i=0;i<16;i++) {
     *( (short *) samples) = *tmp1;
     samples += 2;
     tmp1 += 2;
   }
+  *pnt += 32;
 
   return ret;
 }
 
-int synth_2to1_mono2stereo(real *bandPtr,unsigned char *samples)
+int synth_2to1_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
 {
-  int i,ret = synth_2to1(bandPtr,0,samples);
+  int i,ret;
+
+  ret = synth_2to1(bandPtr,0,samples,pnt);
+  samples = samples + *pnt - 64;
+
   for(i=0;i<16;i++) {
     ((short *)samples)[1] = ((short *)samples)[0];
     samples+=4;
   }
+  
   return ret;
 }
 
-int synth_2to1(real *bandPtr,int channel,unsigned char *out)
+int synth_2to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
 {
   static real buffs[2][2][0x110];
   static const int step = 2;
   static int bo = 1;
-  short *samples = (short *) out;
+  short *samples = (short *) (out + *pnt);
 
   real *b0,(*buf)[0x110];
   int clip = 0; 
   int bo1;
 
-  if(flags.equalizer)
+  if(param.equalizer)
     do_equalizer(bandPtr,channel);
 
   if(!channel) {
@@ -206,6 +222,8 @@ int synth_2to1(real *bandPtr,int channel,unsigned char *out)
 #endif
     }
   }
+
+  *pnt += 64;
 
   return clip;
 }

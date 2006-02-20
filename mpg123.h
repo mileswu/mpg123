@@ -19,7 +19,6 @@
 #endif
 
 #define MPG123_REMOTE
-#define SHUFFLESUPPORT
 #ifdef HPUX
 #define random rand
 #define srandom srand
@@ -42,11 +41,6 @@
 # define srandom srand
 
 # undef MPG123_REMOTE           /* Get rid of this stuff for Win32 */
-# undef SHUFFLESUPPORT
-#endif
-
-#ifdef SGI
-#include <audio.h>
 #endif
 
 #include "xfermem.h"
@@ -69,12 +63,6 @@
 #define INLINE
 #endif
 
-#ifndef NAS
-#if defined(LINUX) || defined(__FreeBSD__) || defined(__bsdi__)
-#define VOXWARE
-#endif
-#endif
-
 #include "audio.h"
 
 /* AUDIOBUFSIZE = n*64 with n=1,2,3 ...  */
@@ -95,6 +83,9 @@
 
 #define MAXOUTBURST 32768
 
+/* Pre Shift fo 16 to 8 bit converter table */
+#define AUSHIFT (3)
+
 
 struct al_table 
 {
@@ -104,8 +95,8 @@ struct al_table
 
 struct frame {
     struct al_table *alloc;
-    int (*synth)(real *,int,unsigned char *);
-    int (*synth_mono)(real *,unsigned char *);
+    int (*synth)(real *,int,unsigned char *,int *);
+    int (*synth_mono)(real *,unsigned char *,int *);
     int stereo;
     int jsbound;
     int single;
@@ -113,10 +104,10 @@ struct frame {
     int lsf;
     int mpeg25;
     int down_sample;
+    int down_sample_orig;
     int header_change;
-    int block_size;
     int lay;
-	int (*do_layer)(struct frame *fr,int,struct audio_info_struct *);
+    int (*do_layer)(struct frame *fr,int,struct audio_info_struct *);
     int error_protection;
     int bitrate_index;
     int sampling_frequency;
@@ -127,18 +118,39 @@ struct frame {
     int copyright;
     int original;
     int emphasis;
+    int framesize; /* computed framesize */
 };
 
-struct flags {
+struct parameter {
 	int equalizer;
 	int aggressive; /* renice to max. priority */
+	int shuffle;	/* shuffle/random play */
+	int remote;	/* remote operation */
+	int outmode;	/* where to out the decoded sampels */
+	int quiet;	/* shut up! */
+	int usebuffer;	/* second level buffer size */
+	int tryresync;  /* resync stream after error */
+	int verbose;    /* verbose level */
+	int force_mono;
+	int force_stereo;
+	int force_8bit;
+	int force_rate;
 };
 
-extern int outmode;  
-extern int tryresync;
-extern int quiet;
+struct reader {
+  int  (*init)(struct reader *);
+  void (*close)(void);
+  int  (*head_read)(unsigned char *hbuf,unsigned long *newhead);
+  int  (*head_shift)(unsigned char *hbuf,unsigned long *head);
+  int  (*skip_bytes)(int len);
+  int  (*read_frame_body)(int size);
+  int  (*back_frame)(struct frame *fr,int num);
+  long (*tell)(void);
+};
+
+extern struct reader *rd,readers[];
+
 extern int halfspeed;
-extern int usebuffer;
 extern int buffer_fd[2];
 extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
@@ -151,7 +163,7 @@ extern void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset);
 
 extern char *proxyurl;
 extern unsigned long proxyip;
-extern FILE *http_open (char *url);
+extern int http_open (char *url);
 extern char *httpauth;
 
 /* ------ Declarations from "common.c" ------ */
@@ -221,27 +233,38 @@ extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
 extern void do_equalizer(real *bandPtr,int channel);
-extern int synth_1to1 (real *,int,unsigned char *);
+
 #ifdef PENTIUM_OPT
 extern int synth_1to1_pent (real *,int,unsigned char *);
 #endif
-extern int synth_1to1_8bit (real *,int,unsigned char *);
-extern int synth_2to1 (real *,int,unsigned char *);
-extern int synth_2to1_8bit (real *,int,unsigned char *);
-extern int synth_4to1 (real *,int,unsigned char *);
-extern int synth_4to1_8bit (real *,int,unsigned char *);
-extern int synth_1to1_mono (real *,unsigned char *);
-extern int synth_1to1_mono2stereo (real *,unsigned char *);
-extern int synth_1to1_8bit_mono (real *,unsigned char *);
-extern int synth_1to1_8bit_mono2stereo (real *,unsigned char *);
-extern int synth_2to1_mono (real *,unsigned char *);
-extern int synth_2to1_mono2stereo (real *,unsigned char *);
-extern int synth_2to1_8bit_mono (real *,unsigned char *);
-extern int synth_2to1_8bit_mono2stereo (real *,unsigned char *);
-extern int synth_4to1_mono (real *,unsigned char *);
-extern int synth_4to1_mono2stereo (real *,unsigned char *);
-extern int synth_4to1_8bit_mono (real *,unsigned char *);
-extern int synth_4to1_8bit_mono2stereo (real *,unsigned char *);
+extern int synth_1to1 (real *,int,unsigned char *,int *);
+extern int synth_1to1_8bit (real *,int,unsigned char *,int *);
+extern int synth_1to1_mono (real *,unsigned char *,int *);
+extern int synth_1to1_mono2stereo (real *,unsigned char *,int *);
+extern int synth_1to1_8bit_mono (real *,unsigned char *,int *);
+extern int synth_1to1_8bit_mono2stereo (real *,unsigned char *,int *);
+
+extern int synth_2to1 (real *,int,unsigned char *,int *);
+extern int synth_2to1_8bit (real *,int,unsigned char *,int *);
+extern int synth_2to1_mono (real *,unsigned char *,int *);
+extern int synth_2to1_mono2stereo (real *,unsigned char *,int *);
+extern int synth_2to1_8bit_mono (real *,unsigned char *,int *);
+extern int synth_2to1_8bit_mono2stereo (real *,unsigned char *,int *);
+
+extern int synth_4to1 (real *,int,unsigned char *,int *);
+extern int synth_4to1_8bit (real *,int,unsigned char *,int *);
+extern int synth_4to1_mono (real *,unsigned char *,int *);
+extern int synth_4to1_mono2stereo (real *,unsigned char *,int *);
+extern int synth_4to1_8bit_mono (real *,unsigned char *,int *);
+extern int synth_4to1_8bit_mono2stereo (real *,unsigned char *,int *);
+
+extern int synth_ntom (real *,int,unsigned char *,int *);
+extern int synth_ntom_8bit (real *,int,unsigned char *,int *);
+extern int synth_ntom_mono (real *,unsigned char *,int *);
+extern int synth_ntom_mono2stereo (real *,unsigned char *,int *);
+extern int synth_ntom_8bit_mono (real *,unsigned char *,int *);
+extern int synth_ntom_8bit_mono2stereo (real *,unsigned char *,int *);
+
 extern void rewindNbits(int bits);
 extern int  hsstell(void);
 extern void set_pointer(long);
@@ -258,7 +281,7 @@ extern void control_sajber(struct frame *fr);
 extern void control_tk3play(struct frame *fr);
 
 extern unsigned char *conv16to8;
-extern long freqs[7];
+extern long freqs[9];
 extern real muls[27][64];
 extern real decwin[512+32];
 extern real *pnts[5];
@@ -267,6 +290,8 @@ extern real equalizer[2][32];
 extern real equalizer_sum[2][32];
 extern int equalizer_cnt;
 
-extern struct flags flags;
+extern struct audio_name audio_val2name[];
+
+extern struct parameter param;
 
 

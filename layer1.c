@@ -135,15 +135,15 @@ int do_layer1(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
     if(single >= 0)
     {
-      clip += (fr->synth_mono)( (real *) fraction[single],pcm_sample+pcm_point);
+      clip += (fr->synth_mono)( (real *) fraction[single],pcm_sample,&pcm_point);
     }
     else {
-        clip += (fr->synth)( (real *) fraction[0],0,pcm_sample+pcm_point);
-        clip += (fr->synth)( (real *) fraction[1],1,pcm_sample+pcm_point);
+        int p1 = pcm_point;
+        clip += (fr->synth)( (real *) fraction[0],0,pcm_sample,&p1);
+        clip += (fr->synth)( (real *) fraction[1],1,pcm_sample,&pcm_point);
     }
-    pcm_point += fr->block_size;
 
-    if(pcm_point == audiobufsize)
+    if(pcm_point >= audiobufsize)
       audio_flush(outmode,ai);
   }
 

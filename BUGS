@@ -2,7 +2,7 @@ Of course, there are some known bugs:
 -------------------------------------
 
 - Using the buffermode, the switching from foreground to background operation 
-  results in ugly noise 
+  results in ugly noise  (-> hopefully fixed)
 - win32 port: problems with option handling
 - auto-config depending on audio capabilities not fully (buggy) implemented
 - 

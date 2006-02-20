@@ -135,7 +135,7 @@ unsigned int proxyport;
 
 char *httpauth = NULL;
 
-FILE *http_open (char *url)
+int http_open (char *url)
 {
 	char *purl, *host, *request, *sptr;
 	int linelength;
@@ -248,7 +248,8 @@ FILE *http_open (char *url)
 	}
 	free (purl);
 	free (request);
-	return (myfile);
+
+	return sock;
 }
 
 #else

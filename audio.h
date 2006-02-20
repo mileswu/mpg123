@@ -5,14 +5,26 @@
 enum { AUDIO_OUT_HEADPHONES,AUDIO_OUT_INTERNAL_SPEAKER,AUDIO_OUT_LINE_OUT };
 enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT, DECODE_BUFFER };
 
-#define AUDIO_FORMAT_SIGNED_16    0x1
-#define AUDIO_FORMAT_UNSIGNED_8   0x2
-#define AUDIO_FORMAT_SIGNED_8     0x4
-#define AUDIO_FORMAT_ULAW_8       0x8
-#define AUDIO_FORMAT_ALAW_8       0x10
+#define AUDIO_FORMAT_MASK	  0x100
+#define AUDIO_FORMAT_16		  0x100
+#define AUDIO_FORMAT_8		  0x000
 
-#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(VOXWARE) || defined(__NetBSD__)
+#define AUDIO_FORMAT_SIGNED_16    0x110
+#define AUDIO_FORMAT_UNSIGNED_16  0x120
+#define AUDIO_FORMAT_UNSIGNED_8   0x1
+#define AUDIO_FORMAT_SIGNED_8     0x2
+#define AUDIO_FORMAT_ULAW_8       0x4
+#define AUDIO_FORMAT_ALAW_8       0x8
+
+/* 3% rate tolerance */
+#define AUDIO_RATE_TOLERANCE	  3
+
+#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(OSS) || defined(__NetBSD__)
 #define AUDIO_USES_FD
+#endif
+
+#ifdef SGI
+#include <audio.h>
 #endif
 
 struct audio_info_struct
@@ -30,7 +42,20 @@ struct audio_info_struct
   char *device;
   int channels;
   int format;
+  int private1;
+  void *private2;
 };
+
+struct audio_name {
+  int  val;
+  char *name;
+  char *sname;
+};
+
+extern void audio_capabilities(struct audio_info_struct *);
+extern void audio_fit_capabilities(struct audio_info_struct *ai,int c,int r);
+
+extern char *audio_encoding_name(int format);
 
 extern int audio_play_samples(struct audio_info_struct *,unsigned char *,int);
 extern int audio_open(struct audio_info_struct *);

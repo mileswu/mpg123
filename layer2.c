@@ -246,13 +246,13 @@ int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
     {
       if(single >= 0)
       {
-        clip += (fr->synth_mono) (fraction[single][j],pcm_sample+pcm_point);
+        clip += (fr->synth_mono) (fraction[single][j],pcm_sample,&pcm_point);
       }
       else {
-          clip += (fr->synth) (fraction[0][j],0,pcm_sample+pcm_point);
-          clip += (fr->synth) (fraction[1][j],1,pcm_sample+pcm_point);
+          int p1 = pcm_point;
+          clip += (fr->synth) (fraction[0][j],0,pcm_sample,&p1);
+          clip += (fr->synth) (fraction[1][j],1,pcm_sample,&pcm_point);
       }
-      pcm_point += fr->block_size;
 
       if(pcm_point == audiobufsize)
         audio_flush(outmode,ai);

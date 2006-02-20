@@ -10,11 +10,10 @@ in layer2.c:
 
 - better frame reader .. especially for layer 3 
 - MPEG system stream decoder
-
 - check again layer1 !!
-
 - Write a special (optimized) 'single channel' decode.
-
 - optimized dct64 for down sampling modes
-
 - native audio support for AIX and DEC
+- update manpage
+- optimizations for downsampling modes on layer2 and layer1
+

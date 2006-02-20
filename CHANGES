@@ -1,3 +1,21 @@
+0.59n: (MH)
+------
+- fixed shuffle bug
+- added memory mapped IO for file reading
+- added MPEG 2.5 12kHz and 8kHz table entry
+- started flexibel rate conversion .. 
+- new '-Z' / '--random' option 
+- minor clean-up
+- splitted audio file in audio system dependend smaller parts
+- started system stream support (external program: system.c)
+- unsigned 8 bit (instead of ulaw) is now default for 8bit operation
+- Linux PPC patch from Grant Erickson <eric0139@tc.umn.edu> applied
+- added BSDi patch from Peter Berger <peterb@hoopoe.psc.edu>, who reported
+  a failure when catching signals
+- minor bug fix in the control interface for sajber jukebox
+- fixed the ugly 'Ctrl-Z in buffer mode' bug .. YES ;)
+- added buffer preload when underrun occurs (preload = 1/8 buffer size)
+
 0.59m: (MH)
 ------
 - Bug with RIFF header streams fixed.

@@ -1,12 +1,14 @@
 
+#include <stdlib.h>
+
 #include "mpg123.h"
 
 real decwin[512+32];
 static real cos64[16],cos32[8],cos16[4],cos8[2],cos4[1];
 real *pnts[] = { cos64,cos32,cos16,cos8,cos4 };
 
-static unsigned char conv16to8_buf[4096];
-unsigned char *conv16to8 = conv16to8_buf + 2048;
+static unsigned char *conv16to8_buf = NULL;
+unsigned char *conv16to8;
 
 static long intwinbase[] = {
      0,    -1,    -1,    -1,    -1,    -1,    -1,    -2,    -2,    -2,
@@ -76,30 +78,50 @@ void make_decode_tables(long scaleval)
 void make_conv16to8_table(int mode)
 {
   int i;
-  unsigned char c;
+
+  /*
+   * ????: 8.0 is right but on SB cards '2.0' is a better value ???
+   */
+  const double mul = 8.0;
+
+  if(!conv16to8_buf) {
+    conv16to8_buf = (unsigned char *) malloc(8192);
+    if(!conv16to8_buf) {
+      fprintf(stderr,"Can't allocate 16 to 8 converter table!\n");
+      exit(1);
+    }
+    conv16to8 = conv16to8_buf + 4096;
+  }
+
   if(mode == AUDIO_FORMAT_ULAW_8) {
     double m=127.0 / log(256.0);
-    for(i=-2048;i<2048;i++) {
+    int c1;
+
+    for(i=-4096;i<4096;i++) {
 /* dunno whether this is a valid transformation rule ?!?!? */
       if(i < 0)
-        c = 127 - (int) (log( 1.0 - 255.0 * (double) i*16.0 / 32767.0 ) * m);
+        c1 = 127 - (int) (log( 1.0 - 255.0 * (double) i*mul / 32768.0 ) * m);
       else
-        c = 255 - (int) (log( 1.0 + 255.0 * (double) i*16.0 / 32767.0 ) * m);
-      conv16to8[i] = c;
+        c1 = 255 - (int) (log( 1.0 + 255.0 * (double) i*mul / 32768.0 ) * m);
+      if(c1 < 0 || c1 > 255) 
+	fprintf(stderr,"Converror %d %d\n",i,c1);
+      if(c1 == 0)
+        c1 = 2;
+      conv16to8[i] = (unsigned char) c1;
     }
   }
   else if(mode == AUDIO_FORMAT_SIGNED_8) {
-    for(i=-2048;i<2048;i++) {
-      conv16to8[i] = i>>4;
+    for(i=-4096;i<4096;i++) {
+      conv16to8[i] = i>>5;
     }
   }
   else if(mode == AUDIO_FORMAT_UNSIGNED_8) {
-    for(i=-2048;i<2048;i++) {
-      conv16to8[i] = (i>>4)+128;
+    for(i=-4096;i<4096;i++) {
+      conv16to8[i] = (i>>5)+128;
     }
   }
   else {
-    for(i=-2048;i<2048;i++) {
+    for(i=-4096;i<4096;i++) {
       conv16to8[i] = 0;
     }
   }
