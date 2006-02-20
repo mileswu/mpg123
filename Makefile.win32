@@ -1,6 +1,6 @@
 LINKER=link
 CC=cl
-CFLAGS=-nologo -G4 -ML -W2 -GX -O2 -DNDEBUG -DWIN32 -D_CONSOLE -D_WIN32 -YX 
+CFLAGS=-nologo -G4 -ML -W2 -GX -O2 -DNDEBUG -DWIN32 -DNOXFERMEM -D_CONSOLE -D_WIN32 -YX 
 LIBS=-DEFAULTLIB:user32.lib gdi32.lib comdlg32.lib winmm.lib
 LINKFLAGS=-nologo -subsystem:console -incremental:no -machine:I386
 

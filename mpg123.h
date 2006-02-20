@@ -125,7 +125,6 @@ struct frame {
 };
 
 struct parameter {
-  int equalizer;
   int aggressive; /* renice to max. priority */
   int shuffle;	/* shuffle/random play */
   int remote;	/* remote operation */
@@ -144,7 +143,7 @@ struct parameter {
   long halfspeed;
   int force_reopen;
   long realtime;
-  char wavfilename[256];
+  char filename[256];
 };
 
 struct reader {
@@ -167,13 +166,14 @@ struct reader {
 #define READER_ID3TAG    0x2
 
 extern struct reader *rd,readers[];
+extern char *equalfile;
 
 extern int halfspeed;
 extern int buffer_fd[2];
 extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
 
-#if !defined(OS2) && !defined(WIN32)
+#ifndef NOXFERMEM
 extern void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset);
 #endif
 

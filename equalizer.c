@@ -9,15 +9,16 @@ void do_equalizer(real *bandPtr,int channel)
 {
 	int i;
 
-	if(param.equalizer & 0x1) {
+	if(equalfile) {
 		for(i=0;i<32;i++)
 			bandPtr[i] *= equalizer[channel][i];
 	}
 
-	if(param.equalizer & 0x2) {
+/*	if(param.equalizer & 0x2) {
 		equalizer_cnt++;
 		for(i=0;i<32;i++)
 			equalizer_sum[channel][i] += bandPtr[i];
 	}
+*/
 }
 

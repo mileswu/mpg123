@@ -116,6 +116,8 @@ void audio_flush(int outmode, struct audio_info_struct *ai)
         write (buffer_fd[1], pcm_sample, pcm_point);
         break;
       case DECODE_WAV:
+      case DECODE_CDR:
+      case DECODE_AU:
         wav_write(pcm_sample, pcm_point);
         break;
     }
@@ -391,9 +393,6 @@ static int decode_header(struct frame *fr,unsigned long newhead)
       fr->error_protection = ((newhead>>16)&0x1)^0x1;
     }
 
-    if(fr->mpeg25) /* allow Bitrate change for 2.5 ... */
-      fr->bitrate_index = ((newhead>>12)&0xf);
-
     fr->bitrate_index = ((newhead>>12)&0xf);
     fr->padding   = ((newhead>>9)&0x1);
     fr->extension = ((newhead>>8)&0x1);
@@ -409,7 +408,7 @@ static int decode_header(struct frame *fr,unsigned long newhead)
 
     if(!fr->bitrate_index)
     {
-      fprintf(stderr,"Free format not supported.\n");
+      fprintf(stderr,"Free format not supported: (head %08lx)\n",newhead);
       return (0);
     }
 
@@ -822,7 +821,13 @@ void print_stat(struct frame *fr,int no,long buffsize,
 #endif
 	tim2 = tim2 < 0 ? 0.0 : tim2;
 
-	fprintf(stderr,"Time: %3.2f [%3.2f], ",tim1,tim2);
+	fprintf(stderr,"Time: %02d:%02d.%02d [%02d:%02d.%02d], ",
+			(int)tim1/60,
+			(int)tim1%60,
+			(int)(tim1*100)%100,
+			(int)tim2/60,
+			(int)tim2%60,
+			(int)(tim2*100)%100);
 	if(param.usebuffer)
 		fprintf(stderr,"[%8ld] ",(long)buffsize);
 	fflush(stderr); /* hmm not really nec. */

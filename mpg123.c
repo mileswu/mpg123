@@ -30,7 +30,6 @@ static void long_usage(char *);
 static void print_title(void);
 
 struct parameter param = { 
-  FALSE , /* equalizer */
   FALSE , /* aggressiv */
   FALSE , /* shuffle */
   FALSE , /* remote */
@@ -49,10 +48,11 @@ struct parameter param = {
   0 ,	  /* halfspeed */
   0 ,	  /* force_reopen, always (re)opens audio device for next song */
   FALSE,  /* try to run process in 'realtime mode' */   
-  { 0,},  /* wavfilename */
+  { 0,},  /* wav,cdr,au Filename */
 };
 
 char *listname = NULL;
+char *equalfile = NULL;
 long outscale  = 32768;
 long numframes = -1;
 long startFrame= 0;
@@ -138,7 +138,7 @@ void init_output(void)
   if (init_done)
     return;
   init_done = TRUE;
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
   if (param.usebuffer) {
     unsigned int bufferbytes;
     sigset_t newsigset, oldsigset;
@@ -176,19 +176,27 @@ void init_output(void)
     if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2 + 1024))) {
       perror ("malloc()");
       exit (1);
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
     }
 #endif
   }
 
-  if(param.outmode==DECODE_AUDIO) {
-    if(audio_open(&ai) < 0) {
-      perror("audio");
-      exit(1);
-    }
-  }
-  else if(param.outmode == DECODE_WAV) {
-    wav_open(&ai,param.wavfilename);
+  switch(param.outmode) {
+    case DECODE_AUDIO:
+      if(audio_open(&ai) < 0) {
+        perror("audio");
+        exit(1);
+      }
+      break;
+    case DECODE_WAV:
+      wav_open(&ai,param.filename);
+      break;
+    case DECODE_AU:
+      au_open(&ai,param.filename);
+      break;
+    case DECODE_CDR:
+      cdr_open(&ai,param.filename);
+      break;
   }
 }
 
@@ -386,8 +394,20 @@ void set_verbose (char *arg)
 void set_wav(char *arg)
 {
   param.outmode = DECODE_WAV;
-  strncpy(param.wavfilename,arg,255);
-  param.wavfilename[255] = 0;
+  strncpy(param.filename,arg,255);
+  param.filename[255] = 0;
+}
+void set_cdr(char *arg)
+{
+  param.outmode = DECODE_CDR;
+  strncpy(param.filename,arg,255);
+  param.filename[255] = 0;
+}
+void set_au(char *arg)
+{
+  param.outmode = DECODE_AU;
+  strncpy(param.filename,arg,255);
+  param.filename[255] = 0;
 }
 void not_compiled(char *arg)
 {
@@ -436,7 +456,7 @@ topt opts[] = {
 	/* 'z' comes from the the german word 'zufall' (eng: random) */
     {'z', "shuffle",     0,                  0, &param.shuffle,    1},
     {'Z', "random",      0,                  0, &param.shuffle,    2},
-    {0,   "equalizer",	 0,                  0, &param.equalizer,1},
+    {'E', "equalizer",	 GLO_ARG | GLO_CHAR, 0, &equalfile,1},
     {0,   "aggressive",	 0,   	             0, &param.aggressive,2},
 #if !defined(WIN32) && !defined(GENERIC)
     {'u', "auth",        GLO_ARG | GLO_CHAR, 0, &httpauth,   0},
@@ -447,6 +467,8 @@ topt opts[] = {
     {'T', "realtime",    0,       not_compiled, 0,           0 },    
 #endif
     {'w', "wav",         GLO_ARG | GLO_CHAR, set_wav, 0 , 0 },
+    {0, "cdr",         GLO_ARG | GLO_CHAR, set_cdr, 0 , 0 },
+    {0, "au",         GLO_ARG | GLO_CHAR, set_au, 0 , 0 },
     {'?', "help",       0,              usage, 0,           0 },
     {0 , "longhelp" ,    0,        long_usage, 0,           0 },
     {0, 0, 0, 0, 0, 0}
@@ -457,7 +479,7 @@ topt opts[] = {
  */
 static void reset_audio(void)
 {
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
 	if (param.usebuffer) {
 		/* wait until the buffer is empty,
 		 * then tell the buffer process to
@@ -617,7 +639,7 @@ void play_frame(int init,struct frame *fr)
 	/* do the decoding */
 	clip = (fr->do_layer)(fr,param.outmode,&ai);
 
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
 	if (param.usebuffer) {
 		if (!intflag) {
 			buffermem->freeindex =
@@ -755,7 +777,7 @@ int main(int argc, char *argv[])
 
 	audio_capabilities(&ai);
 
-	if(param.equalizer) { /* tst */
+	if(equalfile) { /* tst */
 		FILE *fe;
 		int i;
 
@@ -765,7 +787,7 @@ int main(int argc, char *argv[])
 			equalizer_sum[0][i] = equalizer_sum[1][i] = 0.0;
 		}
 
-		fe = fopen("equalize.dat","r");
+		fe = fopen(equalfile,"r");
 		if(fe) {
 			char line[256];
 			for(i=0;i<32;i++) {
@@ -781,10 +803,10 @@ int main(int argc, char *argv[])
 			fclose(fe);
 		}
 		else
-			fprintf(stderr,"Can't open 'equalizer.dat'\n");
+			fprintf(stderr,"Can't open equalizer file '%s'\n",equalfile);
 	}
 
-#if  !defined(WIN32) && !defined(GENERIC)
+#if !defined(WIN32) && !defined(GENERIC) && !defined(MINT)
 	if(param.aggressive) { /* tst */
 		int mypid = getpid();
 		setpriority(PRIO_PROCESS,mypid,-20);
@@ -857,7 +879,7 @@ int main(int argc, char *argv[])
 			init = 0;
 
 			if(param.verbose) {
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
 				if (param.verbose > 1 || !(frameNum & 0x7))
 					print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
 				if(param.verbose > 2 && param.usebuffer)
@@ -873,16 +895,16 @@ int main(int argc, char *argv[])
 
       }
 
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
 	if(param.usebuffer) {
 		int s;
 		while ((s = xfermem_get_usedspace(buffermem))) {
         		struct timeval wait100 = {0, 100000};
 			if(buffermem->wakeme[XF_READER] == TRUE)
 				break;
-			if(param.verbose > 1)
+			if(param.verbose)
 				print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
-                	select(1, NULL, NULL, NULL, &wait100);
+			select(0, NULL, NULL, NULL, &wait100);
 		}
 	}
 #endif
@@ -919,7 +941,7 @@ int main(int argc, char *argv[])
         intflag = FALSE;
       }
     }
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
     if (param.usebuffer) {
       xfermem_done_writer (buffermem);
       waitpid (buffer_pid, NULL, 0);
@@ -929,14 +951,24 @@ int main(int argc, char *argv[])
 #endif
       audio_flush(param.outmode, &ai);
       free (pcm_sample);
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
     }
 #endif
 
-    if(param.outmode==DECODE_AUDIO)
-      audio_close(&ai);
-    if(param.outmode==DECODE_WAV)
-      wav_close();
+    switch(param.outmode) {
+      case DECODE_AUDIO:
+        audio_close(&ai);
+        break;
+      case DECODE_WAV:
+        wav_close();
+        break;
+      case DECODE_AU:
+        au_close();
+        break;
+      case DECODE_CDR:
+        cdr_close();
+        break;
+    }
    
     return 0;
 }
@@ -979,7 +1011,7 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -@ f  read filenames/URLs from f\n");
 #endif
    fprintf(stderr,"   -z    shuffle play (with wildcards)  -Z    random play\n");
-   fprintf(stderr,"   -u a  HTTP authentication string\n");
+   fprintf(stderr,"   -u a  HTTP authentication string     -E f  Equalizer, data from file\n");
    fprintf(stderr,"See the manpage %s(1) or call %s with --longhelp for more information.\n", prgName,prgName);
    exit(1);
 }
@@ -987,49 +1019,58 @@ static void usage(char *dummy)  /* print syntax & exit */
 static void long_usage(char *d)
 {
   FILE *o = stderr;
-  fprintf(o,"-k <n> --skip <n>         \n");
-  fprintf(o,"-a <f> --audiodevice <f>  \n");
-  fprintf(o,"-2     --2to1             2:1 Downsampling\n");
-  fprintf(o,"-4     --4to1             4:1 Downsampling\n");
-  fprintf(o,"-r     --test             \n");
-  fprintf(o,"-s     --stdout           \n");
-  fprintf(o,"-c     --check            \n");
-  fprintf(o,"-v[*]  --verbose          Increase verboselevel\n");
-  fprintf(o,"-q     --quiet            Enables quite mode\n");
-  fprintf(o,"-y     --resync           DISABLES resync on error\n");
-  fprintf(o,"-0     --left --single0   Play only left channel\n");
-  fprintf(o,"-1     --right --single1  Play only right channel\n");
-  fprintf(o,"-m     --mono --mix       Mix stereo to mono\n");
-  fprintf(o,"       --stereo           Duplicate mono channel\n");
-  fprintf(o,"       --reopen           Force close/open on audiodevice\n");
-  fprintf(o,"-g     --gain             Set audio hardware output gain\n");
-  fprintf(o,"-r     --rate             Force a specific audio output rate\n");
-  fprintf(o,"       --8bit             Force 8 bit output\n");
-  fprintf(o,"-o h   --headphones       Output on headphones\n");
-  fprintf(o,"-o s   --speaker          Output on speaker\n");
-  fprintf(o,"-o l   --lineout          Output to lineout\n");
-  fprintf(o,"-f <n> --scale <n>        Scale output samples (soft gain)\n");
-  fprintf(o,"-n     --frames <n>       Play only <n> frames of every stream\n");
+
+  print_title();
+  fprintf(stderr,"\nusage: %s [option(s)] [file(s) | URL(s) | -]\n", prgName);
+  fprintf(stderr,"supported options:\n");
+  fprintf(o,"\n -k <n> --skip <n>         \n");
+  fprintf(o," -a <f> --audiodevice <f>  \n");
+  fprintf(o," -2     --2to1             2:1 Downsampling\n");
+  fprintf(o," -4     --4to1             4:1 Downsampling\n");
+  fprintf(o," -t     --test             \n");
+  fprintf(o," -s     --stdout           \n");
+  fprintf(o," -c     --check            \n");
+  fprintf(o," -v[*]  --verbose          Increase verboselevel\n");
+  fprintf(o," -q     --quiet            Enables quite mode\n");
+  fprintf(o," -y     --resync           DISABLES resync on error\n");
+  fprintf(o," -0     --left --single0   Play only left channel\n");
+  fprintf(o," -1     --right --single1  Play only right channel\n");
+  fprintf(o," -m     --mono --mix       Mix stereo to mono\n");
+  fprintf(o,"        --stereo           Duplicate mono channel\n");
+  fprintf(o,"        --reopen           Force close/open on audiodevice\n");
+  fprintf(o," -g     --gain             Set audio hardware output gain\n");
+  fprintf(o," -r     --rate             Force a specific audio output rate\n");
+  fprintf(o,"        --8bit             Force 8 bit output\n");
+  fprintf(o," -o h   --headphones       Output on headphones\n");
+  fprintf(o," -o s   --speaker          Output on speaker\n");
+  fprintf(o," -o l   --lineout          Output to lineout\n");
+  fprintf(o," -f <n> --scale <n>        Scale output samples (soft gain)\n");
+  fprintf(o," -n     --frames <n>       Play only <n> frames of every stream\n");
 #ifdef VARMODESUPPORT
-  fprintf(o,"-v     --var              Varmode\n");
+  fprintf(o," -v     --var              Varmode\n");
 #endif
-  fprintf(o,"-b <n> --buffer <n>       Set play buffer (\"output cache\")\n");
+  fprintf(o," -b <n> --buffer <n>       Set play buffer (\"output cache\")\n");
 #if 0
-  fprintf(o,"-R     --remote\n");
+  fprintf(o," -R     --remote\n");
 #endif
-  fprintf(o,"-d     --doublespeed      Play only every second frame\n");
-  fprintf(o,"-h     --halfspeed        Play every frame twice\n");
-  fprintf(o,"-p <f> --proxy <f>        Set WWW proxy\n");
-  fprintf(o,"-@ <f> --list <f>         Play songs in <f> file-list\n");
-  fprintf(o,"-z     --shuffle          Shuffle song-list before playing\n");
-  fprintf(o,"-Z     --random           full random play\n");
-  fprintf(o,"       --equalizer        Exp.: scales freq. bands acrd. to 'equalizer.dat'\n");
-  fprintf(o,"       --aggressive       Tries to get higher priority (nice)\n");
-  fprintf(o,"-u     --auth             Set auth values for HTTP access\n");
+  fprintf(o," -d     --doublespeed      Play only every second frame\n");
+  fprintf(o," -h     --halfspeed        Play every frame twice\n");
+  fprintf(o," -p <f> --proxy <f>        Set WWW proxy\n");
+  fprintf(o," -@ <f> --list <f>         Play songs in <f> file-list\n");
+  fprintf(o," -z     --shuffle          Shuffle song-list before playing\n");
+  fprintf(o," -Z     --random           full random play\n");
+  fprintf(o,"        --equalizer        Exp.: scales freq. bands acrd. to 'equalizer.dat'\n");
+  fprintf(o,"        --aggressive       Tries to get higher priority (nice)\n");
+  fprintf(o," -u     --auth             Set auth values for HTTP access\n");
 #if defined(SET_RT)
-  fprintf(o,"-T     --realtime         Tries to get realtime priority\n");
+  fprintf(o," -T     --realtime         Tries to get realtime priority\n");
 #endif
-  fprintf(o,"-w <f> --wav <f>          Writes samples as WAV file in <f>\n");
+  fprintf(o," -w <f> --wav <f>          Writes samples as WAV file in <f> (- is stdout)\n");
+  fprintf(o,"        --au <f>           Writes samples as Sun AU file in <f> (- is stdout)\n");
+  fprintf(o,"        --cdr <f>          Writes samples as CDR file in <f> (- is stdout)\n");
+
+  fprintf(o,"\nSee the manpage %s(1) for more information.\n", prgName);
+  exit(0);
 }
 
 

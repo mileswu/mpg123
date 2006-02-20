@@ -1,4 +1,14 @@
+0.59q: (MH)
+------
+- ESD fixes
+- minor bugfixes (DK patch ;)
+- au and cdr 'support' (it's a hack)
+- Fixed 'VBR' Bug in get_scale_fac1(). Thanx to <ssonique@hotmail.com> for
+  this. (Wasn't really a VBR Bug. The new encoders just triggered it.)
+- Added equalizer patch from <dlux@dlux.sch.bme.hu>
+
 0.59p: (MH)
+------
 - Added mpglib (see mpglib directory)
 - 'make generic' is more generic now
 - Added HPUX/ALib support from Ducroquet Erwan (ducroque@ufr-info-p7.ibp.fr) 
@@ -13,7 +23,9 @@
 - Added combined output devices on SUN (ie Speaker and headphones together)
 - Added audio_alsa.c (under GPL license) for the ALSA sound system from
    A. Hermansen <ahermans@vf.telia.no> and J. Kysela <perex@jcu.cz>
--Added K6-3DNow patches from  KIMURA Takuhiro <kim@hannah.ipc.miyakyo-u.ac.jp>
+- Added K6-3DNow patches from  KIMURA Takuhiro <kim@hannah.ipc.miyakyo-u.ac.jp>
+- Added MINT patches from Petr Stehlik <stehlik@cas3.zlin.vutbr.cz>
+- Fixed minor bug for linux-i486 and mono 
 
 0.59o: (MH)
 ------

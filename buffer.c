@@ -26,7 +26,7 @@ static void catch_usr1 (void)
 	usr1flag = TRUE;
 }
 
-#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
 
 void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 {

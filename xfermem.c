@@ -7,7 +7,7 @@
  *   See xfermem.h for documentation/description.
  */
 
-#if !defined(GENERIC) && !defined(WIN32)
+#ifndef NOXFERMEM
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -43,24 +43,27 @@ int performoption (int argc, char *argv[], topt *opt)
 {
 	int result = GLO_CONTINUE;
 
-	if (!(opt->flags & 1)) /* doesn't take argument */
-		if (opt->var)
+	if (!(opt->flags & 1)) { /* doesn't take argument */
+		if (opt->var) {
 			if (opt->flags & 2) /* var is *char */
 				*((char *) opt->var) = (char) opt->value;
 			else
 				*((long *) opt->var) = opt->value;
+		}
 		else
 			result = opt->value ? opt->value : opt->sname;
+	}
 	else { /* requires argument */
 		if (loptind >= argc)
 			return (GLO_NOARG);
 		loptarg = argv[loptind++]+loptchr;
 		loptchr = 0;
-		if (opt->var)
+		if (opt->var) {
 			if (opt->flags & 2) /* var is *char */
 				*((char **) opt->var) = strdup(loptarg);
 			else
 				*((long *) opt->var) = atoi(loptarg);
+		}
 		else
 			result = opt->value ? opt->value : opt->sname;
 	}
@@ -81,7 +84,7 @@ int getsingleopt (int argc, char *argv[], topt *opts)
 	if (!loptchr) { /* start new option string */
 		if (thisopt[0] != '-' || !thisopt[1]) /* no more options */
 			return (GLO_END);
-		if (thisopt[1] == '-') /* "--" */
+		if (thisopt[1] == '-') { /* "--" */
 			if (thisopt[2]) { /* long option */
 				loptarg = thisopt+2;
 				loptind++;
@@ -94,6 +97,7 @@ int getsingleopt (int argc, char *argv[], topt *opts)
 				loptind++;
 				return (GLO_END);
 			}
+		}
 		else /* start short option(s) */
 			loptchr = 1;
 	}

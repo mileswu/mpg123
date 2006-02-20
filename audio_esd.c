@@ -16,11 +16,11 @@ int audio_open(struct audio_info_struct *ai)
     else
     	format |= ESD_STEREO;
     
-    printf( "opening socket, format = 0x%08x at %d Hz\n", 
+    printf( "opening socket, format = 0x%08x at %ld Hz\n", 
 	    format, ai->rate );
    
     /* sock = esd_play_stream( format, ai->rate ); */
-    ai->fn = esd_play_stream_fallback( format, ai->rate );
+    ai->fn = esd_play_stream_fallback( format, ai->rate, NULL, "mpg123" );
     return (ai->fn);
 
 }

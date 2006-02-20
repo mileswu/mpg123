@@ -80,7 +80,7 @@ int audio_open(struct audio_info_struct *ai)
 #ifndef NETBSD
   AUDIO_INITINFO(&ainfo);
 
-  if(ai->output)
+  if(ai->output > 0)
     ainfo.play.port = 0;
   if(ai->output & AUDIO_OUT_INTERNAL_SPEAKER)
     ainfo.play.port |= AUDIO_SPEAKER;

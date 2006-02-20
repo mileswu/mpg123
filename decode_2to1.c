@@ -124,7 +124,7 @@ int synth_2to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
   int clip = 0; 
   int bo1;
 
-  if(param.equalizer)
+  if(equalfile)
     do_equalizer(bandPtr,channel);
 
   if(!channel) {

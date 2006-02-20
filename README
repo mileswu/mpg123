@@ -33,6 +33,7 @@ Uses code (or at least ideas) from:
   Tony Million: win32 port
   Steven Tiger Lang: advanced shuffle
   Henrik P Johnson: HTTP auth patch
+  Eric B. Mitchell: esd port
   and more ....
 
 current distribution site for new test versions is:
@@ -116,6 +117,10 @@ Pentium optimization notes:
 The ASM optimaztions are especially for Intel Pentium FPUs.
 On other processorts the egcs compiler optimiazation
 may do a better job.
+
+3DNow notes:
+------------
+You need a new 'as'. ie. the 'as' from binutils-2.9.1.0.19a
 
 
 have fun,
