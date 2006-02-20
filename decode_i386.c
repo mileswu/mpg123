@@ -3,8 +3,11 @@
  * ------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README'
- * slighlty optimized for machines without autoincrement/decrement
  *
+ * slighlty optimized for machines without autoincrement/decrement.
+ * The performance is highly compiler dependend. Maybe
+ * the decode.c version for 'normal' processor may be faster
+ * even for Intel processors.
  */
 
 #include <stdlib.h>
@@ -20,12 +23,13 @@
 
 int synth_1to1(real *bandPtr,int channel,short *samples)
 {
-  static real buffs[2][2][0x100];
+  static real buffs[2][2][0x110];
   static const int step = 2;
   static int bo = 1;
 
-  real (*buf)[0x100];
+  real *b0,(*buf)[0x110];
   int clip = 0; 
+  int bo1;
 
   if(!channel) {
     bo--;
@@ -37,138 +41,78 @@ int synth_1to1(real *bandPtr,int channel,short *samples)
     buf = buffs[1];
   }
 
-  dct64(buf[bo&1]+(bo>>1),bandPtr);
-
   if(bo & 0x1) {
-    real *b0 = buf[0] + (15*0x8);
-    real *b1 = buf[1] + (15*0x8);
-    register int j;
-    real *window = decwin + 16 - bo;
-
-    for (j=16;j;j--,b0+=0x8,b1-=0x8,window+=0x20,samples+=step)
-    {
-      real sum;
-      sum  = window[0x0] * b0[0x0];
-      sum -= window[0x1] * b1[0x0];
-      sum += window[0x2] * b0[0x1];
-      sum -= window[0x3] * b1[0x1];
-      sum += window[0x4] * b0[0x2];
-      sum -= window[0x5] * b1[0x2];
-      sum += window[0x6] * b0[0x3];
-      sum -= window[0x7] * b1[0x3];
-      sum += window[0x8] * b0[0x4];
-      sum -= window[0x9] * b1[0x4];
-      sum += window[0xA] * b0[0x5];
-      sum -= window[0xB] * b1[0x5];
-      sum += window[0xC] * b0[0x6];
-      sum -= window[0xD] * b1[0x6];
-      sum += window[0xE] * b0[0x7];
-      sum -= window[0xF] * b1[0x7];
-
-      WRITE_SAMPLE(samples,sum,clip);
-    }
-
-    {
-      real sum;
-      sum  = window[0x0] * b0[0x0];
-      sum += window[0x2] * b0[0x1];
-      sum += window[0x4] * b0[0x2];
-      sum += window[0x6] * b0[0x3];
-      sum += window[0x8] * b0[0x4];
-      sum += window[0xA] * b0[0x5];
-      sum += window[0xC] * b0[0x6];
-      sum += window[0xE] * b0[0x7];
-      WRITE_SAMPLE(samples,sum,clip);
-      b0-=0x8,b1+=0x8,window-=0x20,samples+=step;
-    }
-    window += bo<<1;
-
-    for (j=15;j;j--,b0-=0x8,b1+=0x8,window-=0x20,samples+=step)
-    {
-      real sum;
-      sum = -window[-0x1] * b0[0x0];
-      sum -= window[-0x2] * b1[0x0];
-      sum -= window[-0x3] * b0[0x1];
-      sum -= window[-0x4] * b1[0x1];
-      sum -= window[-0x5] * b0[0x2];
-      sum -= window[-0x6] * b1[0x2];
-      sum -= window[-0x7] * b0[0x3];
-      sum -= window[-0x8] * b1[0x3];
-      sum -= window[-0x9] * b0[0x4];
-      sum -= window[-0xA] * b1[0x4];
-      sum -= window[-0xB] * b0[0x5];
-      sum -= window[-0xC] * b1[0x5];
-      sum -= window[-0xD] * b0[0x6];
-      sum -= window[-0xE] * b1[0x6];
-      sum -= window[-0xF] * b0[0x7];
-      sum -= window[-0x0] * b1[0x7];
-
-      WRITE_SAMPLE(samples,sum,clip);
-    }
+    b0 = buf[0];
+    bo1 = bo;
+    dct64(buf[1]+((bo+1)&0xf),buf[0]+bo,bandPtr);
   }
   else {
-    real *b0 = buf[0] + (15*0x8);
-    real *b1 = buf[1] + (15*0x8);
+    b0 = buf[1];
+    bo1 = bo+1;
+    dct64(buf[0]+bo,buf[1]+bo+1,bandPtr);
+  }
+  
+  {
     register int j;
-    real *window = decwin + 16 - bo;
+    real *window = decwin + 16 - bo1;
 
-    for (j=16;j;j--,b0-=0x8,b1+=0x8,window+=0x20,samples+=step)
+    for (j=16;j;j--,b0+=0x10,window+=0x20,samples+=step)
     {
       real sum;
       sum  = window[0x0] * b0[0x0];
-      sum -= window[0x1] * b1[0x0];
-      sum += window[0x2] * b0[0x1];
-      sum -= window[0x3] * b1[0x1];
-      sum += window[0x4] * b0[0x2];
-      sum -= window[0x5] * b1[0x2];
-      sum += window[0x6] * b0[0x3];
-      sum -= window[0x7] * b1[0x3];
-      sum += window[0x8] * b0[0x4];
-      sum -= window[0x9] * b1[0x4];
-      sum += window[0xA] * b0[0x5];
-      sum -= window[0xB] * b1[0x5];
-      sum += window[0xC] * b0[0x6];
-      sum -= window[0xD] * b1[0x6];
-      sum += window[0xE] * b0[0x7];
-      sum -= window[0xF] * b1[0x7];
+      sum -= window[0x1] * b0[0x1];
+      sum += window[0x2] * b0[0x2];
+      sum -= window[0x3] * b0[0x3];
+      sum += window[0x4] * b0[0x4];
+      sum -= window[0x5] * b0[0x5];
+      sum += window[0x6] * b0[0x6];
+      sum -= window[0x7] * b0[0x7];
+      sum += window[0x8] * b0[0x8];
+      sum -= window[0x9] * b0[0x9];
+      sum += window[0xA] * b0[0xA];
+      sum -= window[0xB] * b0[0xB];
+      sum += window[0xC] * b0[0xC];
+      sum -= window[0xD] * b0[0xD];
+      sum += window[0xE] * b0[0xE];
+      sum -= window[0xF] * b0[0xF];
 
-      WRITE_SAMPLE(samples,-sum,clip);
+      WRITE_SAMPLE(samples,sum,clip);
     }
 
     {
       real sum;
-      sum  = window[0x1] * b1[0x0];
-      sum += window[0x3] * b1[0x1];
-      sum += window[0x5] * b1[0x2];
-      sum += window[0x7] * b1[0x3];
-      sum += window[0x9] * b1[0x4];
-      sum += window[0xB] * b1[0x5];
-      sum += window[0xD] * b1[0x6];
-      sum += window[0xF] * b1[0x7];
+      sum  = window[0x0] * b0[0x0];
+      sum += window[0x2] * b0[0x2];
+      sum += window[0x4] * b0[0x4];
+      sum += window[0x6] * b0[0x6];
+      sum += window[0x8] * b0[0x8];
+      sum += window[0xA] * b0[0xA];
+      sum += window[0xC] * b0[0xC];
+      sum += window[0xE] * b0[0xE];
       WRITE_SAMPLE(samples,sum,clip);
-      b0+=0x8,b1-=0x8,window-=0x20,samples+=step;
+      b0-=0x10,window-=0x20,samples+=step;
     }
-    window += bo<<1;
+    window += bo1<<1;
 
-    for (j=15;j;j--,b0+=0x8,b1-=0x8,window-=0x20,samples+=step)
+    for (j=15;j;j--,b0-=0x10,window-=0x20,samples+=step)
     {
       real sum;
       sum = -window[-0x1] * b0[0x0];
-      sum -= window[-0x2] * b1[0x0];
-      sum -= window[-0x3] * b0[0x1];
-      sum -= window[-0x4] * b1[0x1];
-      sum -= window[-0x5] * b0[0x2];
-      sum -= window[-0x6] * b1[0x2];
-      sum -= window[-0x7] * b0[0x3];
-      sum -= window[-0x8] * b1[0x3];
-      sum -= window[-0x9] * b0[0x4];
-      sum -= window[-0xA] * b1[0x4];
-      sum -= window[-0xB] * b0[0x5];
-      sum -= window[-0xC] * b1[0x5];
-      sum -= window[-0xD] * b0[0x6];
-      sum -= window[-0xE] * b1[0x6];
-      sum -= window[-0xF] * b0[0x7];
-      sum -= window[-0x0] * b1[0x7];
+      sum -= window[-0x2] * b0[0x1];
+      sum -= window[-0x3] * b0[0x2];
+      sum -= window[-0x4] * b0[0x3];
+      sum -= window[-0x5] * b0[0x4];
+      sum -= window[-0x6] * b0[0x5];
+      sum -= window[-0x7] * b0[0x6];
+      sum -= window[-0x8] * b0[0x7];
+      sum -= window[-0x9] * b0[0x8];
+      sum -= window[-0xA] * b0[0x9];
+      sum -= window[-0xB] * b0[0xA];
+      sum -= window[-0xC] * b0[0xB];
+      sum -= window[-0xD] * b0[0xC];
+      sum -= window[-0xE] * b0[0xD];
+      sum -= window[-0xF] * b0[0xE];
+      sum -= window[-0x0] * b0[0xF];
 
       WRITE_SAMPLE(samples,sum,clip);
     }

@@ -43,7 +43,7 @@ typedef struct {
  *	bit 1 = 1 - var is a pointer to a char (or string),
  *			and value is interpreted as char
  *
- * Note: The options definition isterminated by a topt
+ * Note: The options definition is terminated by a topt
  *	 containing only zeroes.
  */
 

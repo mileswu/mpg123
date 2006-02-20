@@ -15,10 +15,10 @@ static int tabsel_123[3][16] =
 long freqs[4] = { 44100, 48000, 32000, 999999 };
 
 #ifdef I386_ASSEM
-int  bitindex;
+int bitindex;
 unsigned char *wordpointer;
 #else
-static int  bitindex;
+static int bitindex;
 static unsigned char *wordpointer;
 #endif
 
@@ -40,7 +40,7 @@ struct ibuf ibufs[2];
 struct ibuf *cibuf;
 int ibufnum=0;
 
-short pcm_sample[AUDIOBUFSIZE];
+short *pcm_sample;
 int pcm_point = 0;
 int audiobufsize = AUDIOBUFSIZE;
 
@@ -204,7 +204,7 @@ int read_frame(struct frame *fr)
           fprintf (stderr, "Skipped %d bytes in input.\n", try);
       }
       else
-        exit(1);
+        return (0);
     }
     if (!firsthead)
       firsthead = newhead;
@@ -233,7 +233,7 @@ int read_frame(struct frame *fr)
     if(!fr->bitrate_index)
     {
       fprintf(stderr,"Free format not supported.\n");
-      exit(1);
+      return (0);
     }
 
     switch(fr->lay)
@@ -242,7 +242,7 @@ int read_frame(struct frame *fr)
 #ifdef VARMODESUPPORT
         if (varmode) {
           fprintf(stderr,"Sorry, layer-1 not supported in varmode.\n"); 
-          exit(1);
+          return (0);
         }
 #endif
         fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ? 
@@ -255,7 +255,7 @@ int read_frame(struct frame *fr)
 #ifdef VARMODESUPPORT
         if (varmode) {
           fprintf(stderr,"Sorry, layer-2 not supported in varmode.\n"); 
-          exit(1);
+          return (0);
         }
 #endif
         get_II_stuff(fr);
@@ -284,7 +284,7 @@ int read_frame(struct frame *fr)
         break; 
       default:
         fprintf(stderr,"Sorry, unknow layer type.\n"); 
-        exit(1);
+        return (0);
     }
   }
 
@@ -435,5 +435,3 @@ void set_pointer(long backstep)
     memcpy(wordpointer,bsbufold+fsizeold-backstep,backstep);
   bitindex = 0; 
 }
-
-

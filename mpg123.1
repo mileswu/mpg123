@@ -49,7 +49,7 @@ mpg123 \- play audio MPEG 1 file (layers 1, 2 and 3)
 .B mpg123
 reads one or more
 .IR file\^ s
-(or standard input if ``-'' is specified) or
+(or standard input if ``\-'' is specified) or
 .IR URL\^ s
 and plays them on the audio device (default) or
 outputs them to stdout.
@@ -70,6 +70,8 @@ instead of playing them through the audio device.  This
 option must be used if your audio hardware is not supported
 by
 .BR mpg123 .
+The output format is raw (headerless) linear PCM audio data,
+16 bit, stereo, host byte order.
 .TP
 .BR \-c ", " \-\^\-check
 Check for filter range violations, and report them for each frame
@@ -193,7 +195,7 @@ Read filenames and/or URLs of MPEG audio streams from the specified
 in addition to the ones specified on the command line (if any).
 Note that
 .I file
-can be either an ordinary file, a dash ``-'' to indicate that
+can be either an ordinary file, a dash ``\-'' to indicate that
 a list of filenames/URLs is to be read from the standard input,
 or an URL pointing to a an appropriate list file.  Note: only
 one
@@ -206,8 +208,8 @@ The following operands are supported:
 .IR file (s)
 The path name(s) of one or more input files.  They must be
 valid MPEG-1 audio layer-1, -2 or -3 bit streams.
-If a dash ``-'' is specified, MPEG data will
-be read from the standard input.  furthermore, any name
+If a dash ``\-'' is specified, MPEG data will
+be read from the standard input.  Furthermore, any name
 starting with ``http://'' is recognized as
 .I URL
 (see next section).
@@ -278,7 +280,9 @@ have at least a Pentium, Alpha, SuperSparc or equivalent
 processor.  You can also use the
 .B -singlemix
 option to decode mono only, which reduces the CPU load
-somewhat for layer-3 streams.
+somewhat for layer-3 streams.  See also the
+.BR \-2 " and " \-4
+options.
 .P
 If everything else fails, use the
 .B \-s
@@ -350,3 +354,9 @@ http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html
 http://www.heim3.tu-clausthal.de/~olli/mpg123/
 .br
 (includes information about the mpg123 mailing list)
+.P
+The latest version is also available from here:
+.br
+ftp.tu-clausthal.de:/pub/unix/audio/mpg123
+.br
+http://ftp.tu-clausthal.de/pub/unix/audio/mpg123

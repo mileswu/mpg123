@@ -1,5 +1,5 @@
 /* 
- * Mpeg Layer audio decoder V0.58
+ * Mpeg Layer audio decoder V0.59c
  * -------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
@@ -20,8 +20,8 @@
 #include "mpg123.h"
 #include "getlopt.h"
 
-char *prgVersion = "0.58";
-char *prgDate = "97/04/10";
+char *prgVersion = "0.59c";
+char *prgDate = "97/04/16";
 char *prgName;
 
 static void usage(char *dummy);
@@ -30,7 +30,6 @@ static void print_title(void);
 int outmode = DECODE_AUDIO;
 
 char *listname = NULL;
-int intflag    = FALSE;
 long outscale  = 32768;
 int checkrange = FALSE;
 int tryresync  = FALSE;
@@ -44,18 +43,23 @@ int usebuffer  = 0;
 int buffer_fd[2];
 int buffer_pid;
 
-void catch_child(void)
+static void catch_child(void)
 {
   while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-void catch_interrupt(void)
+static int intflag = FALSE;
+
+static void catch_interrupt(void)
 {
   intflag = TRUE;
 }
 
 static struct frame fr;
 static struct audio_info_struct ai;
+txfermem *buffermem;
+
+#define FRAMEBUFUNIT (18 * 64 * 4)
 
 void init_output(void)
 {
@@ -65,23 +69,34 @@ void init_output(void)
     return;
   init_done = TRUE;
   if (usebuffer) {
-    if (pipe(buffer_fd)) {
-      perror ("pipe()");
-      exit (1);
-    }
+    unsigned int bufferbytes;
+    if (usebuffer < 32)
+      usebuffer = 32;
+    bufferbytes = (usebuffer * 1024);
+    bufferbytes -= bufferbytes % FRAMEBUFUNIT;
+    xfermem_init (&buffermem, bufferbytes);
+    pcm_sample = (short *) buffermem->data;
+    pcm_point = 0;
     catchsignal (SIGCHLD, catch_child);
     switch ((buffer_pid = fork())) {
       case -1: /* error */
         perror("fork()");
         exit(1);
       case 0: /* child */
-        close (buffer_fd[1]);
-        buffer_loop(&ai);
-        close (buffer_fd[0]);
+        xfermem_init_reader (buffermem);
+        buffer_loop (&ai);
+        xfermem_done_reader (buffermem);
+        xfermem_done (buffermem);
         exit(0);
       default: /* parent */
-        close (buffer_fd[0]);
+        xfermem_init_writer (buffermem);
         outmode = DECODE_BUFFER;
+    }
+  }
+  else {
+    if (!(pcm_sample = (short *) malloc(audiobufsize * 2))) {
+      perror ("malloc()");
+      exit (1);
     }
   }
 
@@ -226,10 +241,10 @@ int main(int argc, char *argv[])
     while ((result = getlopt(argc, argv, opts)))
       switch (result) {
         case GLO_UNKNOWN:
-          fprintf (stderr, "%s: Unknown option \"%s\".", prgName, loptarg);
+          fprintf (stderr, "%s: Unknown option \"%s\".\n", prgName, loptarg);
           exit (1);
         case GLO_NOARG:
-          fprintf (stderr, "%s: Missing argument for option \"%s\".",
+          fprintf (stderr, "%s: Missing argument for option \"%s\".\n",
               prgName, loptarg);
           exit (1);
       }
@@ -291,15 +306,37 @@ int main(int argc, char *argv[])
              clip = do_layer3(&fr,outmode,&ai);
              break;
          }
+         if (usebuffer) {
+           if (!intflag) {
+             buffermem->freeindex =
+                   (buffermem->freeindex + pcm_point * 2) % buffermem->size;
+             if (buffermem->wakeme[XF_READER])
+               xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
+           }
+           while (xfermem_get_freespace(buffermem) < FRAMEBUFUNIT)
+             if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
+               intflag = TRUE;
+               break;
+             }
+           if (intflag)
+             break;
+           pcm_sample = (short *) (buffermem->data + buffermem->freeindex);
+           pcm_point = 0;
+         }
+
          if(verbose)
            fprintf(stderr, "\r{%4lu} ",frameNum);
          if(clip > 0 && checkrange)
            fprintf(stderr,"%d samples clipped\n", clip);
       }
       close_stream(fname);
-      if (!quiet)
-        fprintf(stderr,"Decoding of %s finished.\n",
-                fname ? fname : "standard input");
+      if (!quiet) {
+        int sfreq = freqs[fr.sampling_frequency];
+        int secs = (frameNum * ((fr.lay == 1) ? 384 : 1152) + (sfreq / 2))
+                   / sfreq;
+        fprintf(stderr,"[%d:%02d] Decoding of %s finished.\n", secs / 60,
+                secs % 60, fname ? fname : "standard input");
+      }
       if (intflag) {
         gettimeofday (&now, NULL);
         secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
@@ -312,11 +349,15 @@ int main(int argc, char *argv[])
         intflag = FALSE;
       }
     }
-    audio_flush(outmode, &ai);
 
     if (usebuffer) {
-      close (buffer_fd[1]);
+      xfermem_done_writer (buffermem);
       waitpid (buffer_pid, NULL, 0);
+      xfermem_done (buffermem);
+    }
+    else {
+      audio_flush(outmode, &ai);
+      free (pcm_sample);
     }
 
     if(outmode==DECODE_AUDIO)
@@ -326,7 +367,7 @@ int main(int argc, char *argv[])
 
 static void print_title(void)
 {
-    fprintf(stderr,"High Performance MPEG 1.0 Audio Player for Layer 1,2 and 3. ..\n");
+    fprintf(stderr,"High Performance MPEG 1.0 Audio Player for Layer 1, 2 and 3.\n");
     fprintf(stderr,"Version %s (%s). Written and copyrights by Michael Hipp.\n", prgVersion, prgDate);
     fprintf(stderr,"Uses code from various people. See 'README' for more!\n");
 }

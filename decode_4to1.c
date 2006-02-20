@@ -21,12 +21,13 @@
 
 int synth_4to1(real *bandPtr,int channel,short *samples)
 {
-  static real buffs[2][2][0x100];
+  static real buffs[2][2][0x110];
   static const int step = 2;
   static int bo = 1;
 
-  real (*buf)[0x100];
+  real *b0,(*buf)[0x110];
   int clip = 0; 
+  int bo1;
 
   if(!channel) {
     bo--;
@@ -44,33 +45,40 @@ int synth_4to1(real *bandPtr,int channel,short *samples)
       bandPtr[i] = 0.0;
   }
 
-  dct64(buf[bo&1]+(bo>>1),bandPtr);
-
   if(bo & 0x1) {
-    register int j;
-    real *window = decwin + 16 - bo;
-    real *b0 = buf[0] + (15*0x8);
-    real *b1 = buf[1] + (15*0x8);
+    b0 = buf[0];
+    bo1 = bo;
+    dct64(buf[1]+((bo+1)&0xf),buf[0]+bo,bandPtr);
+  }
+  else {
+    b0 = buf[1];
+    bo1 = bo+1;
+    dct64(buf[0]+bo,buf[1]+bo+1,bandPtr);
+  }
 
-    for (j=4;j;j--,b0+=0x18,b1-=0x28,window+=0x70)
+  {
+    register int j;
+    real *window = decwin + 16 - bo1;
+
+    for (j=4;j;j--,b0+=0x30,window+=0x70)
     {
       real sum;
       sum  = *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
       sum += *window++ * *b0++;
-      sum -= *window++ * *b1++;
+      sum -= *window++ * *b0++;
 
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
@@ -80,116 +88,41 @@ int synth_4to1(real *bandPtr,int channel,short *samples)
 
     {
       real sum;
-      sum  = window[0x0] * *b0++;
-      sum += window[0x2] * *b0++;
-      sum += window[0x4] * *b0++;
-      sum += window[0x6] * *b0++;
-      sum += window[0x8] * *b0++;
-      sum += window[0xA] * *b0++;
-      sum += window[0xC] * *b0++;
-      sum += window[0xE] * *b0++;
+      sum  = window[0x0] * b0[0x0];
+      sum += window[0x2] * b0[0x2];
+      sum += window[0x4] * b0[0x4];
+      sum += window[0x6] * b0[0x6];
+      sum += window[0x8] * b0[0x8];
+      sum += window[0xA] * b0[0xA];
+      sum += window[0xC] * b0[0xC];
+      sum += window[0xE] * b0[0xE];
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
-      b0-=0x28,b1+=0x20,window-=0x80;
+      b0-=0x40,window-=0x80;
     }
-    window += bo<<1;
+    window += bo1<<1;
 
-    for (j=3;j;j--,b0-=0x28,b1+=0x18,window-=0x70)
-    {
-      real sum;
-      sum = -*(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-      sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
-
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-    }
-  }
-  else {
-    register int j;
-    real *window = decwin + 16 - bo;
-    real *b0 = buf[0] + (15*0x8);
-    real *b1 = buf[1] + (15*0x8);
-
-    for (j=4;j;j--,b0-=0x28,b1+=0x18,window+=0x70) 
-    {
-      real sum;
-      sum = -*window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-      sum -= *window++ * *b0++;
-      sum += *window++ * *b1++;
-
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-    }
-    {
-      real sum;
-      sum  = window[0x1] * *b1++;
-      sum += window[0x3] * *b1++;
-      sum += window[0x5] * *b1++;
-      sum += window[0x7] * *b1++;
-      sum += window[0x9] * *b1++;
-      sum += window[0xB] * *b1++;
-      sum += window[0xD] * *b1++;
-      sum += window[0xF] * *b1++;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      WRITE_SAMPLE(samples,sum,clip); samples += step;
-      b0+=0x20,b1-=0x28,window-=0x80;
-    }
-    window += bo<<1;
-
-    for (j=3;j;j--,b1-=0x28,b0+=0x18,window-=0x70)
+    for (j=3;j;j--,b0-=0x50,window-=0x70)
     {
       real sum;
       sum = -*(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
       sum -= *(--window) * *b0++;
-      sum -= *(--window) * *b1++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
+      sum -= *(--window) * *b0++;
 
       WRITE_SAMPLE(samples,sum,clip); samples += step;
       WRITE_SAMPLE(samples,sum,clip); samples += step;
@@ -198,7 +131,7 @@ int synth_4to1(real *bandPtr,int channel,short *samples)
     }
   }
 
-  return(clip);
+  return clip;
 }
 
 

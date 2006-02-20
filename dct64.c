@@ -8,7 +8,7 @@
 
 #include "mpg123.h"
 
-void dct64(real *out,real *samples)
+void dct64(real *out0,real *out1,real *samples)
 {
   real bufs[64];
 
@@ -81,16 +81,16 @@ void dct64(real *out,real *samples)
   }
   bs = bufs;
   costab = pnts[4];
-  b2 = b1 + 2;
 
   for(j=8;j;j--)
   {
-    *bs++ = (*b1++ + *--b2);
-    *bs++ = (*--b2 - *b1++) * (*costab);
-    b2 += 4;
-    *bs++ = (*b1++ + *--b2);
-    *bs++ = (*b1++ - *--b2) * (*costab);
-    b2 += 4;
+    real v0,v1;
+    v0=*b1++; v1 = *b1++;
+    *bs++ = (v0 + v1);
+    *bs++ = (v0 - v1) * (*costab);
+    v0=*b1++; v1 = *b1++;
+    *bs++ = (v0 + v1);
+    *bs++ = (v1 - v0) * (*costab);
   }
 
  }
@@ -122,39 +122,41 @@ void dct64(real *out,real *samples)
   }
  }
 
-  out[0x8*31] = bufs[0];
-  out[0x8*29] = bufs[8];
-  out[0x8*27] = bufs[4];
-  out[0x8*25] = bufs[12];
-  out[0x8*23] = bufs[2];
-  out[0x8*21] = bufs[10];
-  out[0x8*19] = bufs[6];
-  out[0x8*17] = bufs[14];
-  out[0x8*15] = bufs[1];
-  out[0x8*13] = bufs[9];
-  out[0x8*11] = bufs[5];
-  out[0x8* 9] = bufs[13];
-  out[0x8* 7] = bufs[3];
-  out[0x8* 5] = bufs[11];
-  out[0x8* 3] = bufs[7];
-  out[0x8* 1] = bufs[15];
 
-  out[0x8*30] = bufs[16+0]  + bufs[16+8];
-  out[0x8*28] = bufs[16+8]  + bufs[16+4];
-  out[0x8*26] = bufs[16+4]  + bufs[16+12];
-  out[0x8*24] = bufs[16+12] + bufs[16+2];
-  out[0x8*22] = bufs[16+2]  + bufs[16+10];
-  out[0x8*20] = bufs[16+10] + bufs[16+6];
-  out[0x8*18] = bufs[16+6]  + bufs[16+14];
-  out[0x8*16] = bufs[16+14] + bufs[16+1];
-  out[0x8*14] = bufs[16+1]  + bufs[16+9];
-  out[0x8*12] = bufs[16+9]  + bufs[16+5];
-  out[0x8*10] = bufs[16+5]  + bufs[16+13];
-  out[0x8* 8] = bufs[16+13] + bufs[16+3];
-  out[0x8* 6] = bufs[16+3]  + bufs[16+11];
-  out[0x8* 4] = bufs[16+11] + bufs[16+7];
-  out[0x8* 2] = bufs[16+7]  + bufs[16+15];
-  out[0x8* 0] = bufs[16+15];
+  out0[0x10*16] = bufs[0];
+  out0[0x10*15] = bufs[16+0]  + bufs[16+8];
+  out0[0x10*14] = bufs[8];
+  out0[0x10*13] = bufs[16+8]  + bufs[16+4];
+  out0[0x10*12] = bufs[4];
+  out0[0x10*11] = bufs[16+4]  + bufs[16+12];
+  out0[0x10*10] = bufs[12];
+  out0[0x10* 9] = bufs[16+12] + bufs[16+2];
+  out0[0x10* 8] = bufs[2];
+  out0[0x10* 7] = bufs[16+2]  + bufs[16+10];
+  out0[0x10* 6] = bufs[10];
+  out0[0x10* 5] = bufs[16+10] + bufs[16+6];
+  out0[0x10* 4] = bufs[6];
+  out0[0x10* 3] = bufs[16+6]  + bufs[16+14];
+  out0[0x10* 2] = bufs[14];
+  out0[0x10* 1] = bufs[16+14] + bufs[16+1];
+  out0[0x10* 0] = bufs[1];
+
+  out1[0x10* 0] = bufs[1];
+  out1[0x10* 1] = bufs[16+1]  + bufs[16+9];
+  out1[0x10* 2] = bufs[9];
+  out1[0x10* 3] = bufs[16+9]  + bufs[16+5];
+  out1[0x10* 4] = bufs[5];
+  out1[0x10* 5] = bufs[16+5]  + bufs[16+13];
+  out1[0x10* 6] = bufs[13];
+  out1[0x10* 7] = bufs[16+13] + bufs[16+3];
+  out1[0x10* 8] = bufs[3];
+  out1[0x10* 9] = bufs[16+3]  + bufs[16+11];
+  out1[0x10*10] = bufs[11];
+  out1[0x10*11] = bufs[16+11] + bufs[16+7];
+  out1[0x10*12] = bufs[7];
+  out1[0x10*13] = bufs[16+7]  + bufs[16+15];
+  out1[0x10*14] = bufs[15];
+  out1[0x10*15] = bufs[16+15];
 
 }
 

@@ -10,6 +10,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#ifdef SOLARIS
+#include <stropts.h>
+#include <sys/conf.h>
+#endif
+
 #include "mpg123.h"
 
 #ifdef VOXWARE
@@ -203,7 +208,6 @@ int audio_set_channels(struct audio_info_struct *ai)
   return 0;
 }
 
-
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 {
   return write(ai->fn,buf,len*2);
@@ -214,6 +218,13 @@ int audio_close(struct audio_info_struct *ai)
   close (ai->fn);
   return 0;
 }
+
+#ifdef SOLARIS
+void audio_queueflush (struct audio_info_struct *ai)
+{
+	ioctl (ai->fn, I_FLUSH, FLUSHRW);
+}
+#endif
 
 
 #elif defined(HPUX)

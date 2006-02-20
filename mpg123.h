@@ -13,6 +13,8 @@
 #include <audio.h>
 #endif
 
+#include "xfermem.h"
+
 #ifdef SUNOS
 #define memmove bcopy
 #endif
@@ -107,6 +109,7 @@ extern int quiet;
 extern int halfspeed;
 extern int usebuffer;
 extern int buffer_fd[2];
+extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
 
 extern int audio_play_samples(struct audio_info_struct *,short *,int);
@@ -126,7 +129,7 @@ extern unsigned int   get1bit(void);
 extern unsigned int   getbits(int);
 extern unsigned int   getbits_fast(int);
 
-extern short pcm_sample[AUDIOBUFSIZE];
+extern short *pcm_sample;
 extern int pcm_point;
 extern int audiobufsize;
 
@@ -182,7 +185,7 @@ extern void huffman_count1(int,int *);
 extern void init_layer3(void);
 extern void init_layer2(void);
 extern void make_decode_tables(long scale);
-extern void dct64(real *,real *);
+extern void dct64(real *,real *,real *);
 
 extern int audio_open(struct audio_info_struct *);
 extern int audio_set_rate(struct audio_info_struct *);

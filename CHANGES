@@ -1,11 +1,22 @@
-0.59:
+0.59d: (MH)
+------
+minor modifications to dct64_i386.c
+removed duplicated dependency 'dct64.o' in Makefile
+
+0.59c: (OF)
+------
+Another complete rework of the buffer system (-b option)
+   (normally uses mmap(), but it can also use SYSV-ShMem because
+   mmap() is broken on linux).
+
+0.59: (MH)
 -----
 extracted dct64() from decode*.c files.
 some changes to dct64() and decode*.c to allow auto-increment/decrement
 removed bit-counter in getbit-functions. Layer3 part2 now counts it itself.
 
 0.58: (OF)
-------
+-----
 Bugfix: not closing the audio device caused a few samples to be lost.
 Bugfix: audio_set_rate() was not called (!?!).
 Additional command line options "--doublespeed" and "--halfspeed"
