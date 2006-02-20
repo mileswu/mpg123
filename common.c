@@ -15,10 +15,10 @@ static int tabsel_123[3][16] =
 long freqs[4] = { 44100, 48000, 32000, 999999 };
 
 #ifdef I386_ASSEM
-int  bitindex,tellcnt=0;
+int  bitindex;
 unsigned char *wordpointer;
 #else
-static int  bitindex,tellcnt=0;
+static int  bitindex;
 static unsigned char *wordpointer;
 #endif
 
@@ -134,11 +134,24 @@ int read_frame(struct frame *fr)
 
   static unsigned long oldhead=0,newhead;
   static unsigned long firsthead=0;
- 
+
+  static unsigned char ssave[34];
   unsigned char hbuf[8];
   static int framesize;
+  static int halfphase = 0;
   int l;
   int try = 0;
+
+  if (halfspeed)
+    if (halfphase--) {
+      bitindex = 0;
+      wordpointer = (unsigned char *) bsbuf;
+      if (fr->lay == 3)
+        memcpy (bsbuf, ssave, ssize);
+      return 1;
+    }
+    else
+      halfphase = halfspeed - 1;
 
 #ifdef VARMODESUPPORT
   if (varmode) {
@@ -289,7 +302,10 @@ int read_frame(struct frame *fr)
     memset(bsbuf+l,0,fsize-l);
   }
 
-  bitindex = tellcnt = 0;
+  if (halfspeed && fr->lay == 3)
+    memcpy (ssave, bsbuf, ssize);
+
+  bitindex = 0;
   wordpointer = (unsigned char *) bsbuf;
 
   return 1;
@@ -315,24 +331,22 @@ void print_header(struct frame *fr)
 
 void open_stream(char *bs_filenam)
 {
-  if(!bs_filenam)
-  {
-    filept = stdin;
-    return;
-  }
-
-   if ((filept = fopen(bs_filenam, "rb")) == NULL) 
-   {
-      fprintf(stderr,"Could not find \"%s\".\n", bs_filenam);
-      exit(1);
-   }
+    if (!bs_filenam)
+        filept = stdin;
+    else if (!strncmp(bs_filenam, "http://", 7)) 
+        filept = http_open(bs_filenam);
+    else if (!(filept = fopen(bs_filenam, "rb"))) {
+        perror (bs_filenam);
+        exit(1);
+    }
 }
 
 /*close the device containing the bit stream after a read process*/
 
-void close_stream(void)
+void close_stream(char *bs_filenam)
 {
-   fclose(filept);
+    if (bs_filenam)
+        fclose(filept);
 }
 
 #ifndef I386_ASSEM
@@ -359,7 +373,6 @@ unsigned int getbits(int number_of_bits)
     rval <<= bitindex;
     rval &= 0xffffff;
 
-    tellcnt += number_of_bits;
     bitindex += number_of_bits;
 
     rval >>= (24-number_of_bits);
@@ -387,7 +400,6 @@ unsigned int getbits_fast(int number_of_bits)
 #if 0
     rval = ((unsigned int) high << (8-bitindex) )+((unsigned int) (unsigned char) wordpointer[1]);
 #endif
-    tellcnt += number_of_bits;
     bitindex += number_of_bits;
 
     rval >>= (16-number_of_bits);
@@ -408,7 +420,6 @@ unsigned int get1bit(void)
 
   rval = *wordpointer << bitindex;
 
-  tellcnt++;
   bitindex++;
   wordpointer += (bitindex>>3);
   bitindex &= 7;
@@ -416,11 +427,6 @@ unsigned int get1bit(void)
   return rval>>7;
 }
 #endif
-
-int hsstell(void)
-{
-  return tellcnt;
-}
 
 void set_pointer(long backstep)
 {
@@ -430,16 +436,4 @@ void set_pointer(long backstep)
   bitindex = 0; 
 }
 
-void rewindNbits(int bits)
-{
-   fprintf(stderr,"rewind: %d\n",bits); 
-   wordpointer -= (bits>>3);
-   bitindex -= (bits & 7);
-   if(bitindex < 0)
-   {
-      bitindex += 8;
-      wordpointer--;
-   }
-   tellcnt -= bits;
-}
 

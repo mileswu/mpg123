@@ -26,11 +26,6 @@ static real COS6_1,COS6_2;
 static real tfcos36[9];
 static real tfcos12[3];
 
-static int slen[2][16] = {
-  {0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4},
-  {0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 3}
-};
-
 struct bandInfoStruct {
   int longIdx[23];
   int longDiff[22];
@@ -66,16 +61,10 @@ static real tan1_1[16],tan2_1[16],tan1_2[16],tan2_2[16];
  */
 void init_layer3(void)
 {
-  int i,j,m;
-  static int init=0;
-  double sq;
-
-  if(init)
-    return;
-  init = 1;
+  int i,j;
 
   for(i=-256;i<118;i++)
-    gainpow2[i+256] = pow((double)2.0,(double) 0.25 * ( (double) - i - 210.0 ));
+    gainpow2[i+256] = pow((double)2.0,-0.25 * (double) (i+210) );
 
   for(i=0;i<8207;i++)
     ispow[i] = pow((double)i,(double)4.0/3.0);
@@ -83,92 +72,68 @@ void init_layer3(void)
   for (i=0;i<8;i++)
   {
     static double Ci[8]={-0.6,-0.535,-0.33,-0.185,-0.095,-0.041,-0.0142,-0.0037};
-    sq=sqrt(1.0+Ci[i]*Ci[i]);
+    double sq=sqrt(1.0+Ci[i]*Ci[i]);
     aa_cs[i] = 1.0/sq;
     aa_ca[i] = Ci[i]/sq;
   }
 
-   for(i=0;i<18;i++)
-   {
-     win[0][i]    = win[1][i]    = sin( M_PI/36.0 * ((double)i+0.5) );
-     win[0][i+18] = win[3][i+18] = sin( M_PI/36.0 * ((double)i+18.5) );
-   }
-   for(i=0;i<6;i++)
-   {
-     win[1][i+18] = win[3][i+12] = 1.0;
-     win[1][i+24] =                sin( M_PI/12.0 *((double)i+6.5) );
-     win[1][i+30] = win[3][i]    = 0.0;
-                    win[3][i+6 ] = sin( M_PI/12.0 *((double)i+0.5) );
-   }
-
-   for(j=0;j<4;j++) {
-     if(j == 2)
-       continue;
-     for(i=0;i<9;i++)
-       win[j][i] *= 0.5 / ( cos ( ( M_PI * ( (i+9) * 2.0 + 1.0)) / 72.0 ) );
-     for(i=9;i<27;i++)
-       win[j][i] *= -0.5 / ( cos ( ( M_PI * ( (26-i) * 2.0 + 1.0)) / 72.0 ) );
-     for(i=27;i<36;i++)
-       win[j][i] *= -0.5 / ( cos ( ( M_PI * ( (i-27) * 2.0 + 1.0)) / 72.0 ) );
-   }
+  for(i=0;i<18;i++)
+  {
+    win[0][i]    = win[1][i]    = 0.5 * sin( M_PI / 72.0 * (double) (2*(i+0) +1) ) / cos ( M_PI * (double) (2*(i+0) +19) / 72.0 );
+    win[0][i+18] = win[3][i+18] = 0.5 * sin( M_PI / 72.0 * (double) (2*(i+18)+1) ) / cos ( M_PI * (double) (2*(i+18)+19) / 72.0 );
+  }
+  for(i=0;i<6;i++)
+  {
+    win[1][i+18] = 0.5 / cos ( M_PI * (double) (2*(i+18)+19) / 72.0 );
+    win[3][i+12] = 0.5 / cos ( M_PI * (double) (2*(i+12)+19) / 72.0 );
+    win[1][i+24] = 0.5 * sin( M_PI / 24.0 * (double) (2*i+13) ) / cos ( M_PI * (double) (2*(i+24)+19) / 72.0 );
+    win[1][i+30] = win[3][i] = 0.0;
+    win[3][i+6 ] = 0.5 * sin( M_PI / 24.0 * (double) (2*i+1) )  / cos ( M_PI * (double) (2*(i+6 )+19) / 72.0 );
+  }
 
   for(i=0;i<9;i++)
-    COS9[i] = cos( M_PI / 18.0 * i);
+    COS9[i] = cos( M_PI / 18.0 * (double) i);
 
   for(i=0;i<9;i++)
-    tfcos36[i] = 1.0 / ( 2.0 * cos ( ( M_PI * (i * 2.0 + 1.0)) / 36.0 ) );
+    tfcos36[i] = 0.5 / cos ( M_PI * (double) (i*2+1) / 36.0 );
   for(i=0;i<3;i++)
-    tfcos12[i] = 0.5 / ( cos ( ( M_PI * (i * 2.0 + 1.0)) / 12.0 ) );
+    tfcos12[i] = 0.5 / cos ( M_PI * (double) (i*2+1) / 12.0 );
 
-  COS6_1 = cos( PI / 6.0 * 1.0);
-  COS6_2 = cos( PI / 6.0 * 2.0);
+  COS6_1 = cos( M_PI / 6.0 * (double) 1);
+  COS6_2 = cos( M_PI / 6.0 * (double) 2);
  
   for(i=0;i<12;i++)
   {
-    win[2][i] = sin( M_PI/12.0*((double)i+0.5) ) ;
-    for(m=0;m<6;m++)
-      COS1[i][m] = cos( M_PI/24.0*(2.0*(double)i+7.0)*(2.0*(double)m+1.0) );
-  }
-
-  for(i=0;i<3;i++) {
-    win[2][i+0] *=  0.5 / ( cos ( ( M_PI * ((i+3) * 2.0 + 1.0)) / 24.0 ) );
-    win[2][i+3] *= -0.5 / ( cos ( ( M_PI * ((5-i) * 2.0 + 1.0)) / 24.0 ) );
-    win[2][i+6] *= -0.5 / ( cos ( ( M_PI * ((2-i) * 2.0 + 1.0)) / 24.0 ) );
-    win[2][i+9] *= -0.5 / ( cos ( ( M_PI * ((i+0) * 2.0 + 1.0)) / 24.0 ) );
+    win[2][i]  = 0.5 * sin( M_PI / 24.0 * (double) (2*i+1) ) / cos ( M_PI * (double) (2*i+7) / 24.0 );
+    for(j=0;j<6;j++)
+      COS1[i][j] = cos( M_PI / 24.0 * (double) ((2*i+7)*(2*j+1)) );
   }
 
   for(j=0;j<4;j++) {
-    if(j == 2) {
-      for(i=0;i<12;i+=2)
-        win1[2][i] = + win[2][i];
-      for(i=1;i<12;i+=2)
-        win1[2][i] = - win[2][i];
-    }
-    else {
-      for(i=0;i<36;i+=2)
-        win1[j][i] = + win[j][i];
-      for(i=1;i<36;i+=2)
-        win1[j][i] = - win[j][i];
-    }
+    static int len[4] = { 36,36,12,36 };
+    for(i=0;i<len[j];i+=2)
+      win1[j][i] = + win[j][i];
+    for(i=1;i<len[j];i+=2)
+      win1[j][i] = - win[j][i];
   }
 
   for(i=0;i<15;i++)
   {
-    double t = tan((double) i * (M_PI / 12.0));
+    double t = tan( (double) i * M_PI / 12.0 );
     tan1_1[i] = t / (1.0+t);
     tan2_1[i] = 1.0 / (1.0 + t);
     tan1_2[i] = M_SQRT2 * t / (1.0+t);
     tan2_2[i] = M_SQRT2 / (1.0 + t);
   }
 
-  for(m=0;m<3;m++)
+  for(j=0;j<3;j++)
   {
-   struct bandInfoStruct *bi = &bandInfo[m];
+   struct bandInfoStruct *bi = &bandInfo[j];
    int *mp;
    int cb,lwin;
    int *bdf;
 
-   mp = map[m][0] = mapbuf0[m];
+   mp = map[j][0] = mapbuf0[j];
    bdf = bi->longDiff;
    for(i=0,cb = 0; cb < 8 ; cb++,i+=*bdf++) {
      *mp++ = (*bdf) >> 1;
@@ -187,9 +152,9 @@ void init_layer3(void)
      }
      i += 6*l;
    }
-   mapend[m][0] = mp;
+   mapend[j][0] = mp;
 
-   mp = map[m][1] = mapbuf1[m];
+   mp = map[j][1] = mapbuf1[j];
    bdf = bi->shortDiff+0;
    for(i=0,cb=0;cb<13;cb++) {
      int l = (*bdf++) >> 1;
@@ -201,15 +166,15 @@ void init_layer3(void)
      }
      i += 6*l;
    }
-   mapend[m][1] = mp;
+   mapend[j][1] = mp;
 
-   mp = map[m][2] = mapbuf2[m];
+   mp = map[j][2] = mapbuf2[j];
    bdf = bi->longDiff;
    for(cb = 0; cb < 22 ; cb++) {
      *mp++ = (*bdf++) >> 1;
      *mp++ = cb;
    }
-   mapend[m][2] = mp;
+   mapend[j][2] = mp;
 
   }  
 }
@@ -290,67 +255,83 @@ static void III_get_side_info(struct III_sideinfo *si,int stereo,int ms_stereo,l
 /*
  * read scalefactors
  */
-static void III_get_scale_factors(int *scf,struct gr_info_s *gr_info)
+static int III_get_scale_factors(int *scf,struct gr_info_s *gr_info)
 {
+   static unsigned char slen[2][16] = {
+     {0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4},
+     {0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 3}
+   };
+   int numbits;
+   int num0 = slen[0][gr_info->scalefac_compress];
+   int num1 = slen[1][gr_info->scalefac_compress];
+
     if (gr_info->block_type == 2) 
     {
       int i=18;
-      int num = slen[0][gr_info->scalefac_compress];
+      numbits = (num0 + num1) * 18;
 
       if (gr_info->mixed_block_flag) {
          for (i=8;i;i--)
-           *scf++ = getbits_fast(num);
+           *scf++ = getbits_fast(num0);
          i = 9;
+         numbits -= num0; /* num0 * 17 + num1 * 18 */
       }
 
       for (;i;i--)
-        *scf++ = getbits_fast(num);
-      num = slen[1][gr_info->scalefac_compress];
+        *scf++ = getbits_fast(num0);
       for (i = 18; i; i--)
-        *scf++ = getbits_fast(num);
+        *scf++ = getbits_fast(num1);
       *scf++ = 0; *scf++ = 0; *scf++ = 0; /* short[13][0..2] = 0 */
     }
     else 
     {
-      int i,num=slen[0][gr_info->scalefac_compress];
+      int i;
       int scfsi = gr_info->scfsi;
 
       if(scfsi < 0) { /* scfsi < 0 => granule == 0 */
          for(i=11;i;i--)
-           *scf++ = getbits_fast(num);
-         num=slen[1][gr_info->scalefac_compress];
+           *scf++ = getbits_fast(num0);
          for(i=10;i;i--)
-           *scf++ = getbits_fast(num);
+           *scf++ = getbits_fast(num1);
+         numbits = (num0 + num1) * 10 + num0;
       }
       else {
-        if(!(scfsi & 0x8))
+        numbits = 0;
+        if(!(scfsi & 0x8)) {
           for (i=6;i;i--)
-            *scf++ = getbits_fast(num);
+            *scf++ = getbits_fast(num0);
+          numbits += num0 * 6;
+        }
         else {
           *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
           *scf++ = 0; *scf++ = 0; *scf++ = 0;
         }
 
-        if(!(scfsi & 0x4))
+        if(!(scfsi & 0x4)) {
           for (i=5;i;i--)
-            *scf++ = getbits_fast(num);
+            *scf++ = getbits_fast(num0);
+          numbits += num0 * 5;
+        }
         else {
           *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
           *scf++ = 0; *scf++ = 0;
         }
 
-        num=slen[1][gr_info->scalefac_compress];
-        if(!(scfsi & 0x2))
+        if(!(scfsi & 0x2)) {
           for(i=5;i;i--)
-            *scf++ = getbits_fast(num);
+            *scf++ = getbits_fast(num1);
+          numbits += num1 * 5;
+        }
         else {
           *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
           *scf++ = 0; *scf++ = 0;
         }
 
-        if(!(scfsi & 0x1))
+        if(!(scfsi & 0x1)) {
           for (i=5;i;i--)
-            *scf++ = getbits_fast(num);
+            *scf++ = getbits_fast(num1);
+          numbits += num1 * 5;
+        }
         else {
           *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
           *scf++ = 0; *scf++ = 0;
@@ -359,6 +340,7 @@ static void III_get_scale_factors(int *scf,struct gr_info_s *gr_info)
 
       *scf++ = 0;  /* no l[21] in original sources */
     }
+    return numbits;
 }
 
 static int pretab1[22] = {0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0};
@@ -368,13 +350,13 @@ static int pretab2[22] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
  * don't forget to apply the same changes to III_dequantize_sample_ms() !!! 
  * (note: maxband stuff would only be necessary for second channel and I-stereo)
  */
-static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
-   struct gr_info_s *gr_info,int sfreq,int part2_start)
+static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
+   struct gr_info_s *gr_info,int sfreq,int part2bits)
 {
   int shift = 1 + gr_info->scalefac_scale;
   real *xrpnt = (real *) xr;
   int l[3],l3;
-  int part2end = gr_info->part2_3_length + part2_start;
+  int part2remain = gr_info->part2_3_length - part2bits;
   int *me;
 
   {
@@ -442,14 +424,17 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
         }
         {
           register short *val = h->table;
-          while((y=*val++)<0)
+          while((y=*val++)<0) {
             if (get1bit())
               val -= y;
+            part2remain--;
+          }
           x = y >> 4;
           y &= 0xf;
         }
         if(x == 15) {
           max[lwin] = cb;
+          part2remain -= h->linbits+1;
           x += getbits(h->linbits);
           if(get1bit())
             *xrpnt = -ispow[x] * v;
@@ -462,12 +447,14 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = -ispow[x] * v;
           else
             *xrpnt =  ispow[x] * v;
+          part2remain--;
         }
         else
           *xrpnt = 0.0;
         xrpnt += step;
         if(y == 15) {
           max[lwin] = cb;
+          part2remain -= h->linbits+1;
           y += getbits(h->linbits);
           if(get1bit())
             *xrpnt = -ispow[y] * v;
@@ -480,6 +467,7 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = -ispow[y] * v;
           else
             *xrpnt =  ispow[y] * v;
+          part2remain--;
         }
         else
           *xrpnt = 0.0;
@@ -487,13 +475,15 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
       }
     }
 
-    for(;l3 && hsstell() < part2end;l3--) {
+    for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
 
-      while((a=*val++)<0)
+      while((a=*val++)<0) {
         if (get1bit())
           val -= a;
+        part2remain--;
+      }
 
       for(i=0;i<4;i++) {
         if(!(i & 1)) {
@@ -519,6 +509,7 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = -v;
           else
             *xrpnt = v;
+          part2remain--;
         }
         else
           *xrpnt = 0.0;
@@ -570,14 +561,17 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
         }
         {
           register short *val = h->table;
-          while((y=*val++)<0)
+          while((y=*val++)<0) {
             if (get1bit())
               val -= y;
+            part2remain--;
+          }
           x = y >> 4;
           y &= 0xf;
         }
         if (x == 15) {
           max = cb;
+          part2remain -= h->linbits+1;
           x += getbits(h->linbits);
           if(get1bit())
             *xrpnt++ = -ispow[x] * v;
@@ -590,12 +584,14 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = -ispow[x] * v;
           else
             *xrpnt++ =  ispow[x] * v;
+          part2remain--;
         }
         else
           *xrpnt++ = 0.0;
 
         if (y == 15) {
           max = cb;
+          part2remain -= h->linbits+1;
           y += getbits(h->linbits);
           if(get1bit())
             *xrpnt++ = -ispow[y] * v;
@@ -608,18 +604,21 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = -ispow[y] * v;
           else
             *xrpnt++ =  ispow[y] * v;
+          part2remain--;
         }
         else
           *xrpnt++ = 0.0;
       }
     }
-    for(;l3 && hsstell() < part2end;l3--) {
+    for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
 
-      while((a=*val++)<0)
+      while((a=*val++)<0) {
         if (get1bit())
           val -= a;
+        part2remain--;
+      }
 
       for(i=0;i<4;i++) {
         if(!(i & 1)) {
@@ -636,6 +635,7 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = -v;
           else
             *xrpnt++ = v;
+          part2remain--;
         }
         else
           *xrpnt++ = 0.0;
@@ -649,31 +649,27 @@ static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
     gr_info->maxbandl = max+1;
   }
 
-  {
-    int h;
-    if( (h = (part2end-hsstell()) ) ) {
-      while ( h > 16 ) {
-         getbits(16); /* Dismiss stuffing Bits */
-         h -= 16;
-      }
-      if(h >= 0 )
-         getbits(h);
-      else {
-         fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-h);
-         exit(1);
-      }
-    }
+  while( part2remain > 16 ) {
+    getbits(16); /* Dismiss stuffing Bits */
+    part2remain -= 16;
   }
+  if(part2remain > 0)
+    getbits(part2remain);
+  else if(part2remain < 0) {
+    fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-part2remain);
+    return 1; /* -> error */
+  }
+  return 0;
 }
 
-static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
-   struct gr_info_s *gr_info,int sfreq,int part2_start)
+static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
+   struct gr_info_s *gr_info,int sfreq,int part2bits)
 {
   int shift = 1 + gr_info->scalefac_scale;
   real *xrpnt = (real *) xr[1];
   real *xr0pnt = (real *) xr[0];
   int l[3],l3;
-  int part2end = gr_info->part2_3_length + part2_start;
+  int part2remain = gr_info->part2_3_length - part2bits;
   int *me;
 
   {
@@ -741,14 +737,17 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
         }
         {
           register short *val = h->table;
-          while((y=*val++)<0)
+          while((y=*val++)<0) {
             if (get1bit())
               val -= y;
+            part2remain--;
+          }
           x = y >> 4;
           y &= 0xf;
         }
         if(x == 15) {
           max[lwin] = cb;
+          part2remain -= h->linbits+1;
           x += getbits(h->linbits);
           if(get1bit()) {
             real a = ispow[x] * v;
@@ -773,6 +772,7 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = *xr0pnt - a;
             *xr0pnt += a;
           }
+          part2remain--;
         }
         else
           *xrpnt = *xr0pnt;
@@ -781,6 +781,7 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
 
         if(y == 15) {
           max[lwin] = cb;
+          part2remain -= h->linbits+1;
           y += getbits(h->linbits);
           if(get1bit()) {
             real a = ispow[y] * v;
@@ -805,6 +806,7 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = *xr0pnt - a;
             *xr0pnt += a;
           }
+          part2remain--;
         }
         else
           *xrpnt = *xr0pnt;
@@ -813,13 +815,15 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
       }
     }
 
-    for(;l3 && hsstell() < part2end;l3--) {
+    for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
 
-      while((a=*val++)<0)
+      while((a=*val++)<0) {
         if (get1bit())
           val -= a;
+        part2remain--;
+      }
 
       for(i=0;i<4;i++) {
         if(!(i & 1)) {
@@ -850,6 +854,7 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt = *xr0pnt - v;
             *xr0pnt += v;
           }
+          part2remain--;
         }
         else
           *xrpnt = *xr0pnt;
@@ -904,14 +909,17 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
         }
         {
           register short *val = h->table;
-          while((y=*val++)<0)
+          while((y=*val++)<0) {
             if (get1bit())
               val -= y;
+            part2remain--;
+          }
           x = y >> 4;
           y &= 0xf;
         }
         if (x == 15) {
           max = cb;
+          part2remain -= h->linbits+1;
           x += getbits(h->linbits);
           if(get1bit()) {
             real a = ispow[x] * v;
@@ -936,12 +944,14 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = *xr0pnt - a;
             *xr0pnt++ += a;
           }
+          part2remain--;
         }
         else
           *xrpnt++ = *xr0pnt++;
 
         if (y == 15) {
           max = cb;
+          part2remain -= h->linbits+1;
           y += getbits(h->linbits);
           if(get1bit()) {
             real a = ispow[y] * v;
@@ -966,18 +976,21 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = *xr0pnt - a;
             *xr0pnt++ += a;
           }
+          part2remain--;
         }
         else
           *xrpnt++ = *xr0pnt++;
       }
     }
-    for(;l3 && hsstell() < part2end;l3--) {
+    for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
 
-      while((a=*val++)<0)
+      while((a=*val++)<0) {
         if (get1bit())
           val -= a;
+        part2remain--;
+      }
 
       for(i=0;i<4;i++) {
         if(!(i & 1)) {
@@ -998,6 +1011,7 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
             *xrpnt++ = *xr0pnt - v;
             *xr0pnt++ += v;
           }
+          part2remain--;
         }
         else
           *xrpnt++ = *xr0pnt++;
@@ -1011,21 +1025,17 @@ static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
     gr_info->maxbandl = max+1;
   }
 
-  {
-    int h;
-    if( (h = (part2end-hsstell()) ) ) {
-      while ( h > 16 ) {
-         getbits(16); /* Dismiss stuffing Bits */
-         h -= 16;
-      }
-      if(h >= 0 )
-         getbits(h);
-      else {
-         fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-h);
-         exit(1);
-      }
-    }
+  while ( part2remain > 16 ) {
+    getbits(16); /* Dismiss stuffing Bits */
+    part2remain -= 16;
   }
+  if(part2remain > 0 )
+    getbits(part2remain);
+  else if(part2remain < 0) {
+    fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-part2remain);
+    return 1; /* -> error */
+  }
+  return 0;
 }
 
 /* 
@@ -1546,18 +1556,23 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
     {
       struct gr_info_s *gr_info = &(sideinfo.ch[0].gr[gr]);
-      long part2_start = hsstell();
-      III_get_scale_factors(scalefacs[0],gr_info);
-      III_dequantize_sample(hybridIn[0], scalefacs[0],gr_info,sfreq,part2_start);
+      long part2bits;
+      part2bits = III_get_scale_factors(scalefacs[0],gr_info);
+      if(III_dequantize_sample(hybridIn[0], scalefacs[0],gr_info,sfreq,part2bits))
+        return clip;
     }
     if(stereo == 2) {
       struct gr_info_s *gr_info = &(sideinfo.ch[1].gr[gr]);
-      long part2_start = hsstell();
-      III_get_scale_factors(scalefacs[1],gr_info);
-      if(ms_stereo)
-        III_dequantize_sample_ms(hybridIn,scalefacs[1],gr_info,sfreq,part2_start); 
-      else
-        III_dequantize_sample(hybridIn[1],scalefacs[1],gr_info,sfreq,part2_start); 
+      long part2bits;
+      part2bits = III_get_scale_factors(scalefacs[1],gr_info);
+      if(ms_stereo) {
+        if(III_dequantize_sample_ms(hybridIn,scalefacs[1],gr_info,sfreq,part2bits))
+          return clip;
+      }
+      else {
+        if(III_dequantize_sample(hybridIn[1],scalefacs[1],gr_info,sfreq,part2bits))
+          return clip;
+      }
 
       if(i_stereo)
         III_stereo(hybridIn,scalefacs[1],gr_info,sfreq,ms_stereo);

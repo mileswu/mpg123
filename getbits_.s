@@ -6,10 +6,6 @@
 .type	_bitindex,@object
 .size	_bitindex,4
 
-.globl	_tellcnt
-.type	_tellcnt,@object
-.size	_tellcnt,4
-
 .globl	_getbits
 	.type    _getbits,@function
 _getbits:
@@ -29,7 +25,6 @@ _getbits:
 	shll	%cl,%eax
 	movl 	4(%esp),%ecx
 	addl	%ecx,_bitindex
-	addl	%ecx,_tellcnt
 	negl	%ecx
 	addl	$32,%ecx
 	shrl	%cl,%eax
@@ -51,7 +46,6 @@ _getbits_fast:
 	shlw	%cl,%ax
 	movl 	4(%esp),%ecx
 	addl	%ecx,_bitindex
-	addl	%ecx,_tellcnt
 	negl	%ecx
 	addl	$16,%ecx
 	shrl	%cl,%eax
@@ -68,7 +62,6 @@ _getbits_fast:
 _get1bit:
 	movl	_wordpointer,%ecx
 	movzbl	(%ecx),%eax
-	incl	_tellcnt
 	movl	_bitindex,%ecx
 	incl	%ecx
 	rolb	%cl,%al

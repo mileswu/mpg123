@@ -19,5 +19,3 @@ in layer2.c:
 - check again layer1 !!
 
 - Write a special (optimized) 'single channel' decode.
-
-

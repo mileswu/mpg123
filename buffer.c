@@ -1,28 +1,85 @@
 /*
- * Buffer functions for MPEG audio decoder
- * ---------------------------------------
- * copyright (c) 1997 by Oliver Fromme & Michael Hipp, All rights reserved.
- * See also 'README'!
+ *   buffer.c
+ *
+ *   Oliver Fromme  <oliver.fromme@heim3.tu-clausthal.de>
+ *   Thu Apr 10 14:10:27 MET DST 1997
  */
 
 #include <stdlib.h>
+#include <signal.h>
 #include <fcntl.h>
 #ifdef AIX
 #include <sys/select.h>
 #endif
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <sys/errno.h>
 extern int errno;
 
 #include "mpg123.h"
 
-int usebuffer;
+static int intflag = FALSE;
+static int player_fd[2];
+static int player_pid;
+#define PLAYBUFSIZE 32768
+
+static void catch_interrupt(void)
+{
+  intflag = TRUE;
+}
+
+static void player_loop(struct audio_info_struct *ai)
+{
+  char buffer[PLAYBUFSIZE];
+  int freeindex, readindex, bytes;
+  int done = FALSE;
+
+  if(outmode==DECODE_AUDIO) {
+    if(audio_open(ai) < 0) {
+      perror("audio");
+      exit(1);
+    }
+    audio_set_rate (ai);
+  }
+
+  while (!done) {
+    freeindex = readindex = 0;
+    do  {
+      if ((bytes = read(player_fd[0], buffer+freeindex, PLAYBUFSIZE - freeindex)) > 0)
+        freeindex += bytes;
+      else
+        if (!(bytes == -1 && errno == EINTR))
+          done = TRUE;
+    } while (freeindex < PLAYBUFSIZE && !done);
+    if (freeindex) do {
+      if (outmode == DECODE_STDOUT)
+        bytes = write(1, buffer+readindex, freeindex - readindex);
+      else if (outmode == DECODE_AUDIO) {
+        bytes = ((freeindex - readindex) >> 1) & (~ 1l);
+        if (bytes)
+          bytes = audio_play_samples(ai,
+                  (short *) (buffer+readindex), bytes);
+      }
+      else
+        bytes = freeindex;
+      if (bytes > 0)
+        readindex += bytes;
+      else
+        if (bytes == -1 && errno != EINTR)
+          done = TRUE;
+    } while (readindex+3 < freeindex && !done);
+  }
+
+  if(outmode==DECODE_AUDIO)
+    audio_close(ai);
+}
 
 void buffer_loop(struct audio_info_struct *ai)
 {
   unsigned char *buffer;
   fd_set read_fdset, write_fdset;
-  int write_fd;
   unsigned long freeindex = 0, readindex = 0, bufsize = usebuffer * 1024;
   unsigned long bytesused = 0, bytesfree;
   int done = FALSE, read_eof = FALSE;
@@ -32,27 +89,38 @@ void buffer_loop(struct audio_info_struct *ai)
     perror("malloc()");
     exit(1);
   }
-  if(outmode==DECODE_AUDIO)
-    if(audio_open(ai) < 0) {
-      perror("audio");
-      exit(1);
-    }
-#ifdef AUDIO_USES_FD
-  if (outmode == DECODE_AUDIO) {
-    write_fd = ai->fn;
-    fcntl (write_fd, F_SETFL, O_NONBLOCK);
+
+  catchsignal (SIGINT, catch_interrupt);
+  if (pipe(player_fd)) {
+    perror ("pipe()");
+    exit (1);
   }
-  else
-#endif
-    write_fd = 1;
+  switch ((player_pid = fork())) {
+    case -1: /* error */
+      perror("fork()");
+      exit(1);
+    case 0: /* child */
+      close (player_fd[1]);
+      player_loop(ai);
+      close (player_fd[0]);
+      exit(0);
+    default: /* parent */
+      close (player_fd[0]);
+  }
+  fcntl (player_fd[1], F_SETFL, O_NONBLOCK);
 
   while (!done) {
+    if (intflag) {
+      freeindex = readindex = bytesused = 0;
+      bytesfree = bufsize - 4;
+      intflag = FALSE;
+    }
     FD_ZERO (&read_fdset);
     FD_ZERO (&write_fdset);
     if (!read_eof && bytesfree)
       FD_SET (buffer_fd[0], &read_fdset);
     if (bytesused > 3)
-      FD_SET (write_fd, &write_fdset);
+      FD_SET (player_fd[1], &write_fdset);
     if (select(FD_SETSIZE, &read_fdset, &write_fdset, NULL, NULL) <= 0) {
       if (errno != EINTR) {
         read_eof = TRUE;
@@ -70,25 +138,17 @@ void buffer_loop(struct audio_info_struct *ai)
           bytesused += numread;
           bytesfree -= numread;
         }
-        else {
+        else if (!(numread == -1 && errno == EINTR)) {
           read_eof = TRUE;
           if (bytesused < 4)
             done = TRUE;
         }
       }
-      if (FD_ISSET(write_fd, &write_fdset)) {
+      else if (FD_ISSET(player_fd[1], &write_fdset)) {
         size_t numwrite;
         if ((numwrite = bufsize - readindex) > bytesused)
           numwrite = bytesused;
-        if (outmode == DECODE_STDOUT)
-          numwrite = write(write_fd, buffer+readindex, numwrite);
-        else if (outmode == DECODE_AUDIO) {
-          numwrite = (numwrite >> 1) & (~ 1l);
-          if (numwrite)
-            numwrite = audio_play_samples(ai,
-                    (short *) (buffer+readindex), numwrite);
-        }
-        if (numwrite) {
+        if ((numwrite = write(player_fd[1], buffer+readindex, numwrite)) > 0) {
           readindex = (readindex + numwrite) % bufsize;
           bytesfree += numwrite;
           bytesused -= numwrite;
@@ -98,9 +158,10 @@ void buffer_loop(struct audio_info_struct *ai)
       }
   }
 
-  if(outmode==DECODE_AUDIO)
-    audio_close(ai);
+  fcntl (player_fd[1], F_SETFL, 0);
   free (buffer);
+  close (player_fd[1]);
+  waitpid (player_pid, NULL, 0);
 }
 
-
+/* EOF */

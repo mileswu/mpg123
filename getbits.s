@@ -17,7 +17,6 @@ getbits:
 	shll	%cl,%eax
 	movl 	4(%esp),%ecx
 	addl	%ecx,bitindex
-	addl	%ecx,tellcnt
 	negl	%ecx
 	addl	$32,%ecx
 	shrl	%cl,%eax
@@ -39,7 +38,6 @@ getbits_fast:
 	shlw	%cl,%ax
 	movl 	4(%esp),%ecx
 	addl	%ecx,bitindex
-	addl	%ecx,tellcnt
 	negl	%ecx
 	addl	$16,%ecx
 	shrl	%cl,%eax
@@ -56,7 +54,6 @@ getbits_fast:
 get1bit:
 	movl	wordpointer,%ecx
 	movzbl	(%ecx),%eax
-	incl	tellcnt
 	movl	bitindex,%ecx
 	incl	%ecx
 	rolb	%cl,%al

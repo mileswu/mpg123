@@ -20,11 +20,7 @@ nothing-specified:
 	@echo "You must specify the system which you want to compile for:"
 	@echo ""
 	@echo "make linux           Linux"
-#	@echo "make linux-int       Linux, integer, a bit faster on machines with worse"
-#	@echo "                     floating point performance. Slightly reduced quality"
 	@echo "make freebsd         FreeBSD"
-#	@echo "make freebsd-int     FreeBSD, integer, a bit faster on machines with worse"
-#	@echo "                     floating point performance. Slightly reduced quality"
 	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1) using SparcWorks CC"
 	@echo "make solaris-gcc     Solaris 2.x using GNU CC (somewhat slower)"
 	@echo "make sunos           SunOS 4.x (tested: 4.1.4)"
@@ -39,9 +35,6 @@ nothing-specified:
 
 linux:
 	$(MAKE) OBJECTS='decode_i386.o getbits.o' linux-generic
-
-#linux-int:
-#	$(MAKE) OBJECTS='decode_int.o getbits.o' linux-generic
 
 linux-generic:
 	$(MAKE) CC=gcc LDFLAGS= \
@@ -58,9 +51,6 @@ linux-generic:
 freebsd:
 	$(MAKE) OBJECTS='decode_i386.o getbits_.o' freebsd-generic
 
-#freebsd-int:
-#	$(MAKE) OBJECTS='decode_int.o getbits_.o' freebsd-generic
-
 freebsd-generic:
 	$(MAKE) CC=cc LDFLAGS= \
 		CFLAGS='-Wall -ansi -pedantic -O4 -m486 -fomit-frame-pointer \
@@ -69,12 +59,12 @@ freebsd-generic:
 		mpg123
 
 solaris:
-	$(MAKE) CC=cc LDFLAGS= OBJECTS=decode.o \
+	$(MAKE) CC=cc LDFLAGS='-lsocket -lnsl' OBJECTS=decode.o \
 		CFLAGS='-fast -native -xO5 -DSOLARIS -DREAL_IS_FLOAT' \
 		mpg123
 
 solaris-gcc:
-	$(MAKE) CC=gcc LDFLAGS= OBJECTS=decode.o \
+	$(MAKE) CC=gcc LDFLAGS='-lsocket -lnsl' OBJECTS=decode.o \
 		CFLAGS='-O2 -Wall -DSOLARIS -DREAL_IS_FLOAT \
 			-funroll-all-loops -finline-functions' \
 		mpg123
@@ -109,10 +99,11 @@ generic:
 		CFLAGS='-O' \
 		mpg123
 
-mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o Makefile
-	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o layer2.o \
-			layer3.o audio.o buffer.o decode_2to1.o decode_4to1.o $(OBJECTS) \
-			-o mpg123 -lm $(AUDIO_LIB)
+mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o dct64.o decode_4to1.o tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o getlopt.o httpget.o Makefile
+	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o \
+		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
+		decode_4to1.o getlopt.o httpget.o dct64.o $(OBJECTS) \
+		-o mpg123 -lm $(AUDIO_LIB)
 
 tst:
 	gcc $(CFLAGS) -S decode.c
@@ -126,12 +117,15 @@ decode_2to1.o:	mpg123.h
 decode_4to1.o:	mpg123.h
 decode_i386.o:	mpg123.h
 common.o:	mpg123.h tables.h
-mpg123.o:	mpg123.h
+mpg123.o:	mpg123.h getlopt.h
 audio.o:	mpg123.h
 buffer.o:	mpg123.h
 getbits.o:	mpg123.h
 getbits_.o:	mpg123.h
-tabinit.o: mpg123.h
+tabinit.o:	mpg123.h
+getlopt.o:	getlopt.h
+httpget.o:	mpg123.h
+dct64.o: mpg123.h
 
 clean:
 	rm -f *.o *core *~ mpg123

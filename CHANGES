@@ -1,3 +1,25 @@
+0.59:
+-----
+extracted dct64() from decode*.c files.
+some changes to dct64() and decode*.c to allow auto-increment/decrement
+removed bit-counter in getbit-functions. Layer3 part2 now counts it itself.
+
+0.58: (OF)
+------
+Bugfix: not closing the audio device caused a few samples to be lost.
+Bugfix: audio_set_rate() was not called (!?!).
+Additional command line options "--doublespeed" and "--halfspeed"
+   (couldn't find better names).  See the manpage.
+Complete redesign of command line options.  See the manpage.
+Changed the buffer algorithm (-b).  I'm not sure whether it's better
+   or worse now.
+Supports multiple files on the command line.  Pressing Ctrl-C will
+   skip to the next MPEG file, pressing it twice within one second
+   will abort mpg123 completely.  See the "INTERRUPT" section in the
+   manpage.
+Support for http URLs.  See also the -p option in the manpage.
+Support for list files.  See also the -@ option in the manpage.
+
 0.57: (MH)
 -----
 Put the downsampling code together with the full
@@ -8,7 +30,7 @@ Removed the 'int' version.
 0.56: (OF)
 -----
 Additional command line option "-rs" to try to resync on
-   "broken" MPEG streams.
+   "broken" MPEG streams (now called "--resync" or "-y").
 Additional command line option "-b" to use audio output buffering.
    See the manpage for additional information.
 Changed a few variable names and some other minor fixes, so the

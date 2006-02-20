@@ -12,32 +12,6 @@ Have fun!
 
 Some additional remarks:
 
- - The "linux" and "freebsd" targets provide additional compile
-   options beside the "normal" target:
-
-      -int    Uses integer calculations at certain places
-              instead of floating point.  This _might_ reduce
-              CPU load if the floating point part of your CPU
-              is rather slow, e.g. Cyrix/AMD.  Don't use this
-              if you have an original intel Pentium or PPro.
-              Quality suffers somewhat.
-
-      -2to1   Use 2:1 downsampling.  Faster, but noticeably
-              worse quality.
-
-      -4to1   Use 4:1 downsampling.  Yet faster, but ugly
-              quality.
-
-   Normally you should try the normal target first, which gives
-   you the best possible audio quality.  If your CPU is not
-   fast enough for that, and you have a CPU which is known to
-   have bad floating point performance, try the -int target.
-   Otherwise, try the -2to1 or (as a last resort) -4to1 target,
-   which take less CPU power, but also provide worse audio
-   quality.  As an alternative, you can try to use the
-   "-singlemix" commandline option for mono output, which also
-   requires less CPU power.
-
  - There is currently no direct audio hardware support for the
    "dec", "aix" and "generic" targets.  That means that you
    have to use the "-s" commandline option to write the decoded
@@ -46,5 +20,8 @@ Some additional remarks:
  - On Solaris, use Sun's SparcWorks compiler ("make solaris")
    if at all possible.  It generates faster code than gcc, so
    use gcc only if there's no other way.
+
+ - The macro "htons" causes a compiler warning in httpget.c
+   (at least on FreeBSD).  This can be safely ignored.
 
 ***

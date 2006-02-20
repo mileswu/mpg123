@@ -104,13 +104,21 @@ struct audio_info_struct
 extern int outmode;  
 extern int tryresync;
 extern int quiet;
+extern int halfspeed;
 extern int usebuffer;
 extern int buffer_fd[2];
+extern char *prgName, *prgVersion;
 
 extern int audio_play_samples(struct audio_info_struct *,short *,int);
 extern void buffer_loop(struct audio_info_struct *ai);
 
-/* The following functions are in the file "common.c" */
+/* ------ Declarations from "httpget.c" ------ */
+
+extern char *proxyurl;
+extern unsigned long proxyip;
+extern FILE *http_open (char *url);
+
+/* ------ Declarations from "common.c" ------ */
 
 extern void audio_flush(int, struct audio_info_struct *);
 extern void (*catchsignal(int signum, void(*handler)()))();
@@ -155,7 +163,7 @@ struct III_sideinfo
 };
 
 extern void open_stream(char *);
-extern void close_stream(void);
+extern void close_stream(char *);
 extern int read_frame(struct frame *fr);
 extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
@@ -174,6 +182,7 @@ extern void huffman_count1(int,int *);
 extern void init_layer3(void);
 extern void init_layer2(void);
 extern void make_decode_tables(long scale);
+extern void dct64(real *,real *);
 
 extern int audio_open(struct audio_info_struct *);
 extern int audio_set_rate(struct audio_info_struct *);

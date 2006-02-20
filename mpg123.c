@@ -1,5 +1,5 @@
 /* 
- * Mpeg Layer audio decoder V0.57
+ * Mpeg Layer audio decoder V0.58
  * -------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
@@ -12,44 +12,58 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 /* #define SET_PRIO */
 
-#ifdef SET_PRIO
-#include <sys/resource.h>
-#endif
-
 #include "mpg123.h"
+#include "getlopt.h"
 
+char *prgVersion = "0.58";
+char *prgDate = "97/04/10";
 char *prgName;
 
-static void usage(void);
+static void usage(char *dummy);
 static void print_title(void);
 
 int outmode = DECODE_AUDIO;
 
+char *listname = NULL;
+int intflag    = FALSE;
 long outscale  = 32768;
 int checkrange = FALSE;
 int tryresync  = FALSE;
 int verbose    = FALSE;
 int quiet      = FALSE;
+int doublespeed= 0;
+int halfspeed  = 0;
 long numframes = -1;
-long startFrame = 0;
+long startFrame= 0;
 int usebuffer  = 0;
 int buffer_fd[2];
 int buffer_pid;
 
-#ifndef MAXNAMLEN
-#define MAXNAMLEN	256
-#endif
-
-void catch_child()
+void catch_child(void)
 {
   while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-void init_output(struct audio_info_struct *ai)
+void catch_interrupt(void)
 {
+  intflag = TRUE;
+}
+
+static struct frame fr;
+static struct audio_info_struct ai;
+
+void init_output(void)
+{
+  static int init_done = FALSE;
+
+  if (init_done)
+    return;
+  init_done = TRUE;
   if (usebuffer) {
     if (pipe(buffer_fd)) {
       perror ("pipe()");
@@ -62,7 +76,7 @@ void init_output(struct audio_info_struct *ai)
         exit(1);
       case 0: /* child */
         close (buffer_fd[1]);
-        buffer_loop(ai);
+        buffer_loop(&ai);
         close (buffer_fd[0]);
         exit(0);
       default: /* parent */
@@ -72,22 +86,128 @@ void init_output(struct audio_info_struct *ai)
   }
 
   if(outmode==DECODE_AUDIO) {
-    if(audio_open(ai) < 0) {
+    if(audio_open(&ai) < 0) {
       perror("audio");
       exit(1);
     }
+    audio_set_rate (&ai);
   }
 }
 
-int main(int argc,char *argv[])
+char *get_next_file (int argc, char *argv[])
 {
-    struct frame fr;
-    int i, stereo,clip=0;
+    static FILE *listfile = NULL;
+    static char line[1024];
+
+    if (listname || listfile) {
+        if (!listfile) {
+            if (!*listname || !strcmp(listname, "-")) {
+                listfile = stdin;
+                listname = NULL;
+            }
+            else if (!strncmp(listname, "http://", 7)) 
+                listfile = http_open(listname);
+            else if (!(listfile = fopen(listname, "rb"))) {
+                perror (listname);
+                exit (1);
+            }
+            if (verbose)
+                fprintf (stderr, "Using playlist from %s ...\n",
+                        listname ? listname : "standard input");
+        }
+        do {
+            if (fgets(line, 1023, listfile)) {
+                line[strcspn(line, "\t\n\r")] = '\0';
+                if (line[0]=='\0' || line[0]=='#')
+                    continue;
+                return (line);
+            }
+            else {
+                if (*listname)
+                   fclose (listfile);
+                listname = NULL;
+                listfile = NULL;
+            }
+        } while (listfile);
+    }
+    if (loptind < argc)
+    	return (argv[loptind++]);
+    return (NULL);
+}
+
+void set_synth (char *arg)
+{
+    if (*arg == '2')
+        fr.synth = synth_2to1;
+    else
+        fr.synth = synth_4to1;
+}
+
+#ifdef VARMODESUPPORT
+void set_varmode (char *arg)
+{
+    audiobufsize = ((audiobufsize >> 1) + 63) & 0xffffc0;
+}
+#endif
+
+void set_output (char *arg)
+{
+    switch (*arg) {
+        case 'h': ai.output = AUDIO_OUT_HEADPHONES; break;
+        case 's': ai.output = AUDIO_OUT_INTERNAL_SPEAKER; break;
+        case 'l': ai.output = AUDIO_OUT_LINE_OUT; break;
+        default:
+            fprintf (stderr, "%s: Unknown argument \"%s\" to option \"%s\".\n",
+                prgName, arg, loptarg);
+            exit (1);
+    }
+}
+
+topt opts[] = {
+    {'k', "skip",        GLO_ARG | GLO_NUM,  0, &startFrame, 0},
+    {'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &ai.device,  0},
+    {'2', "2to1",        0,          set_synth, 0,           0},
+    {'4', "4to1",        0,          set_synth, 0,           0},
+    {'t', "test",        0,                  0, &outmode, DECODE_TEST},
+    {'s', "stdout",      0,                  0, &outmode, DECODE_STDOUT},
+    {'c', "check",       0,                  0, &checkrange, TRUE},
+    {'v', "verbose",     0,                  0, &verbose,    TRUE},
+    {'q', "quiet",       0,                  0, &quiet,      TRUE},
+    {'y', "resync",      0,                  0, &tryresync,  TRUE},
+    {'0', "single0",     0,                  0, &fr.single,  0},
+    {0,   "left",        0,                  0, &fr.single,  0},
+    {'1', "single1",     0,                  0, &fr.single,  1},
+    {0,   "right",       0,                  0, &fr.single,  1},
+    {'m', "singlemix",   0,                  0, &fr.single,  3},
+    {0,   "mix",         0,                  0, &fr.single,  3},
+    {'g', "gain",        GLO_ARG | GLO_NUM,  0, &ai.gain,    0},
+    {'r', "rate",        GLO_ARG | GLO_NUM,  0, &ai.rate,    0},
+    {0,   "headphones",  0,                  0, &ai.output, AUDIO_OUT_HEADPHONES},
+    {0,   "speaker",     0,                  0, &ai.output, AUDIO_OUT_INTERNAL_SPEAKER},
+    {0,   "lineout",     0,                  0, &ai.output, AUDIO_OUT_LINE_OUT},
+    {'o', "output",      GLO_ARG | GLO_CHAR, set_output, 0,  0},
+    {'f', "scale",       GLO_ARG | GLO_NUM,  0, &outscale,   0},
+    {'n', "frames",      GLO_ARG | GLO_NUM,  0, &numframes,  0},
+#ifdef VARMODESUPPORT
+    {'v', "var",         0,        set_varmode, &varmode,    TRUE},
+#endif
+    {'b', "buffer",      GLO_ARG | GLO_NUM,  0, &usebuffer,  0},
+    {'d', "doublespeed", GLO_ARG | GLO_NUM,  0, &doublespeed,0},
+    {'h', "halfspeed",   GLO_ARG | GLO_NUM,  0, &halfspeed,  0},
+    {'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
+    {'@', "list",        GLO_ARG | GLO_CHAR, 0, &listname,   0},
+    {'?', "help",        0,              usage, 0,           0}
+};
+
+int main(int argc, char *argv[])
+{
+    int result, stereo, clip=0;
     int crc_error_count, total_error_count;
     unsigned int old_crc;
     unsigned long frameNum = 0;
-    char fname[MAXNAMLEN] = { 0, };
-    struct audio_info_struct ai;
+    char *fname;
+    struct timeval start_time, now;
+    unsigned long secdiff;
 
 #ifdef SET_PRIO
 	int mypid = getpid();
@@ -101,103 +221,20 @@ int main(int argc,char *argv[])
     ai.device = NULL;
     ai.channels = 2;
 
-    if (!(prgName = strrchr(argv[0], '/')))
-      prgName = argv[0];
     (prgName = strrchr(argv[0], '/')) ? prgName++ : (prgName = argv[0]);
 
-    if(argc == 1)
-      usage();
-
-    for(i=1;i<argc;i++)
-    {
-      if(!strcmp(argv[i],"-skip"))
-      {
-        i++;
-        startFrame = atoi(argv[i]);
+    while ((result = getlopt(argc, argv, opts)))
+      switch (result) {
+        case GLO_UNKNOWN:
+          fprintf (stderr, "%s: Unknown option \"%s\".", prgName, loptarg);
+          exit (1);
+        case GLO_NOARG:
+          fprintf (stderr, "%s: Missing argument for option \"%s\".",
+              prgName, loptarg);
+          exit (1);
       }
-      else if(!strcmp(argv[i],"-audiodevice")) {
-        i++;
-        ai.device = strdup(argv[i]);
-      }
-      else if(!strcmp(argv[i],"-2to1"))
-        fr.synth = synth_2to1;
-      else if(!strcmp(argv[i],"-4to1"))
-        fr.synth = synth_4to1;
-      else if(!strcmp(argv[i],"-t"))
-        outmode = DECODE_TEST;
-      else if(!strcmp(argv[i],"-s"))
-        outmode = DECODE_STDOUT;
-      else if(!strcmp(argv[i],"-c"))
-        checkrange = TRUE;
-      else if(!strcmp(argv[i],"-v") || !strcmp(argv[i],"-verbose"))
-        verbose = TRUE;
-      else if(!strcmp(argv[i],"-single0") || !strcmp(argv[i],"-left"))
-        fr.single = 0;
-      else if(!strcmp(argv[i],"-single1") || !strcmp(argv[i],"-right"))
-        fr.single = 1;
-      else if(!strcmp(argv[i],"-singlemix") || !strcmp(argv[i],"-mix"))
-        fr.single = 3;
-      else if(!strcmp(argv[i],"-g") || !strcmp(argv[i],"-gain"))
-      {
-        i++;
-        ai.gain = atoi(argv[i]);
-      }
-      else if(!strcmp(argv[i],"-r"))
-      {
-        i++;
-        ai.rate = atoi(argv[i]);
-      }
-      else if(!strcmp(argv[i],"-oh"))
-        ai.output = AUDIO_OUT_HEADPHONES;
-      else if(!strcmp(argv[i],"-os"))
-        ai.output = AUDIO_OUT_INTERNAL_SPEAKER;
-      else if(!strcmp(argv[i],"-ol"))
-        ai.output = AUDIO_OUT_LINE_OUT;
-      else if(!strcmp(argv[i],"-f"))
-      {
-        i++;
-        outscale = atoi(argv[i]);
-      }
-      else if(!strcmp(argv[i],"-n"))
-      {
-        i++;
-        numframes = atoi(argv[i]);
-      }
-#ifdef VARMODESUPPORT
-      else if(!strcmp(argv[i],"-var")) {
-        varmode = TRUE;
-        audiobufsize = ((audiobufsize >> 1) + 63) & 0xffffc0;
-      }
-#endif
-      else if(!strcmp(argv[i],"-q"))
-        quiet = TRUE;
-      else if(!strcmp(argv[i],"-rs"))
-        tryresync = TRUE;
-      else if(!strcmp(argv[i],"-b"))
-      {
-        i++;
-        usebuffer = atoi(argv[i]);
-      }
-      else if(!strcmp(argv[i],"-"))
-        fname[0] = '\0';   /* read from stdin */
-      else if(argv[i][0] == '-')
-      {
-        fprintf(stderr,"Unknown option: %s\n",argv[i]);
-        usage();
-      }
-      else
-      {
-        if(fname[0])
-          usage();
-        strcpy(fname,argv[i]);
-      }
-    }
-#ifndef AUDIO_USES_FD
-    if (usebuffer && outmode == DECODE_AUDIO) {
-      fprintf(stderr,"Buffering not supported for this kind of audio hardware.\n");
-      exit(1);
-    }
-#endif
+    if (loptind >= argc && !listname)
+      usage(NULL);
 
     if (!quiet)
       print_title();
@@ -205,58 +242,77 @@ int main(int argc,char *argv[])
     make_decode_tables(outscale);
     init_layer2(); /* inits also shared tables with layer1 */
     init_layer3();
+    catchsignal (SIGINT, catch_interrupt);
 
-    if(fname[0])
+    while ((fname = get_next_file(argc, argv))) {
+      if(!*fname || !strcmp(fname, "-"))
+        fname = NULL;
       open_stream(fname);
-    else
-      open_stream(NULL);
-  
-    for(frameNum=0;read_frame(&fr) && numframes;frameNum++) 
-    {
-       stereo = fr.stereo;
-       crc_error_count   = 0;
-       total_error_count = 0;
+      if (!quiet)
+        fprintf(stderr, "\nPlaying MPEG stream from %s ...\n",
+                fname ? fname : "standard input");
 
-       if(!frameNum)
-       {
-         if (!quiet)
-           print_header(&fr);
-         if(ai.rate == -1) {
-           ai.rate = freqs[fr.sampling_frequency];
+      gettimeofday (&start_time, NULL);
+      for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) 
+      {
+         stereo = fr.stereo;
+         crc_error_count   = 0;
+         total_error_count = 0;
+
+         if(!frameNum)
+         {
+           if (!quiet)
+             print_header(&fr);
+           if(ai.rate == -1) {
+             ai.rate = freqs[fr.sampling_frequency];
+           }
+           init_output();
          }
-         init_output(&ai);
-       }
-       if(frameNum < startFrame) {
-         if(fr.lay == 3) {
-           set_pointer(512);
+         if(frameNum < startFrame || (doublespeed && (frameNum % doublespeed))) {
+           if(fr.lay == 3) {
+             set_pointer(512);
+           }
+           continue;
          }
-         continue;
-       }
-       numframes--;
+         numframes--;
 
-       if (fr.error_protection)
-          old_crc = getbits(16);
+         if (fr.error_protection)
+            old_crc = getbits(16);
 
-       switch(fr.lay)
-       {
-         case 1:
-           clip = do_layer1(&fr,outmode,&ai);
-           break;
-         case 2:
-           clip = do_layer2(&fr,outmode,&ai);
-           break;
-         case 3:
-           clip = do_layer3(&fr,outmode,&ai);
-           break;
-       }
-       if(verbose)
-         fprintf(stderr, "\r{%4lu} ",frameNum);
-       if(clip > 0 && checkrange)
-         fprintf(stderr,"%d samples clipped\n", clip);
+         switch(fr.lay)
+         {
+           case 1:
+             clip = do_layer1(&fr,outmode,&ai);
+             break;
+           case 2:
+             clip = do_layer2(&fr,outmode,&ai);
+             break;
+           case 3:
+             clip = do_layer3(&fr,outmode,&ai);
+             break;
+         }
+         if(verbose)
+           fprintf(stderr, "\r{%4lu} ",frameNum);
+         if(clip > 0 && checkrange)
+           fprintf(stderr,"%d samples clipped\n", clip);
+      }
+      close_stream(fname);
+      if (!quiet)
+        fprintf(stderr,"Decoding of %s finished.\n",
+                fname ? fname : "standard input");
+      if (intflag) {
+        gettimeofday (&now, NULL);
+        secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
+        if (now.tv_usec >= start_time.tv_usec)
+          secdiff += (now.tv_usec - start_time.tv_usec) / 1000;
+        else
+          secdiff -= (start_time.tv_usec - now.tv_usec) / 1000;
+        if (secdiff < 1000)
+          break;
+        intflag = FALSE;
+      }
     }
     audio_flush(outmode, &ai);
-
-    close_stream();
 
     if (usebuffer) {
       close (buffer_fd[1]);
@@ -265,42 +321,34 @@ int main(int argc,char *argv[])
 
     if(outmode==DECODE_AUDIO)
       audio_close(&ai);
-
-    if (!quiet)
-      fprintf(stderr,"Decoding of \"%s\" is finished\n", fname);
     exit( 0 );
 }
 
-static void print_title()
+static void print_title(void)
 {
     fprintf(stderr,"High Performance MPEG 1.0 Audio Player for Layer 1,2 and 3. ..\n");
-    fprintf(stderr,"Version 0.57 (97/04/06). Written and copyrights by Michael Hipp.\n");
+    fprintf(stderr,"Version %s (%s). Written and copyrights by Michael Hipp.\n", prgVersion, prgDate);
     fprintf(stderr,"Uses code from various people. See 'README' for more!\n");
 }
 
-static void usage(void)  /* print syntax & exit */
+static void usage(char *dummy)  /* print syntax & exit */
 {
    print_title();
-   fprintf(stderr,"usage: %s [option(s)] inputBS\n", prgName);
-   fprintf(stderr,"supported options:\n");
-   fprintf(stderr," -t\t\ttestmode .. only decoding, no output.\n");
-   fprintf(stderr," -s\t\twrite to stdout\n");
-   fprintf(stderr," -c\t\tcheck for filter range violations.\n");     
-   fprintf(stderr," -v\t\tverbose.\n");
-   fprintf(stderr," -q\t\tquiet.\n");
-   fprintf(stderr," -n <num>\tdecode only <num> frames.\n");
-   fprintf(stderr," -skip <num>\tskip first <num> frames.\n");
-   fprintf(stderr," -rs\t\ttry to resync and continue on errors.\n");
-   fprintf(stderr," -b <size>\tUse an output buffer of <size> Kbytes (default: 0 [none])\n");
-   fprintf(stderr," -f <factor>\tchange scalefactor (default: 32768).\n");
-   fprintf(stderr," -r <smplerate>\tset samplerate (default: Automatic).\n");
-   fprintf(stderr," -g <gain>\tset audio hardware output gain.\n");
-   fprintf(stderr," -os,-oh,-ol\tset audio output line: speaker/headphone/line.\n");
-   fprintf(stderr," -single0,-single1\tfor stereomodes: decode only channel No.0 or No.1.\n");
-   fprintf(stderr," -singlemix\tonly Layer3: mix both channels\n");
-   fprintf(stderr," inputBS  input bit stream of encoded audio\n");
+   fprintf(stderr,"\nusage: %s [option(s)] [file(s) | URL(s) | -]\n", prgName);
+   fprintf(stderr,"supported options [defaults in brackets]:\n");
+   fprintf(stderr,"   -v    verbose                        -q    quiet\n");
+   fprintf(stderr,"   -t    testmode (no output)           -s    write to stdout\n");
+   fprintf(stderr,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
+   fprintf(stderr,"   -c    check range violations         -y    try to resync on errors\n");
+   fprintf(stderr,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [32768]\n");
+   fprintf(stderr,"   -r n  override samplerate [auto]     -g n  set audio hardware output gain\n");
+   fprintf(stderr,"   -os   output to built-in speaker     -oh   output to headphones\n");
+   fprintf(stderr,"   -ol   output to line-out connector   -a d  set audio device\n");
+   fprintf(stderr,"   -2    downsample 1:2 (22 kHz)        -4    downsample 1:4 (11 kHz)\n");
+   fprintf(stderr,"   -d n  play every n'th frame only     -h n  play every frame n times\n");
+   fprintf(stderr,"   -0    decode channel 0 (left) only   -1    decode channel 1 (right) only\n");
+   fprintf(stderr,"   -m    mix both channels (mono)       -p p  use HTTP proxy p [$HTTP_PROXY]\n");
+   fprintf(stderr,"   -@ f  read filenames/URLs from f\n");
    fprintf(stderr,"See the manpage %s(1) for more information.\n", prgName);
    exit(1);
 }
-
-

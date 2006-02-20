@@ -101,6 +101,7 @@ int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 
 int audio_close(struct audio_info_struct *ai)
 {
+  close (ai->fn);
   return 0;
 }
 
@@ -210,6 +211,7 @@ int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 
 int audio_close(struct audio_info_struct *ai)
 {
+  close (ai->fn);
   return 0;
 }
 
@@ -290,6 +292,7 @@ int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 
 int audio_close(struct audio_info_struct *ai)
 {
+  close (ai->fn);
   return 0;
 }
 
@@ -348,7 +351,7 @@ int audio_close(struct audio_info_struct *ai)
 #else
 int audio_open(struct audio_info_struct *ai)
 {
-  fprintf(stderr,"No audio support compiled into this binary.\n");
+  fprintf(stderr,"No audio device support compiled into this binary (use -s).\n");
   return -1;
 }
 
