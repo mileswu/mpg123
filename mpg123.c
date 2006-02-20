@@ -28,6 +28,8 @@ static long rates[3][3] = {
  {  8000,11025,12000 } 
 };
 
+struct flags flags = { 0 , 0 };
+
 int supported_rates = 0;
 
 int outmode = DECODE_AUDIO;
@@ -44,6 +46,7 @@ int shuffle = 0;
 int change_always = 1;
 int force_8bit = 0;
 int force_frequency = -1;
+int force_mono = 0;
 long numframes = -1;
 long startFrame= 0;
 int usebuffer  = 0;
@@ -316,6 +319,8 @@ topt opts[] = {
 	/* 'z' comes from the the german word 'zufall' (eng: random) */
     {'z', "shuffle",         0,        0, &shuffle,    1},
 #endif
+	{0,   "equalizer",	0,				0, &flags.equalizer,1},
+	{0,   "aggressive",	0,				0, &flags.aggressive,2},
     {'?', "help",        0,              usage, 0,           0},
     {0, 0, 0, 0, 0, 0}
 };
@@ -425,6 +430,32 @@ void play_frame(int init,struct frame *fr)
 		fprintf(stderr,"%d samples clipped\n", clip);
 }
 
+void set_synth_functions(struct frame *fr)
+{
+	static void *funcs[2][2][3][2] = { 
+		{ { { synth_1to1 , synth_1to1_mono2stereo } ,
+		    { synth_2to1 , synth_2to1_mono2stereo } ,
+		    { synth_4to1 , synth_4to1_mono2stereo } } ,
+		  { { synth_1to1_8bit , synth_1to1_8bit_mono2stereo } ,
+		    { synth_2to1_8bit , synth_2to1_8bit_mono2stereo } ,
+		    { synth_4to1_8bit , synth_4to1_8bit_mono2stereo } } } ,
+		{ { { synth_1to1_mono , synth_1to1_mono } ,
+		    { synth_2to1_mono , synth_2to1_mono } ,
+		    { synth_4to1_mono , synth_4to1_mono } } ,
+		  { { synth_1to1_8bit_mono , synth_1to1_8bit_mono } ,
+		    { synth_2to1_8bit_mono , synth_2to1_8bit_mono } ,
+		    { synth_4to1_8bit_mono , synth_4to1_8bit_mono } } } 
+	};
+
+	fr->synth = funcs[force_mono][force_8bit][fr->down_sample][0];
+	fr->synth_mono = funcs[force_mono][force_8bit][fr->down_sample][1];
+	fr->block_size = 128 >> (force_mono+force_8bit+fr->down_sample);
+
+	if(force_8bit) {
+		ai.format = AUDIO_FORMAT_ULAW_8;
+		make_conv16to8_table(ai.format);
+	}
+}
 
 int main(int argc, char *argv[])
 {
@@ -437,11 +468,6 @@ int main(int argc, char *argv[])
 
 #ifdef OS2
         _wildcard(&argc,&argv);
-#endif
-
-#ifdef SET_PRIO
-	int mypid = getpid();
-	setpriority(PRIO_PROCESS,mypid,-20);
 #endif
 
 	if(!strcmp("sajberplay",argv[0]))
@@ -480,9 +506,16 @@ int main(int argc, char *argv[])
         fprintf(stderr,"@R MPG123\n");        
     }
 
-    if (!quiet)
-      print_title();
+	if (!quiet)
+		print_title();
 
+	if(fr.single >= 0)
+		force_mono = 1;
+	if(force_mono) {
+		if(fr.single < 0)
+			fr.single = 3;
+		ai.channels = 1;
+	}
 
     {
         int fmts;
@@ -498,21 +531,21 @@ int main(int argc, char *argv[])
         else
         	fmts = AUDIO_FORMAT_SIGNED_16;
 
-        supported_rates = 0;
-        for(i=0;i<3;i++) {
-          for(j=0;j<3;j++) {
-            ai.rate = rates[i][j];
-            if (outmode == DECODE_AUDIO)
-              audio_rate_best_match(&ai);
-            /* allow about 2% difference */
-            if( ((rates[i][j]*98) < (ai.rate*100)) &&
-                ((rates[i][j]*102) > (ai.rate*100)) )
-              supported_rates |= 1<<(i*3+j);
-          } 
-        }
+		supported_rates = 0;
+		for(i=0;i<3;i++) {
+			for(j=0;j<3;j++) {
+				ai.rate = rates[i][j];
+				if (outmode == DECODE_AUDIO)
+					audio_rate_best_match(&ai);
+					/* allow about 2% difference */
+					if( ((rates[i][j]*98) < (ai.rate*100)) &&
+					    ((rates[i][j]*102) > (ai.rate*100)) )
+						supported_rates |= 1<<(i*3+j);
+			} 
+		}
         
-        if (outmode == DECODE_AUDIO)
-          audio_close(&ai);
+		if (outmode == DECODE_AUDIO)
+			audio_close(&ai);
 
         if(!force_8bit && !(fmts & AUDIO_FORMAT_SIGNED_16))
             force_8bit = 1;
@@ -523,80 +556,62 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(force_8bit) {
-#if 0
-      ai.format = AUDIO_FORMAT_UNSIGNED_8;
-      ai.format = AUDIO_FORMAT_SIGNED_8;
-#endif
-      ai.format = AUDIO_FORMAT_ULAW_8;
-      make_conv16to8_table(ai.format);
-      switch(fr.down_sample) {
-        case 0:
-          fr.synth = synth_1to1_8bit;
-          fr.synth_mono = synth_1to1_8bit_mono;
-          fr.block_size = 64;
-          break;
-        case 1:
-          fr.synth = synth_2to1_8bit;
-          fr.synth_mono = synth_2to1_8bit_mono;
-          fr.block_size = 32;
-          break;
-        case 2:
-          fr.synth = synth_4to1_8bit;
-          fr.synth_mono = synth_4to1_8bit_mono;
-          fr.block_size = 16;
-          break;
-      }
-    }
-    else {
-      switch(fr.down_sample) {
-        case 0:
-          fr.synth = synth_1to1;
-          fr.synth_mono = synth_1to1_mono;
-          fr.block_size = 128;
-          break;
-        case 1:
-          fr.synth = synth_2to1;
-          fr.synth_mono = synth_2to1_mono;
-          fr.block_size = 64;
-          break;
-        case 2:
-          fr.synth = synth_4to1;
-          fr.synth_mono = synth_4to1_mono;
-          fr.block_size = 32;
-          break;
-      }
-    }
+	if(flags.equalizer) { /* tst */
+		FILE *fe;
+		int i;
 
-    make_decode_tables(outscale);
-    init_layer2(); /* inits also shared tables with layer1 */
-    init_layer3(fr.down_sample);
-    catchsignal (SIGINT, catch_interrupt);
+		equalizer_cnt = 0;
+		for(i=0;i<32;i++) {
+			equalizer[0][i] = equalizer[1][i] = 1.0;
+			equalizer_sum[0][i] = equalizer_sum[1][i] = 0.0;
+		}
+
+		fe = fopen("equalize.dat","r");
+		if(fe) {
+			for(i=0;i<32;i++)
+				fscanf(fe,"%f %f",&equalizer[0][i],&equalizer[1][i]);
+			fclose(fe);
+		}
+		else
+			fprintf(stderr,"Can't open 'equalizer.dat'\n");
+	}
+
+	if(flags.aggressive) { /* tst */
+		int mypid = getpid();
+		setpriority(PRIO_PROCESS,mypid,-20);
+	}
+
+	set_synth_functions(&fr);
+
+	make_decode_tables(outscale);
+	init_layer2(); /* inits also shared tables with layer1 */
+	init_layer3(fr.down_sample);
+	catchsignal (SIGINT, catch_interrupt);
 
 	if(frontend_type) {
 		handle_remote();
 		exit(0);
 	}
 
-    while ((fname = get_next_file(argc, argv))) {
-      char *dirname, *filename;
+	while ((fname = get_next_file(argc, argv))) {
+		char *dirname, *filename;
 
-      if(!*fname || !strcmp(fname, "-"))
-        fname = NULL;
-      open_stream(fname,-1);
+		if(!*fname || !strcmp(fname, "-"))
+			fname = NULL;
+		open_stream(fname,-1);
       
-      if (!quiet) {
-        if (split_dir_file(fname ? fname : "standard input",
-                &dirname, &filename))
-           fprintf(stderr, "\nDirectory: %s", dirname);
-        fprintf(stderr, "\nPlaying MPEG stream from %s ...\n", filename);
-      }
+		if (!quiet) {
+			if (split_dir_file(fname ? fname : "standard input",
+				&dirname, &filename))
+				fprintf(stderr, "\nDirectory: %s", dirname);
+			fprintf(stderr, "\nPlaying MPEG stream from %s ...\n", filename);
+		}
 
-      gettimeofday (&start_time, NULL);
-      read_frame_init();
+		gettimeofday (&start_time, NULL);
+		read_frame_init();
 
-      init = 1;
-      for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) {
+		init = 1;
+		for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) {
 			if(frameNum < startFrame || (doublespeed && (frameNum % doublespeed))) {
 				if(fr.lay == 3)
 					set_pointer(512);
@@ -685,7 +700,11 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [32768]\n");
    fprintf(stderr,"   -r n  override samplerate [auto]     -g n  set audio hardware output gain\n");
    fprintf(stderr,"   -os   output to built-in speaker     -oh   output to headphones\n");
+#ifdef NAS
+   fprintf(stderr,"   -ol   output to line-out connector   -a d  set NAS server\n");
+#else
    fprintf(stderr,"   -ol   output to line-out connector   -a d  set audio device\n");
+#endif
    fprintf(stderr,"   -2    downsample 1:2 (22 kHz)        -4    downsample 1:4 (11 kHz)\n");
    fprintf(stderr,"   -d n  play every n'th frame only     -h n  play every frame n times\n");
    fprintf(stderr,"   -0    decode channel 0 (left) only   -1    decode channel 1 (right) only\n");

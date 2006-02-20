@@ -41,6 +41,7 @@ void make_decode_tables(long scaleval)
   int i,j,k,kr,divv;
   real *table,*costab;
 
+  
   for(i=0;i<5;i++)
   {
     kr=0x10>>i; divv=0x40>>i;

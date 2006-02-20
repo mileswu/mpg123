@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <stdlib.h>
+#include <signal.h>
 #include "mpg123.h"
 #include "tables.h"
 
@@ -135,8 +136,8 @@ static unsigned long firsthead=0;
 
 void read_frame_init (void)
 {
-    oldhead = 0;
-    firsthead = 0;
+	oldhead = 0;
+	firsthead = 0;
 }
 
 #define HDRCMPMASK 0xfffffd00
@@ -188,6 +189,33 @@ int back_frame(struct frame *fr,int num)
 	return 0;
 }
 
+int head_read(unsigned char *hbuf,unsigned long *newhead)
+{
+	if(fread(hbuf,1,4,filept) != 4)
+		return FALSE;
+
+	*newhead = ((unsigned long) hbuf[0] << 24) |
+	           ((unsigned long) hbuf[1] << 16) |
+	           ((unsigned long) hbuf[2] << 8)  |
+	            (unsigned long) hbuf[3];
+
+	return TRUE;
+}
+
+int head_check(unsigned long newhead) 
+{
+	if( (newhead & 0xffe00000) != 0xffe00000)
+		return FALSE;
+	if(!((newhead>>17)&3))
+		return FALSE;
+	if( ((newhead>>12)&0xf) == 0xf)
+		return FALSE;
+	if( ((newhead>>10)&0x3) == 0x3 )
+		return FALSE;
+	return TRUE;
+}
+
+
 int read_frame(struct frame *fr)
 {
   static unsigned long newhead;
@@ -217,46 +245,63 @@ int read_frame(struct frame *fr)
   }
   else
 #endif
-read_again:
-    if(fread(hbuf,1,4,filept) != 4)
-      return 0;
 
-  newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
-            ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
+read_again:
+	if(!head_read(hbuf,&newhead))
+		return FALSE;
 
   if(oldhead != newhead || !oldhead)
   {
     fr->header_change = 1;
-#if 0
-    fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
-#endif
 
 init_resync:
-    if( (newhead & 0xffe00000) != 0xffe00000) {
+
 #ifdef SKIP_JUNK
-		if(!firsthead) {
-			int i;
-			/* I even saw RIFF headers at the beginning of MPEG streams ;( */
-			if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
-				char buf[40];
-				fprintf(stderr,"Skipped RIFF header\n");
-				fread(buf,1,68,filept);
-				goto read_again;
-			}
-			/* give up after 1024 bytes */
-			for(i=0;i<1024;i++) {
-          		memmove (&hbuf[0], &hbuf[1], 3);
+	if(!firsthead && !head_check(newhead) ) {
+		int i;
+
+		fprintf(stderr,"Junk at the beginning\n");
+		/* I even saw RIFF headers at the beginning of MPEG streams ;( */
+
+		if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
+			char buf[40];
+			fprintf(stderr,"Skipped RIFF header\n");
+			fread(buf,1,68,filept);
+			goto read_again;
+		}
+		/* search in 32 bit steps through the first 2K */
+		for(i=0;i<512;i++) {
+			if(!head_read(hbuf,&newhead))
+				return 0;
+			if(head_check(newhead))
+				break;
+		}
+		if(i==512) {
+			/* step in byte steps through next 2K */
+			for(i=0;i<2048;i++) {
+				memmove (&hbuf[0], &hbuf[1], 3);
 				if(fread(hbuf+3,1,1,filept) != 1)
 					return 0;
 				newhead <<= 8;
 				newhead |= hbuf[3];
 				newhead &= 0xffffffff;
-				goto init_resync;
+				if(head_check(newhead))
+					break;
 			}
-			fprintf(stderr,"Giving up searching valid MPEG header\n");
-			return 0;
+			if(i == 2048) {
+				fprintf(stderr,"Giving up searching valid MPEG header\n");
+				return 0;
+			}
 		}
+		/* 
+		 * should we check, whether a new frame starts at the next
+		 * expected position? (some kind of read ahead)
+		 * We could implement this easily, at least for files.
+		 */
+	}
 #endif
+
+    if( (newhead & 0xffe00000) != 0xffe00000) {
       if (!quiet)
         fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
               newhead,ftell(filept)-4);
@@ -440,9 +485,9 @@ void print_header(struct frame *fr)
 {
 	static char *modes[4] = { "Stereo", "Joint-Stereo", "Dual-Channel", "Single-Channel" };
 	static char *layers[4] = { "Unknown" , "I", "II", "III" };
- 
-	fprintf(stderr,"MPEG %s, Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF: %d\n",
-        	fr->mpeg25 ? "2.5" : (fr->lsf ? "2.0" : "1.0"),
+
+	fprintf(stderr,"MPEG %s, Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF : %d\n", 
+		fr->mpeg25 ? "2.5" : (fr->lsf ? "2.0" : "1.0"),
 		layers[fr->lay],freqs[fr->sampling_frequency],
 		modes[fr->mode],fr->mode_ext,fsize+4);
 	fprintf(stderr,"Channels: %d, copyright: %s, original: %s, CRC: %s, emphasis: %d.\n",

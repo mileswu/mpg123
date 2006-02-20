@@ -48,7 +48,277 @@ void audio_info_struct_init(struct audio_info_struct *ai)
 #define BUFSIZE 16384
 #endif
 
-#ifdef VOXWARE
+#ifdef NAS
+#include <stdlib.h>
+#include <audio/audiolib.h>
+#include <audio/soundlib.h>
+
+typedef struct
+{
+    AuServer            *aud;
+    AuFlowID            flow;
+    AuDeviceAttributes  *da;
+    int                 numDevices;
+    char                *buf;
+    int                 buf_size;
+    int                 buf_cnt;
+    AuBool              data_sent;
+    AuBool              finished;
+} InfoRec, *InfoPtr;
+
+#define NAS_SOUND_PORT_DURATION 5 /* seconds */
+#define NAS_SOUND_LOW_WATER_MARK 25 /* percent */
+#define NAS_MAX_FORMAT 10 /* currently, there are 7 supported formats */
+
+static InfoRec info;
+
+static void
+sendData(AuServer *aud, InfoPtr i, AuUint32 numBytes)
+{
+    if (numBytes < i->buf_cnt) {
+        AuWriteElement(aud, i->flow, 0, numBytes, i->buf, AuFalse, NULL);
+        memmove(i->buf, i->buf + numBytes, i->buf_cnt - numBytes);
+        i->buf_cnt = i->buf_cnt - numBytes;
+    }
+    else {
+         AuWriteElement(aud, i->flow, 0, i->buf_cnt, i->buf,
+                        (numBytes > i->buf_cnt), NULL);
+         i->buf_cnt = 0;
+    }
+    i->data_sent = AuTrue;
+}
+
+static AuBool
+eventHandler(AuServer *aud, AuEvent *ev, AuEventHandlerRec *handler)
+{
+    InfoPtr         i = (InfoPtr) handler->data;
+
+    switch (ev->type)
+    {
+        case AuEventTypeMonitorNotify:
+            i->finished = AuTrue;
+            break;
+       case AuEventTypeElementNotify:
+           {
+               AuElementNotifyEvent *event = (AuElementNotifyEvent *) ev;
+
+               switch (event->kind)
+               {
+                   case AuElementNotifyKindLowWater:
+                       sendData(aud, i, event->num_bytes);
+                       break;
+                   case AuElementNotifyKindState:
+                       switch (event->cur_state)
+                       {
+                           case AuStatePause:
+                               if (event->reason != AuReasonUser)
+                                   sendData(aud, i, event->num_bytes);
+                               break;
+                            case AuStateStop:
+                                i->finished = AuTrue;
+                                break;
+                       }
+               }
+           }
+    }
+    return AuTrue;
+}
+
+int audio_open(struct audio_info_struct *ai)
+{
+    AuDeviceID      device = AuNone;
+    AuElement       elements[3];
+    unsigned char   format;
+    int             buf_samples;
+    int i, j, k;
+    int maxRate, minRate;
+    AuBool supportedFormats[NAS_MAX_FORMAT];
+    
+    if(!ai)
+        return -1;
+
+    if (!(info.aud = AuOpenServer(ai->device, 0, NULL, 0, NULL, NULL))) {
+        if (ai->device==NULL)
+            fprintf(stderr,"could not open default NAS server\n");
+        else
+            fprintf(stderr,"could not open NAS server %s\n",
+                    ai->device);
+        exit(1);
+    }
+
+    /* get server info */
+    maxRate =  AuServerMaxSampleRate(info.aud);
+    minRate =  AuServerMinSampleRate(info.aud);
+    for (i=0; i<NAS_MAX_FORMAT; i++)
+        supportedFormats[i]=AuFalse;
+    
+    j = AuServerNumFormats(info.aud);
+    for (i=0; i<j; i++) {
+        k=AuServerFormat(info.aud,i);
+        if ((k>=0) && (k<NAS_MAX_FORMAT))
+            supportedFormats[k] = AuTrue;
+    }
+    
+    /* adjust sample rate */
+    if (ai->rate == -1) ai->rate = maxRate;
+    if (ai->rate > maxRate) {
+        fprintf(stderr,"unable to set audio rate to %ld\n", ai->rate);
+        exit(1);
+    }
+    if (ai->rate < minRate) {
+        fprintf(stderr,"unable to set audio rate to %ld\n", ai->rate);
+        exit(1);
+    }
+    
+    buf_samples = ai->rate * NAS_SOUND_PORT_DURATION;
+    
+    format = AuFormatLinearSigned16LSB;
+    if (!supportedFormats[AuFormatLinearSigned16LSB]) {
+        fprintf(stderr,"LinearUnsigned16LSB not supported\n");
+        exit(1);
+    }
+
+    /* look for an output device */
+    for (i = 0; i < AuServerNumDevices(info.aud); i++)
+       if (((AuDeviceKind(AuServerDevice(info.aud, i)) ==
+              AuComponentKindPhysicalOutput) &&
+             AuDeviceNumTracks(AuServerDevice(info.aud, i))
+             ==  ai->channels )) {
+            device = AuDeviceIdentifier(AuServerDevice(info.aud, i));
+            break;
+       }
+    if (device == AuNone) {
+       fprintf(stderr,
+                "Couldn't find an output device providing %d channels\n",
+                ai->channels);
+        exit(1);
+    }
+
+    if(ai->gain >= 0) {
+        info.da = AuGetDeviceAttributes(info.aud, device, NULL);
+        if ((info.da)!=NULL) {
+            AuDeviceGain(info.da) = AuFixedPointFromSum(ai->gain, 0);
+            AuSetDeviceAttributes(info.aud, AuDeviceIdentifier(info.da),
+                                  AuCompDeviceGainMask, info.da, NULL);
+        }
+        else
+            fprintf(stderr,"audio/gain: setable Volume/PCM-Level not supported");
+    }
+        
+    if (!(info.flow = AuCreateFlow(info.aud, NULL))) {
+        fprintf(stderr, "Couldn't create flow\n");
+        exit(1);
+    }
+
+    AuMakeElementImportClient(&elements[0],        /* element */
+                              (unsigned short) ai->rate,
+                                                   /* rate */
+                              format,              /* format */
+                             ai->channels,        /* channels */
+                             AuTrue,              /* ??? */
+                              (unsigned short) buf_samples,
+                                                   /* max samples */
+                              (unsigned short) (ai->rate *
+                                  NAS_SOUND_LOW_WATER_MARK / 100),
+                                                   /* low water mark */
+                              0,                   /* num actions */
+                              NULL);               /* actions */
+    AuMakeElementExportDevice(&elements[1],        /* element */
+                              0,                   /* input */
+                              device,              /* device */
+                              (unsigned short) ai->rate,
+                                                   /* rate */
+                             AuUnlimitedSamples,  /* num samples */
+                              0,                   /* num actions */
+                              NULL);               /* actions */
+    AuSetElements(info.aud,                        /* Au server */
+                  info.flow,                       /* flow ID */
+                  AuTrue,                          /* clocked */
+                  2,                               /* num elements */
+                  elements,                        /* elements */
+                  NULL);                           /* return status */
+
+    AuRegisterEventHandler(info.aud,               /* Au server */
+                           AuEventHandlerIDMask,   /* value mask */
+                           0,                      /* type */
+                           info.flow,              /* id */
+                          eventHandler,           /* callback */
+                           (AuPointer) &info);     /* data */
+
+    info.buf_size = buf_samples * ai->channels * AuSizeofFormat(format);
+    info.buf = (char *) malloc(info.buf_size);
+    if (info.buf == NULL) {
+        fprintf(stderr, "Unable to allocate input/output buffer of size %d\n",
+             info.buf_size);
+        exit(1);
+    }
+    info.buf_cnt = 0;
+    info.data_sent = AuFalse;
+    info.finished = AuFalse;
+    
+    AuStartFlow(info.aud,                          /* Au server */
+                info.flow,                         /* id */
+                NULL);                             /* status */
+
+    return 0;
+}
+    
+int audio_set_rate(struct audio_info_struct *ai)
+{
+    /* changing the sample rate is not supported */
+    return 0;
+}
+
+int audio_set_channels(struct audio_info_struct *ai)
+{
+    /* changing the channel number is not supported */
+    return 0;
+}
+
+void nas_flush()
+{
+    AuEvent         ev;
+    
+    while ((!info.data_sent) && (!info.finished)) {
+        AuNextEvent(info.aud, AuTrue, &ev);
+        AuDispatchEvent(info.aud, &ev);
+    }
+    info.data_sent = AuFalse;
+}
+
+int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+{
+    int buf_cnt = 0;
+    int len_bytes = len * 2;
+
+    while ((info.buf_cnt + (len_bytes - buf_cnt)) >  info.buf_size) {
+        memcpy(info.buf + info.buf_cnt,
+               ((char *) buf) + buf_cnt,
+               (info.buf_size - info.buf_cnt));
+        buf_cnt += (info.buf_size - info.buf_cnt);
+        info.buf_cnt += (info.buf_size - info.buf_cnt);
+        nas_flush();
+    }
+    memcpy(info.buf + info.buf_cnt,
+           ((char *) buf) + buf_cnt,
+           (len_bytes - buf_cnt));
+    info.buf_cnt += (len_bytes - buf_cnt);
+    
+    return len*2;
+}
+
+int audio_close(struct audio_info_struct *ai)
+{
+    while (!info.finished) {
+        nas_flush();
+    }
+    AuCloseServer(info.aud);
+    free(info.buf);
+    
+    return 0;
+}
+
+#elif defined(VOXWARE)
 #include <sys/ioctl.h>
 #ifdef LINUX
 #include <linux/soundcard.h>

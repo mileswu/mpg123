@@ -629,6 +629,9 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
   }
  
   if(gr_info->block_type == 2) {
+    /*
+     * decoding with short or mixed mode BandIndex table 
+     */
     int i,max[4];
     int step=0,lwin=0,cb=0;
     register real v = 0.0;
@@ -785,6 +788,11 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
       xrpnt += step;
       *xrpnt = 0.0;
       xrpnt += step;
+/* we could add a little opt. here:
+ * if we finished a band for window 3 or a long band
+ * further bands could copied in a simple loop without a
+ * special 'map' decoding
+ */
     }
 
     gr_info->maxband[0] = max[0]+1;
@@ -800,14 +808,22 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
 
   }
   else {
+	/*
+     * decoding with 'long' BandIndex table (block_type != 2)
+     */
     int *pretab = gr_info->preflag ? pretab1 : pretab2;
     int i,max = -1;
     int cb = 0;
     register int *m = map[sfreq][2];
     register real v = 0.0;
     register int mc = 0;
+#if 0
     me = mapend[sfreq][2];
+#endif
 
+	/*
+     * long hash table values
+     */
     for(i=0;i<3;i++) {
       int lp = l[i];
       struct newhuff *h = ht+gr_info->table_select[i];
@@ -872,6 +888,9 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
       }
     }
 
+	/*
+     * short (count1table) values
+     */
     for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
@@ -912,6 +931,10 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
           *xrpnt++ = 0.0;
       }
     }
+
+	/* 
+     * zero part
+     */
     for(i=(&xr[SBLIMIT][SSLIMIT]-xrpnt)>>1;i;i--) {
       *xrpnt++ = 0.0;
       *xrpnt++ = 0.0;
@@ -1148,8 +1171,8 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
     while( m < me ) {
       if(!mc) {
         mc = *m++;
-        xrpnt = ((real *) xr) + *m;
-        xr0pnt = ((real *) xr) + *m++;
+        xrpnt = ((real *) xr[1]) + *m;
+        xr0pnt = ((real *) xr[0]) + *m++;
         if(*m++ == 3)
           step = 1;
         else
@@ -1163,6 +1186,11 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
       *xrpnt = *xr0pnt;
       xrpnt += step;
       xr0pnt += step;
+/* we could add a little opt. here:
+ * if we finished a band for window 3 or a long band
+ * further bands could copied in a simple loop without a
+ * special 'map' decoding
+ */
     }
 
     gr_info->maxband[0] = max[0]+1;
@@ -1182,7 +1210,9 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
     int cb = 0;
     register int mc=0,*m = map[sfreq][2];
     register real v = 0.0;
+#if 0
     me = mapend[sfreq][2];
+#endif
 
     for(i=0;i<3;i++) {
       int lp = l[i];

@@ -20,6 +20,7 @@ nothing-specified:
 	@echo "You must specify the system which you want to compile for:"
 	@echo ""
 	@echo "make linux           Linux"
+	@echo "make linux-nas       Linux, output to Network Audio System"
 	@echo "make freebsd         FreeBSD"
 	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1) using SparcWorks cc"
 	@echo "make solaris-gcc     Solaris 2.x using GNU cc (somewhat slower)"
@@ -53,20 +54,31 @@ linux-profile:
 
 linux:
 	$(MAKE) CC=gcc LDFLAGS= \
-		OBJECTS='decode_i386.o dct64_i386.o getbits.o' \
-		CFLAGS='-DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486 \
+		OBJECTS='decode_i386.o dct64_i386.o getbits.o decode_i586.o' \
+		CFLAGS='-DI386_ASSEM -DREAL_IS_FLOAT -DPENTIUM_OPT -DLINUX -Wall -O2 -m486 \
 			-fomit-frame-pointer -funroll-all-loops \
 			-finline-functions -ffast-math' \
 		mpg123
 
 linux-sajber:
 	$(MAKE) CC=gcc LDFLAGS= \
-		OBJECTS='decode_i386.o dct64_i386.o getbits.o control.o' \
-		CFLAGS='-DFRONTEND -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486\
+		OBJECTS='decode_i386.o dct64_i386.o getbits.o decode_i586.o control.o' \
+		CFLAGS='-DFRONTEND -DI386_ASSEM -DREAL_IS_FLOAT -DPENTIUM_OPT -DLINUX \
+			-Wall -O2 -m486 \
 			-fomit-frame-pointer -funroll-all-loops \
 			-finline-functions -ffast-math' \
 		sajberplay
 
+linux-nas:
+	$(MAKE) CC=gcc LDFLAGS='-L/usr/X11R6/lib' \
+		AUDIO_LIB='-laudio -lXau' \
+		OBJECTS='decode_i386.o dct64_i386.o getbits.o' \
+		CFLAGS='-I/usr/X11R6/include \
+			-DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -DNAS \
+			-Wall -O2 -m486 \
+			-fomit-frame-pointer -funroll-all-loops \
+			-finline-functions -ffast-math' \
+		mpg123
 
 #### the following defines are for experimental use ... 
 #
@@ -141,17 +153,17 @@ generic:
 
 sajberplay: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 		tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
-		getlopt.o httpget.o xfermem.o Makefile
+		getlopt.o httpget.o xfermem.o equalizer.o Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o \
-		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
+		layer2.o layer3.o audio.o buffer.o decode_2to1.o equalizer.o \
 		decode_4to1.o getlopt.o httpget.o xfermem.o $(OBJECTS) \
 		-o sajberplay -lm $(AUDIO_LIB)
 
 mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 		tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
-		getlopt.o httpget.o xfermem.o Makefile
+		getlopt.o httpget.o xfermem.o equalizer.o Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o \
-		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
+		layer2.o layer3.o audio.o buffer.o decode_2to1.o equalizer.o \
 		decode_4to1.o getlopt.o httpget.o xfermem.o $(OBJECTS) \
 		-o mpg123 -lm $(AUDIO_LIB)
 
@@ -187,6 +199,8 @@ httpget.o:	mpg123.h
 dct64.o:	mpg123.h
 dct64_i386.o:	mpg123.h
 xfermem.o:	xfermem.h
+equalizer.o:	mpg123.h
+control.o:	jukebos/controldata.h mpg123.h
 
 clean:
 	rm -f *.o *core *~ mpg123 gmon.out sajberplay

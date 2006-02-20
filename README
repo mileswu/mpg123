@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59k                                * 
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59l                                * 
 *                                                                    *
 * (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                      *
 * Layer-3 realtime only with a 'fast' machine                        *
@@ -18,13 +18,15 @@ written/modfied by:
     (several enhancements, man pages, Makefile, FreeBSD port, License, etc.)
 
 Uses code (or at least ideas) from:
-  MPEG Software Simulation Group (Base package)
-  Tobias Bading (subband synthesis)
-  Jeff Tsay and Mikko Tommila (DCT36)
-  Philipp Knirsch (DCT36/manual unroll)
-  Thomas Woerner (SGI Audio)
-  Damien Clermonte (HP-UX audio fixes)
-  Niclas Lindstrom (OS2 port)
+  MPEG Software Simulation Group: reference decoder package
+  Tobias Bading: idea for DCT64 in subband synthesis from maplay package
+  Jeff Tsay and Mikko Tommila: MDCT36 from maplay package
+  Philipp Knirsch <phil@mpik-tueb.mpg.de>: DCT36/manual unroll idea
+  Thomas Woerner <..> (SGI Audio)
+  Damien Clermonte <..> (HP-UX audio fixes)
+  Niclas Lindstrom <nil@wineasy.se>: OS2 port
+  Stefan Bieschewski <stb@acm.org>: Pentium optimizations, decode_i586.s
+  Martin Denn <mdenn@unix-ag.uni-kl.de>: NAS port
   and more ....
 
 current original distribution site is:
@@ -40,7 +42,7 @@ and you can get the latest release from here:
 
 ------------------------------------------------------------------------
 
-V0.59k plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
+This version plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
 with about 66% CPU load. (on the console, NO X11)
 If your machine isn't fast enough you may try the downsampling
 feature (--2to1 and --4to1 options)
@@ -91,6 +93,17 @@ the channel. Currently, only (very simple) audiosupport for
 Linux,HP7xx,SGI,SunOS/Solaris and FreeBSD systems.
 I have tested the program with a lot of teststreams, but it's very 
 likely, that there are still a few bugs.
+
+NAS notes: (from Martin Denn)
+-----------------------------
+you may wanna play with the following defines: (from audio.c)
+  NAS_SOUND_PORT_DURATION 
+  NAS_SOUND_LOW_WATER_MARK
+Change them to optimize the player for your environment. For slow
+networks a proven config is:
+#define NAS_SOUND_PORT_DURATION 10 /* seconds */
+#define NAS_SOUND_LOW_WATER_MARK 75 /* percent */
+
 
 have fun,
            Mike

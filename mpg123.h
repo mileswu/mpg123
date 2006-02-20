@@ -49,8 +49,10 @@
 #define INLINE
 #endif
 
+#ifndef NAS
 #if defined(LINUX) || defined(__FreeBSD__)
 #define VOXWARE
+#endif
 #endif
 
 #include "audio.h"
@@ -105,6 +107,11 @@ struct frame {
     int copyright;
     int original;
     int emphasis;
+};
+
+struct flags {
+	int equalizer;
+	int aggressive; /* renice to max. priority */
 };
 
 extern int outmode;  
@@ -190,6 +197,7 @@ extern void play_frame(int init,struct frame *fr);
 extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
+extern void do_equalizer(real *bandPtr,int channel);
 extern int synth_1to1 (real *,int,unsigned char *);
 extern int synth_1to1_8bit (real *,int,unsigned char *);
 extern int synth_2to1 (real *,int,unsigned char *);
@@ -197,11 +205,17 @@ extern int synth_2to1_8bit (real *,int,unsigned char *);
 extern int synth_4to1 (real *,int,unsigned char *);
 extern int synth_4to1_8bit (real *,int,unsigned char *);
 extern int synth_1to1_mono (real *,unsigned char *);
+extern int synth_1to1_mono2stereo (real *,unsigned char *);
 extern int synth_1to1_8bit_mono (real *,unsigned char *);
+extern int synth_1to1_8bit_mono2stereo (real *,unsigned char *);
 extern int synth_2to1_mono (real *,unsigned char *);
+extern int synth_2to1_mono2stereo (real *,unsigned char *);
 extern int synth_2to1_8bit_mono (real *,unsigned char *);
+extern int synth_2to1_8bit_mono2stereo (real *,unsigned char *);
 extern int synth_4to1_mono (real *,unsigned char *);
+extern int synth_4to1_mono2stereo (real *,unsigned char *);
 extern int synth_4to1_8bit_mono (real *,unsigned char *);
+extern int synth_4to1_8bit_mono2stereo (real *,unsigned char *);
 extern void rewindNbits(int bits);
 extern int  hsstell(void);
 extern void set_pointer(long);
@@ -223,6 +237,10 @@ extern real muls[27][64];
 extern real decwin[512+32];
 extern real *pnts[5];
 
+extern real equalizer[2][32];
+extern real equalizer_sum[2][32];
+extern int equalizer_cnt;
 
+extern struct flags flags;
 
 

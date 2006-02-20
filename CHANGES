@@ -1,3 +1,12 @@
+0.59l: (MH)
+------
+- simple equalizer support (to be continued)
+- added NAS patch from Martin Denn <mdenn@unix-ag.uni-kl.de>
+- real mono support
+- added pentium optimized decode_i586 from Stefan Bieschewski <stb@acm.org>
+- fixed a bug in MS dequantize function
+
+
 0.59k: (OF)
 ------
 - fixed "Accept" header in httpget.c
