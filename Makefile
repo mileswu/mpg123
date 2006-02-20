@@ -19,41 +19,29 @@ nothing-specified:
 	@echo ""
 	@echo "You must specify the system which you want to compile for:"
 	@echo ""
-	@echo "make linux           Linux, full quality and best performance"
-	@echo "make linux-int       Linux, integer, a bit faster on machines with worse"
-	@echo "                     floating point performance. Slightly reduced quality"
-	@echo "make linux-2to1      Linux, 2:1 down sampling, faster, but noticeably"
-	@echo "                     worse quality"
-	@echo "make linux-4to1      Linux, 4:1 down sampling, faster, but ugly quality"
-	@echo "make freebsd         FreeBSD, full quality and best performance"
-	@echo "make freebsd-int     FreeBSD, integer, a bit faster on machines with worse"
-	@echo "                     floating point performance. Slightly reduced quality"
-	@echo "make freebsd-2to1    FreeBSD, 2:1 down sampling, faster, but noticeably"
-	@echo "                     worse quality"
-	@echo "make freebsd-4to1    FreeBSD, 4:1 down sampling, faster, but ugly qualtiy"
-	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1)"
+	@echo "make linux           Linux"
+#	@echo "make linux-int       Linux, integer, a bit faster on machines with worse"
+#	@echo "                     floating point performance. Slightly reduced quality"
+	@echo "make freebsd         FreeBSD"
+#	@echo "make freebsd-int     FreeBSD, integer, a bit faster on machines with worse"
+#	@echo "                     floating point performance. Slightly reduced quality"
+	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1) using SparcWorks CC"
+	@echo "make solaris-gcc     Solaris 2.x using GNU CC (somewhat slower)"
 	@echo "make sunos           SunOS 4.x (tested: 4.1.4)"
 	@echo "make hpux            HP/UX 7xx"
 	@echo "make sgi             SGI running IRIX"
 	@echo "make dec             DEC Unix (tested: 3.2 and 4.0), OSF/1"
+	@echo "make aix             IBM AIX (tested: 4.1)"
+	@echo "make generic         try this one if your system isn't listed above"
 	@echo ""
-	@echo "Notes:  Use the -int and Xto1 down sampling versions only if the standard"
-	@echo "        version is too slow for your hardware.  In fact, the standard version"
-	@echo "        is faster than -int if you have a Pentium or PPro."
-	@echo "        The FreeBSD version might also work with NetBSD & OpenBSD (untested)."
+	@echo "Please read the file INSTALL for additional information."
 	@echo ""
 
 linux:
 	$(MAKE) OBJECTS='decode_i386.o getbits.o' linux-generic
 
-linux-int:
-	$(MAKE) OBJECTS='decode_int.o getbits.o' linux-generic
-
-linux-2to1:
-	$(MAKE) OBJECTS='decode_2to1.o getbits.o' linux-generic
-
-linux-4to1:
-	$(MAKE) OBJECTS='decode_4to1.o getbits.o' linux-generic
+#linux-int:
+#	$(MAKE) OBJECTS='decode_int.o getbits.o' linux-generic
 
 linux-generic:
 	$(MAKE) CC=gcc LDFLAGS= \
@@ -70,23 +58,22 @@ linux-generic:
 freebsd:
 	$(MAKE) OBJECTS='decode_i386.o getbits_.o' freebsd-generic
 
-freebsd-int:
-	$(MAKE) OBJECTS='decode_int.o getbits_.o' freebsd-generic
-
-freebsd-2to1:
-	$(MAKE) OBJECTS='decode_2to1.o getbits_.o' freebsd-generic
-
-freebsd-4to1:
-	$(MAKE) OBJECTS='decode_4to1.o getbits_.o' freebsd-generic
+#freebsd-int:
+#	$(MAKE) OBJECTS='decode_int.o getbits_.o' freebsd-generic
 
 freebsd-generic:
 	$(MAKE) CC=cc LDFLAGS= \
-		CFLAGS='-Wshadow -O4 -m486 -fomit-frame-pointer \
+		CFLAGS='-Wall -ansi -pedantic -O4 -m486 -fomit-frame-pointer \
 			-funroll-all-loops -ffast-math -DROT_I386 \
 			-DI386_ASSEM -DREAL_IS_FLOAT' \
 		mpg123
 
 solaris:
+	$(MAKE) CC=cc LDFLAGS= OBJECTS=decode.o \
+		CFLAGS='-fast -native -xO5 -DSOLARIS -DREAL_IS_FLOAT' \
+		mpg123
+
+solaris-gcc:
 	$(MAKE) CC=gcc LDFLAGS= OBJECTS=decode.o \
 		CFLAGS='-O2 -Wall -DSOLARIS -DREAL_IS_FLOAT \
 			-funroll-all-loops -finline-functions' \
@@ -94,7 +81,7 @@ solaris:
 
 sunos:
 	$(MAKE) CC=gcc LDFLAGS= OBJECTS=decode.o \
-		CFLAGS='-O2 -Wall -DSUNOS -DREAL_IS_FLOAT -funroll-loops' \
+		CFLAGS='-O2 -DSUNOS -DREAL_IS_FLOAT -funroll-loops' \
 		mpg123
 
 hpux:
@@ -109,21 +96,30 @@ sgi:
 
 dec:
 	$(MAKE) CC=cc LDFLAGS= OBJECTS=decode.o \
-		CFLAGS='-O4' \
+		CFLAGS='-std1 -warnprotos -O4' \
 		mpg123
 
-mpg123: mpg123.o common.o $(OBJECTS) audio.o layer1.o layer2.o layer3.o huffman.o Makefile
-	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o common.o layer1.o layer2.o layer3.o \
-			huffman.o audio.o $(OBJECTS) -o mpg123 -lm $(AUDIO_LIB)
+aix:
+	$(MAKE) LDFLAGS= OBJECTS=decode.o \
+		CFLAGS='-O -DAIX' \
+		mpg123
+
+generic:
+	$(MAKE) LDFLAGS= OBJECTS=decode.o \
+		CFLAGS='-O' \
+		mpg123
+
+mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o Makefile
+	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o layer2.o \
+			layer3.o audio.o buffer.o decode_2to1.o decode_4to1.o $(OBJECTS) \
+			-o mpg123 -lm $(AUDIO_LIB)
 
 tst:
 	gcc $(CFLAGS) -S decode.c
-	gcc $(CFLAGS) -S huffman.c
 
-huffman.o:	mpg123.h huffman.h
 layer1.o:	mpg123.h
 layer2.o:	mpg123.h
-layer3.o:	mpg123.h
+layer3.o:	mpg123.h huffman.h
 decode.o:	mpg123.h
 decode_int.o:	mpg123.h
 decode_2to1.o:	mpg123.h
@@ -132,8 +128,10 @@ decode_i386.o:	mpg123.h
 common.o:	mpg123.h tables.h
 mpg123.o:	mpg123.h
 audio.o:	mpg123.h
+buffer.o:	mpg123.h
 getbits.o:	mpg123.h
-getbits_.o:  mpg123.h
+getbits_.o:	mpg123.h
+tabinit.o: mpg123.h
 
 clean:
 	rm -f *.o *core *~ mpg123

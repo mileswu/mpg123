@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <stdlib.h>
+#include <signal.h>
 #include "mpg123.h"
 #include "tables.h"
 
@@ -97,30 +98,28 @@ void audio_flush(int outmode, struct audio_info_struct *ai)
       case DECODE_AUDIO:
         audio_play_samples (ai, pcm_sample, pcm_point);
         break;
+      case DECODE_BUFFER:
+        write (buffer_fd[1], pcm_sample, pcm_point * 2);
+        break;
     }
     pcm_point = 0;
   }
 }
 
-int simple_resync(unsigned char *hbuf,long oldhead)
+void (*catchsignal(int signum, void(*handler)()))()
 {
-  int i;
-  long newhead,mask = 0xfff00000 | 0x00600000 | 0x0000f000 | 0x00000c00;
+  struct sigaction new_sa;
+  struct sigaction old_sa;
 
-  while(1) {
-    newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
-            ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
-
-    if( (newhead & mask) == (oldhead & mask) )
-      return 1;
-    for(i=0;i<3;i++)
-      hbuf[i] = hbuf[i+1];
-    if(fread(hbuf+3,1,1,filept) != 1)
-      break;
-  }
-  return 0;
+  new_sa.sa_handler = handler;
+  sigemptyset(&new_sa.sa_mask);
+  new_sa.sa_flags = 0;
+  if (sigaction(signum, &new_sa, &old_sa) == -1)
+    return ((void (*)()) -1);
+  return (old_sa.sa_handler);
 }
 
+#define HDRCMPMASK 0xfffffddf
 
 int read_frame(struct frame *fr)
 {
@@ -134,23 +133,23 @@ int read_frame(struct frame *fr)
 */
 
   static unsigned long oldhead=0,newhead;
+  static unsigned long firsthead=0;
  
   unsigned char hbuf[8];
   static int framesize;
   int l;
+  int try = 0;
 
 #ifdef VARMODESUPPORT
   if (varmode) {
     if(fread(hbuf,1,8,filept) != 8)
       return 0;
-    playlimit = ((unsigned int) hbuf[6] << 8) | (unsigned int) hbuf[7];
   }
   else
 #endif
     if(fread(hbuf,1,4,filept) != 4)
       return 0;
 
-try_again:
   newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
             ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
 
@@ -160,38 +159,52 @@ try_again:
     fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
 #endif
 
-
     if( (newhead & 0xfff80000) != 0xfff80000)
     {
-      if((newhead & 0xfff80000) == 0xfff00000) {
+      if((newhead & 0xfff80000) == 0xfff00000)
         fprintf(stderr,"MPEG 2.0 Audio not supported!\n");
-        exit(1);
-      }
-      else if((newhead & 0xfff80000) == 0xffe00000) {
+      else if((newhead & 0xfff80000) == 0xffe00000)
         fprintf(stderr,"MPEG '2.5' Audio not supported!\n");
+      else
+        fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
+                newhead,ftell(filept)-4);
+      if (tryresync && oldhead) {
+            /* Read more bytes until we find something that looks
+               reasonably like a valid header.  This is not a
+               perfect strategy, but it should get us back on the
+               track within a short time (and hopefully without
+               too much distortion in the audio output).  */
+        do {
+          try++;
+          memmove (&hbuf[0], &hbuf[1], 7);
+#ifdef VARMODESUPPORT
+          if (fread(&hbuf[varmode?7:3],1,1,filept) != 1)
+#else
+          if (fread(&hbuf[3],1,1,filept) != 1)
+#endif
+            return 0;
+          newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
+                    ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
+        } while ((newhead & HDRCMPMASK) != (oldhead & HDRCMPMASK)
+              && (newhead & HDRCMPMASK) != (firsthead & HDRCMPMASK));
+        if (!quiet)
+          fprintf (stderr, "Skipped %d bytes in input.\n", try);
+      }
+      else
         exit(1);
-      }
-      else {
-        fprintf(stderr,"Illegal Audio-MPEG-Header,unsupported format or error.\n");
-        if(oldhead != 0) {
-          fprintf(stderr,"Try to resync ... ");
-          if(simple_resync(hbuf,oldhead)) {
-            fprintf(stderr,"OK\n");
-            goto try_again;
-          }
-          fprintf(stderr,"Failed!\n");
-          exit(1);
-        }
-      }
     }
-
-    oldhead = newhead;
+    if (!firsthead)
+      firsthead = newhead;
 
     fr->version = 1;
-    fr->lay = 4-((newhead>>17)&3);
-    fr->error_protection = ((newhead>>16)&0x1)^0x1;
-    fr->bitrate_index = ((newhead>>12)&0xf);
-    fr->sampling_frequency = ((newhead>>10)&0x3);
+    if (!tryresync || !oldhead) {
+          /* If "tryresync" is true, assume that certain
+             parameters do not change within the stream! */
+      fr->lay = 4-((newhead>>17)&3);
+      fr->bitrate_index = ((newhead>>12)&0xf);
+      fr->sampling_frequency = ((newhead>>10)&0x3);
+      fr->error_protection = ((newhead>>16)&0x1)^0x1;
+    }
     fr->padding = ((newhead>>9)&0x1);
     fr->extension = ((newhead>>8)&0x1);
     fr->copyright = ((newhead>>3)&0x1);
@@ -201,6 +214,8 @@ try_again:
     fr->mode_ext = ((newhead>>4)&0x3);
     fr->padding = ((newhead>>9)&0x1);
     fr->stereo = (fr->mode == MPG_MD_MONO) ? 1 : 2;
+
+    oldhead = newhead;
 
     if(!fr->bitrate_index)
     {
@@ -242,6 +257,7 @@ try_again:
           ssize += 2;
 #ifdef VARMODESUPPORT
         if (varmode)
+          playlimit = ((unsigned int) hbuf[6] << 8) | (unsigned int) hbuf[7];
           framesize = ssize + 
                       (((unsigned int) hbuf[4] << 8) | (unsigned int) hbuf[5]);
         else {
@@ -426,20 +442,4 @@ void rewindNbits(int bits)
    }
    tellcnt -= bits;
 }
-
-/*
-static struct ibuf *read_next(void)
-{
-	static unsigned char bufs[2][1024];
-	static struct ibuf ibufs[2];
-	static int num=0;
-
-	ibufs[num].buf = bufs[num];
-	ibufs[num].len = fread(bufs[num],1,1024,filept);
-
-	return &ibufs[num];	
-}
-*/
-
-
 

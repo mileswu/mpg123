@@ -1,8 +1,8 @@
 Layer-1 support not heavily tested .. 
 i-stereo in Level-3 seems to work now, but I have to optimize it.
-l3: exchange the DCT in III_Hybrid by a faster version.
+l3: exchange the DCTs in III_Hybrid by a faster version.
 general optimizations in Level-3 code.
-add a few more audio-systems.
+add a few more audio-systems/machines. (done by Oliver Fromme)
 add CRC check.
 no 'free format stream' support.
 in layer2.c:
@@ -18,11 +18,6 @@ in layer2.c:
 
 - check again layer1 !!
 
-- integrate sign-check into huftables ... at least for hufman_count1 ...
-- Put the huffman decoding into the dequantize part 
-
-- put decode_4to1, decode_2to1 and normal decode together to
-  make it selectable on the command line. Write a special 'single channel'
-  decode.
+- Write a special (optimized) 'single channel' decode.
 
 

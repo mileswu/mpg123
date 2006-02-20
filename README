@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0 _AUDIO_ PLAYER, V0.55                                     * 
+* MPEG 1.0 _AUDIO_ PLAYER, V0.57                                     * 
 * (full?) MPEG 1.0, Layer 1,2 and 3 support                          *
 * Layer-3 realtime only with a 'fast' machine (e.g Sparc10)          *
 * Since 29.3.96 128kbit j-stereo on an amd 5x86-P75 (133Mhz), too ;) *
@@ -27,11 +27,10 @@ Uses code (or at least ideas) from:
 current original distribution site is:
   http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html
 
-V0.55 plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
+V0.57 plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
 with about 73% CPU load.
-If your machine isn't fast enough you may wanna try one of 
-the 'special' versions. (replace the decode.c/decode_i386.c by decoce_2to1.c
-or decode_int.c for this). Both version have a significant lower quality. 
+If your machine isn't fast enough you may try the downsampling
+feature (-2to1 and -4to1 options)
 Playing in 'singlemix' (stero reduced to mono) also saves some
 CPU cycles, though the whole code is optimized for 'full' stereo playing. 
 
@@ -42,18 +41,16 @@ CPU cycles, though the whole code is optimized for 'full' stereo playing.
 (Compiled with: -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486
    -fomit-frame-pointer -funroll-all-loops -finline-functions -ffast-math)
 
-  decode_i386.o: (stero)     73%
-                 (singlemix) 43% (-> should work on 486DX66)
-  decode_int.o:  (stereo)    69%
-                 (singlemix) 41%
-  decode_2to1.o: (stereo)    60%
-                 (singlemix) 36% (-> should work on 486DX50)
+  full quality:     (stero)     72%
+                    (singlemix) 42% (-> should work on 486DX66)
+  2:1 downsampling: (stereo)    59%
+                    (singlemix) 35% (-> should work on 486DX50)
 
 ---------------------------------------------------------------------
 Description:
 
-This isn't a new player. It's mainly based on the mpegaudio (FHG-version)
-package with several additions and optimizations. The DCT algorithm in the
+This isn't a new player. It's a near fully rewritten version based on the
+mpegaudio (FHG-version) package. The DCT algorithm in the
 synthesis filter is a rewritten version of the DCT first seen in the maplay
 package, which was written by Tobias Bading (bading@cs.tu-berlin.de). The 
 rewrite was neccassary, because the GPL may not allow this copyright mix.

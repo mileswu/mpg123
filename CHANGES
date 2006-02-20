@@ -1,3 +1,24 @@
+0.57: (MH)
+-----
+Put the downsampling code together with the full
+  quality decode into one binary. (new options -2to1,-4to1)
+Optimizations in the dct12.
+Removed the 'int' version.
+
+0.56: (OF)
+-----
+Additional command line option "-rs" to try to resync on
+   "broken" MPEG streams.
+Additional command line option "-b" to use audio output buffering.
+   See the manpage for additional information.
+Changed a few variable names and some other minor fixes, so the
+   source compiles more cleanly (without warnings) on most
+   platforms (for example, the FreeBSD port compiles without
+   warnings using "-Wall -ansi -pedantic").
+Makefile changes: moved "solaris" to "solaris-gcc", new target
+   "solaris" (using Sun's SparcWorks cc, faster tha gcc!), new
+   targets "aix" and "generic".
+
 0.55: 
 -----
 removed some obsolete code from layer3.c (MH)
@@ -12,7 +33,7 @@ Changed dequantize to reorder with a mapping table
    (you can disable this by undefining MAP in layer3.c) (MH)
 removed the 'dummy' scale step for mixed mode (MH)
 Changed copy policy (MH)
-
+Modified dequant-reorder-mapping (MH)
 
 0.54: (MH)
 -----
@@ -22,14 +43,6 @@ audio.c: some additions to the SOLARIS audio code
 
 0.53b: (OF)
 ------
-
-Oliver Fromme  <oliver.fromme@heim3.tu-clausthal.de>
-Tue Mar 25 05:13:47 MET 1997
-
-This file describes some of my patches to mpg123 v0.53a.
-Patches whose purpose is obvious and which don't require any
-additional notes are not mentioned here.
-
 Makefile:
 
     Renamed SPARC10 to SUNOS (which is more appropriate).

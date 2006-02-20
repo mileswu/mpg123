@@ -1,0 +1,24 @@
+#!/bin/sh -
+
+#
+# simple conformance tester
+# compares the output of two different versions
+#
+
+BIN1=./mpg123
+BIN2=./mpg123m
+
+FILES=../layer3/he*\ ../layer3/si*\ ../layer3/compl.bit
+
+for i in $FILES; do
+  echo $i
+  echo
+  $BIN1 -s $i > /tmp/o1
+  $BIN2 -s $i > /tmp/o2
+  /usr/bin/cmp -l /tmp/o1 /tmp/o2
+  echo
+done
+
+rm -f /tmp/o1 /tmp/o2
+
+

@@ -286,7 +286,7 @@ static short tab_c1[] =
 
 
 
-struct newhuff ht[] = 
+static struct newhuff ht[] = 
 {
  { /* 0 */ 0 , tab0  } ,
  { /* 2 */ 0 , tab1  } ,
@@ -323,7 +323,7 @@ struct newhuff ht[] =
  { /* 16 */ 13, tab24 }
 };
 
-struct newhuff htc[] = 
+static struct newhuff htc[] = 
 {
  { /* 1 , 1 , */ 0 , tab_c0 } ,
  { /* 1 , 1 , */ 0 , tab_c1 }

@@ -7,6 +7,55 @@
 
 #include "mpg123.h"
 
+static int grp_3tab[32 * 3] = { 0, };   /* used: 27 */
+static int grp_5tab[128 * 3] = { 0, };  /* used: 125 */
+static int grp_9tab[1024 * 3] = { 0, }; /* used: 729 */
+
+real muls[27][64];	/* also used by layer 1 */
+
+void init_layer2(void)
+{
+  static double mulmul[27] = {
+    0.0 , -2.0/3.0 , 2.0/3.0 ,
+    2.0/7.0 , 2.0/15.0 , 2.0/31.0, 2.0/63.0 , 2.0/127.0 , 2.0/255.0 ,
+    2.0/511.0 , 2.0/1023.0 , 2.0/2047.0 , 2.0/4095.0 , 2.0/8191.0 ,
+    2.0/16383.0 , 2.0/32767.0 , 2.0/65535.0 ,
+    -4.0/5.0 , -2.0/5.0 , 2.0/5.0, 4.0/5.0 ,
+    -8.0/9.0 , -4.0/9.0 , -2.0/9.0 , 2.0/9.0 , 4.0/9.0 , 8.0/9.0 };
+  static int base[3][9] = {
+     { 1 , 0, 2 , } ,
+     { 17, 18, 0 , 19, 20 , } ,
+     { 21, 1, 22, 23, 0, 24, 25, 2, 26 } };
+  int i,j,k,l,len;
+  real *table;
+  static int tablen[3] = { 3 , 5 , 9 };
+  static int *itable,*tables[3] = { grp_3tab , grp_5tab , grp_9tab };
+
+  for(i=0;i<3;i++)
+  {
+    itable = tables[i];
+    len = tablen[i];
+    for(j=0;j<len;j++)
+      for(k=0;k<len;k++)
+        for(l=0;l<len;l++)
+        {
+          *itable++ = base[i][l];
+          *itable++ = base[i][k];
+          *itable++ = base[i][j];
+        }
+  }
+
+  for(k=0;k<27;k++)
+  {
+    double m=mulmul[k];
+    table = muls[k];
+    for(j=3,i=0;i<63;i++,j--)
+      *table++ = m * pow(2.0,(double) j / 3.0);
+    *table++ = 0.0;
+  }
+}
+
+
 void II_step_one(unsigned int *bit_alloc,int *scale,struct frame *fr)
 {
     int stereo = fr->stereo-1;
@@ -107,10 +156,10 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
           }        
           else 
           {
-            static unsigned int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
+            static int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
             unsigned int idx,*tab,m=scale[x1];
             idx = (unsigned int) getbits(k);
-            tab = table[d1] + idx + idx + idx;
+            tab = (unsigned int *) (table[d1] + idx + idx + idx);
             fraction[j][0][i] = muls[*tab++][m];
             fraction[j][1][i] = muls[*tab++][m];
             fraction[j][2][i] = muls[*tab][m];  
@@ -141,11 +190,11 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
         }
         else
         {
-          static unsigned int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
+          static int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
           unsigned int idx,*tab,m1,m2;
           m1 = scale[x1]; m2 = scale[x1+3];
           idx = (unsigned int) getbits(k);
-          tab = table[d1] + idx + idx + idx;
+          tab = (unsigned int *) (table[d1] + idx + idx + idx);
           fraction[0][0][i] = muls[*tab][m1]; fraction[1][0][i] = muls[*tab++][m2];
           fraction[0][1][i] = muls[*tab][m1]; fraction[1][1][i] = muls[*tab++][m2];
           fraction[0][2][i] = muls[*tab][m1]; fraction[1][2][i] = muls[*tab][m2];
@@ -194,15 +243,15 @@ int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
     {
       if(single >= 0)
       {
-        int i;
+        int k;
         short *pcm = pcm_sample+pcm_point;
-        clip += SubBandSynthesis (fraction[single][j],0,pcm);
-        for(i=0;i<32;i++,pcm+=2)
+        clip += (fr->synth) (fraction[single][j],0,pcm);
+        for(k=0;k<32;k++,pcm+=2)
           pcm[1] = pcm[0];
       }
       else {
-          clip += SubBandSynthesis (fraction[0][j],0,pcm_sample+pcm_point);
-          clip += SubBandSynthesis (fraction[1][j],1,pcm_sample+pcm_point);
+          clip += (fr->synth) (fraction[0][j],0,pcm_sample+pcm_point);
+          clip += (fr->synth) (fraction[1][j],1,pcm_sample+pcm_point);
       }
       pcm_point += 64;
 

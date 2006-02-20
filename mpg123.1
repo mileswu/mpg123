@@ -1,9 +1,9 @@
-.\" @(#)mpg123.1 0.01 97/03/25 OF; from mpg123 archive
-.TH mpg123 1 "25 Mar 1997"
+.\" @(#)mpg123.1 0.01 97/04/04 OF; from mpg123 archive
+.TH mpg123 1 "4 Apr 1997"
 .SH NAME
-mpg123 \- play audio MPEG\-1 layer\-1, \-2 or \-3 file
+mpg123 \- play audio MPEG 1 file (layers 1, 2 and 3)
 .SH SYNOPSIS
-.B cat
+.B mpg123
 [
 .BR \-t " | " \-s
 ]
@@ -17,10 +17,16 @@ mpg123 \- play audio MPEG\-1 layer\-1, \-2 or \-3 file
 .B \-q
 ]
 [
+.BI \-b " size"
+]
+[
 .BI \-n " num"
 ]
 [
 .BI \-skip " num"
+]
+[
+.B \-rs
 ]
 [
 .BI \-f " factor"
@@ -37,13 +43,15 @@ mpg123 \- play audio MPEG\-1 layer\-1, \-2 or \-3 file
 [
 .BR \-single0 " | " \-single1 " | " \-singlemix
 ]
-.IR file " | "
-\*(lq\*(rq
+[
+.BR \-2to1 " | " \-4to1 
+]
+.IR file " | -"
 .SH DESCRIPTION
 .B mpg123
 reads
 .I file\^
-(or standard input if an empty string \*(lq\*(rq is specified)
+(or standard input if \*(lq-\*(rq is specified)
 and plays it on the audio device.
 .I file\^
 is assumed to be an MPEG-1 audio bit stream.
@@ -54,7 +62,10 @@ Test mode.  The audio stream is decoded, but no output occurs.
 .TP
 .B \-s
 The decoded audio samples are written to standard output,
-instead of playing them through the audio device.
+instead of playing them through the audio device.  This
+option must be used if your audio hardware is not supported
+by
+.BR mpg123 .
 .TP
 .B \-c
 Check for filter range violations and report them when decoding
@@ -66,6 +77,17 @@ Verbose.  Displays the frame numbers during decoding.
 .B \-q
 Quiet.  Suppress diagnostic messages.
 .TP
+.BI \-b " size"
+Use an output buffer of
+.I size
+Kbytes.  This is useful to bypass short periods of heavy
+system activity, which would normally cause the audio output 
+to be interrupted.  
+You should specify a buffer size of at least 1024 
+(i.e. 1 Mb, which equals about 6 seconds of audio data) or more; 
+less than about 500 does not make much sense.  The default is 0, 
+which turns buffering off.
+.TP
 .BI \-n " num"
 Decode only
 .I num
@@ -76,11 +98,21 @@ Skip first
 .I num
 frames.  By default the decoding starts at the first frame.
 .TP
+.B \-rs
+Try to resync and continue decoding if an error occurs in
+the input file.  Also try to recover from certain broken
+headers.  Useful if you have a broken MPEG file, on which
+.B mpg123
+normally gives up saying `Illegal header'.  Be careful:
+Broken locations in MPEG files might cause sharp, loud pops or
+clicks, which might damage your speakers if played too loud.
+.TP
 .BI \-f " factor"
 Change scale factor (default: 32768).
 .TP
 .BI \-r " rate"
-Set sample rate (default: automatic).
+Set sample rate (default: automatic).  You don't want to
+change this.
 .TP
 .BI \-g " gain"
 Set audio hardware output gain (default: don't change).
@@ -103,6 +135,11 @@ stereo MPEG streams only.
 Mix both channels.  This option is available for
 stereo MPEG layer-3 streams only.  It takes less
 CPU time than full stereo decoding.
+.TP
+.B \-4to1 ", " \-2to1
+Performs a down sampling in the ratio 4:1 or 2:1 on the output
+stream. Saves some CPU cycles, but at least the
+4:1 ratio sounds ugly.
 .SH OPERANDS
 The following operand is supported:
 .TP 8
@@ -111,7 +148,7 @@ The path name of the input file.  It must be a valid
 MPEG-1 audio layer-1, -2 or -3 bit stream.
 If
 .I file
-is \*(lq\*(rq (empty string), mp123
+is \*(lq-\*(rq (or an empty string), mp123
 will read from the standard input.  This makes it
 possible to use
 .BR cat (1)
@@ -149,26 +186,53 @@ generated).  If your hardware requires some other
 format, for example 8 bit mono, you also have
 to use a converter such as
 .BR sox (1).
+.P
+If your system is generally fast enough to decode in 
+realtime, but there are sometimes periods of heavy 
+system load (such as cronjobs, users logging in remotely, 
+starting of \*(lqbig\*(rq programs etc.) causing the 
+audio output to be interrupted, then you should use
+the
+.B \-b
+option to use a buffer of at least 1000 Kbytes.
 .SH BUGS
+.TP
+Known bugs and limitations:
+.br
 Only MPEG-1 streams are supported at this time.
+.br
 Free format streams are not supported.
+.br
 Layer-1 support is not heavily tested.
+.br
 No CRC error checking is performed.
+.br
 There is currently no support for audio hardware on
 DEC Digital Unix, therefore the
-.B -s
+.B \-s
 option has to be used on that platform.
+.br
+The
+.B \-b
+option (output buffering) is currently not supported
+on SGI/IRIX (if you are an IRIX audio expert and are 
+willing to help, please contact Oliver Fromme).  If
+you absolutely need that option on IRIX, use it along
+with the 
+.B \-s
+option to decode to stdout and pipe the output in an
+audio player program.
 .SH AUTHORS
 .TP
-Main authors:
+Main author:
 .br
 Michael Hipp <Michael.Hipp@student.uni-tuebingen.de>
-.br
-Philipp Knirsch <email: phil@mpik-tueb.mpg.de>
 .TP
 Uses code (or at least ideas) from:
 .br
 MPEG Software Simulation Group (Base package)
+.br
+Philipp Knirsch <phil@mpik-tueb.mpg.de>
 .br
 Tobias Bading <bading@cs.tu-berlin.de> (subband synthesis)
 .br
@@ -177,7 +241,5 @@ Jeff Tsay <ctsay@pasteur.eecs.berkeley.edu> (DCT36)
 Philipp Knirsch (DCT36/manual unroll)
 .br
 Thomas Woerner (SGI Audio)
-.TP
-Some ports, bug fixes, manual page:
 .br
 Oliver Fromme <oliver.fromme@heim3.tu-clausthal.de>

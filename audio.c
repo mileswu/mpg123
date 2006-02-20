@@ -294,7 +294,6 @@ int audio_close(struct audio_info_struct *ai)
 }
 
 #elif defined(SGI)
-#include <audio.h>
 
 int audio_open(struct audio_info_struct *ai)
 {
@@ -335,7 +334,7 @@ int audio_set_channels(struct audio_info_struct *ai)
 
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 {
-    return ALwritesamps(ai->port, buf, len);
+    return ALwritesamps(ai->port, buf, len)*2;
 }
 
 int audio_close(struct audio_info_struct *ai)
@@ -365,7 +364,7 @@ int audio_set_channels(struct audio_info_struct *ai)
 
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 {
-  return len;
+  return len*2;
 }
 
 int audio_close(struct audio_info_struct *ai)

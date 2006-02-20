@@ -9,6 +9,14 @@
 
 #include        <unistd.h>
 
+#ifdef SGI
+#include <audio.h>
+#endif
+
+#ifdef SUNOS
+#define memmove bcopy
+#endif
+
 #ifdef REAL_IS_FLOAT
 #  define real float
 #elif defined(REAL_IS_LONG_DOUBLE)
@@ -44,7 +52,7 @@
 #define         MPG_MD_MONO             3
 
 enum { AUDIO_OUT_HEADPHONES,AUDIO_OUT_INTERNAL_SPEAKER,AUDIO_OUT_LINE_OUT };
-enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT };
+enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT, DECODE_BUFFER };
 
 struct al_table 
 {
@@ -54,6 +62,7 @@ struct al_table
 
 struct frame {
     struct al_table *alloc;
+    int (*synth)(real *,int,short *);
     int stereo;
     int jsbound;
     int single;
@@ -72,10 +81,18 @@ struct frame {
     int emphasis;
 };
 
+#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(VOXWARE)
+#define AUDIO_USES_FD
+#endif
+
 struct audio_info_struct
 {
-#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(VOXWARE)
+#ifdef AUDIO_USES_FD
   int fn; /* filenumber */
+#endif
+#ifdef SGI
+  ALconfig config;
+  ALport port;
 #endif
   long rate;
   int gain;
@@ -84,11 +101,19 @@ struct audio_info_struct
   int channels;
 };
 
+extern int outmode;  
+extern int tryresync;
+extern int quiet;
+extern int usebuffer;
+extern int buffer_fd[2];
+
 extern int audio_play_samples(struct audio_info_struct *,short *,int);
+extern void buffer_loop(struct audio_info_struct *ai);
 
 /* The following functions are in the file "common.c" */
 
 extern void audio_flush(int, struct audio_info_struct *);
+extern void (*catchsignal(int signum, void(*handler)()))();
 extern unsigned int   get1bit(void);
 extern unsigned int   getbits(int);
 extern unsigned int   getbits_fast(int);
@@ -137,14 +162,19 @@ extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
 extern void print_header(struct frame *);
 extern void set_pointer(long);
-extern int SubBandSynthesis (real *,int,short *);
+extern int synth_1to1 (real *,int,short *);
+extern int synth_2to1 (real *,int,short *);
+extern int synth_4to1 (real *,int,short *);
 extern void rewindNbits(int bits);
 extern int  hsstell(void);
 extern void set_pointer(long);
 extern void huffman_decoder(int ,int *);
 extern void huffman_count1(int,int *);
 
+extern void init_layer3(void);
+extern void init_layer2(void);
 extern void make_decode_tables(long scale);
+
 extern int audio_open(struct audio_info_struct *);
 extern int audio_set_rate(struct audio_info_struct *);
 extern int audio_set_channels(struct audio_info_struct *);
@@ -153,10 +183,9 @@ extern int audio_close(struct audio_info_struct *);
 
 extern long freqs[4];
 extern real muls[27][64];
-extern real muls[27][64];
-extern int grp_3tab[32 * 3]; /* filled to 27 */
-extern int grp_5tab[128 * 3]; /* filled to 125 */
-extern int grp_9tab[1024 * 3]; /* filled to 729 */
+extern real decwin[512+32];
+extern real *pnts[5];
+
 
 
 
