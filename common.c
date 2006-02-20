@@ -1,6 +1,5 @@
 #include <ctype.h>
 #include <stdlib.h>
-#include <signal.h>
 #include "mpg123.h"
 #include "tables.h"
 
@@ -137,7 +136,7 @@ static unsigned long firsthead=0;
 void read_frame_init (void)
 {
     oldhead = 0;
-	firsthead = 0;
+    firsthead = 0;
 }
 
 #define HDRCMPMASK 0xfffffd00
@@ -441,10 +440,9 @@ void print_header(struct frame *fr)
 {
 	static char *modes[4] = { "Stereo", "Joint-Stereo", "Dual-Channel", "Single-Channel" };
 	static char *layers[4] = { "Unknown" , "I", "II", "III" };
-    static char *mpeg_type[4] = { "MPEG 1.0" , "MPEG 2.0" , "MPEG 2.5" , "MPEG 2.5"  };
  
-	fprintf(stderr,"%s, Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF: %d\n",
-        mpeg_type[2*fr->mpeg25+fr->lsf],
+	fprintf(stderr,"MPEG %s, Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF: %d\n",
+        	fr->mpeg25 ? "2.5" : (fr->lsf ? "2.0" : "1.0"),
 		layers[fr->lay],freqs[fr->sampling_frequency],
 		modes[fr->mode],fr->mode_ext,fsize+4);
 	fprintf(stderr,"Channels: %d, copyright: %s, original: %s, CRC: %s, emphasis: %d.\n",
@@ -453,6 +451,79 @@ void print_header(struct frame *fr)
 		fr->emphasis);
 	fprintf(stderr,"Bitrate: %d Kbits/s, Extension value: %d\n",
 		tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index],fr->extension);
+}
+
+void print_header_compact(struct frame *fr)
+{
+	static char *modes[4] = { "stereo", "joint-stereo", "dual-channel", "mono" };
+	static char *layers[4] = { "Unknown" , "I", "II", "III" };
+ 
+	fprintf(stderr,"MPEG %s layer %s, %d kbit/s, %ld Hz %s\n",
+		fr->mpeg25 ? "2.5" : (fr->lsf ? "2.0" : "1.0"),
+		layers[fr->lay],
+		tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index],
+		freqs[fr->sampling_frequency], modes[fr->mode]);
+}
+
+/*
+ *   Allocate space for a new string containing the first
+ *   "num" characters of "src".  The resulting string is
+ *   always zero-terminated.  Returns NULL if malloc fails.
+ */
+
+char *strndup (const char *src, int num)
+{
+	char *dst;
+
+	if (!(dst = (char *) malloc(num+1)))
+		return (NULL);
+	dst[num] = '\0';
+	return (strncpy(dst, src, num));
+}
+
+/*
+ *   Split "path" into directory and filename components.
+ *
+ *   Return value is 0 if no directory was specified (i.e.
+ *   "path" does not contain a '/'), OR if the directory
+ *   is the same as on the previous call to this function.
+ *
+ *   Return value is 1 if a directory was specified AND it
+ *   is different from the previous one (if any).
+ */
+
+int split_dir_file (const char *path, char **dname, char **fname)
+{
+	static char *lastdir = NULL;
+	char *slashpos;
+
+	if ((slashpos = strrchr(path, '/'))) {
+		*fname = slashpos + 1;
+		*dname = strndup(path, 1 + slashpos - path);
+		if (lastdir && !strcmp(lastdir, *dname)) {
+			/***   same as previous directory   ***/
+			free (*dname);
+			*dname = lastdir;
+			return 0;
+		}
+		else {
+			/***   different directory   ***/
+			if (lastdir)
+				free (lastdir);
+			lastdir = *dname;
+			return 1;
+		}
+	}
+	else {
+		/***   no directory specified   ***/
+		if (lastdir) {
+			free (lastdir);
+			lastdir = NULL;
+		};
+		*dname = NULL;
+		*fname = (char *)path;
+		return 0;
+	}
 }
 
 /* open the device to read the bit stream from it */

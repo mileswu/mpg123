@@ -7,24 +7,25 @@ getbits:
 	ret
 
 .L1:
-	movl    wordpointer,%ecx
-	movl    -2(%ecx),%eax
-	movw    1(%ecx),%ax
-	xchg    %ah,%al
-	movl    bitindex,%ecx
-	shll    $8,%eax
-	shll    %cl,%eax
-	movl    4(%esp),%ecx
-	addl    %ecx,bitindex
-	negl    %ecx
-	addl    $32,%ecx
-	shrl    %cl,%eax
-	movl    bitindex,%ecx
-	sarl    $3,%ecx
-
-	addl    %ecx,wordpointer
-	andl    $7,bitindex
+	movl	wordpointer,%ecx
+	movzbl	(%ecx),%eax
+	shll	$16,%eax
+	movb	1(%ecx),%ah
+	movb	2(%ecx),%al
+	movl	bitindex,%ecx
+	shll	$8,%eax
+	shll	%cl,%eax
+	movl 	4(%esp),%ecx
+	addl	%ecx,bitindex
+	negl	%ecx
+	addl	$32,%ecx
+	shrl	%cl,%eax
+	movl	bitindex,%ecx
+	sarl	$3,%ecx
+	addl	%ecx,wordpointer
+	andl	$7,bitindex
 	ret
+
 
 
 .globl	getbits_fast
@@ -45,6 +46,7 @@ getbits_fast:
 	addl	%ecx,wordpointer
 	andl	$7,bitindex
 	ret
+
 
 
 .globl	get1bit

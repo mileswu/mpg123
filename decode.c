@@ -66,13 +66,13 @@ int synth_1to1_mono(real *bandPtr,unsigned char *samples)
 int synth_1to1(real *bandPtr,int channel,unsigned char *out)
 {
   static real buffs[2][2][0x110];
-  static const int step = 2;
   static int bo = 1;
   short *samples = (short *) out;
 
   real *b0,(*buf)[0x110];
   int clip = 0; 
   int bo1;
+  static const int step = 2;
 
   if(!channel) {
     bo--;

@@ -55,16 +55,6 @@ void readstring (char *string, int maxlen, FILE *f)
 	}
 }
 
-char *strndup (char *src, int num)
-{
-	char *dst;
-
-	if (!(dst = (char *) malloc(num+1)))
-		return (NULL);
-	dst[num] = '\0';
-	return (strncpy(dst, src, num));
-}
-
 char *url2hostport (char *url, char **hname, unsigned long *hip, unsigned int *port)
 {
 	char *cptr;
@@ -107,10 +97,11 @@ char *proxyurl = NULL;
 unsigned long proxyip = 0;
 unsigned int proxyport;
 
+#define ACCEPT_HEAD "Accept: audio/mpeg, audio/x-mpegurl, */*\r\n"
+
 FILE *http_open (char *url)
 {
 	char *purl, *host, *request, *sptr;
-	char agent[50];
 	int linelength;
 	unsigned long myip;
 	unsigned int myport;
@@ -137,7 +128,7 @@ FILE *http_open (char *url)
 			proxyip = INADDR_NONE;
 	}
 	
-	if ((linelength = strlen(url)+175) < 1024)
+	if ((linelength = strlen(url)+200) < 1024)
 		linelength = 1024;
 	if (!(request = malloc(linelength)) || !(purl = malloc(1024))) {
 		fprintf (stderr, "malloc() failed, out of memory.\n");
@@ -164,9 +155,11 @@ FILE *http_open (char *url)
 				free (host);
 			strcat (request, sptr);
 		}
-		sprintf (agent, " HTTP/1.0\r\nUser-Agent: %s/%s\r\nAccept: text/html\r\nAccept: audio/x-mpeg\r\nAccept: audio/x-mpeg3\r\n\r\n" ,
+		sprintf (request + strlen(request),
+			" HTTP/1.0\r\nUser-Agent: %s/%s\r\n",
 			prgName, prgVersion);
-		strcat (request, agent);
+		strcat (request, ACCEPT_HEAD);
+		strcat (request, "\r\n");
 		server.sin_family = AF_INET;
 		server.sin_port = htons(myport);
 		server.sin_addr.s_addr = myip;

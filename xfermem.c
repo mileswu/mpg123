@@ -32,9 +32,9 @@ extern int errno;
 #define MAP_ANON MAP_ANONYMOUS
 #endif
 
-void xfermem_init (txfermem **xf, int bufsize)
+void xfermem_init (txfermem **xf, int bufsize, int msize)
 {
-	int regsize = bufsize + sizeof(txfermem);
+	int regsize = bufsize + msize + sizeof(txfermem);
 
 #ifdef USE_MMAP
 #  ifdef MAP_ANON
@@ -70,24 +70,27 @@ void xfermem_init (txfermem **xf, int bufsize)
 	}
 	if (shmctl(shmemid, IPC_RMID, &shmemds) == -1) {
 		perror ("shmctl()");
+		xfermem_done (*xf);
 		exit (1);
 	}
 #endif
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, (*xf)->fd) < 0) {
 		perror ("socketpair()");
-		munmap ((caddr_t) *xf, regsize);
+		xfermem_done (*xf);
 		exit (1);
 	}
 	(*xf)->freeindex = (*xf)->readindex = 0;
 	(*xf)->wakeme[0] = (*xf)->wakeme[1] = FALSE;
-	(*xf)->data = ((byte *) *xf) + sizeof(txfermem);
+	(*xf)->data = ((byte *) *xf) + sizeof(txfermem) + msize;
+	(*xf)->metadata = ((byte *) *xf) + sizeof(txfermem);
 	(*xf)->size = bufsize;
+	(*xf)->metasize = msize;
 }
 
 void xfermem_done (txfermem *xf)
 {
 #ifdef USE_MMAP
-	munmap ((caddr_t) xf, xf->size + sizeof(txfermem));
+	munmap ((caddr_t) xf, xf->size + xf->metasize + sizeof(txfermem));
 #else
 	if (shmdt((void *) xf) == -1) {
 		perror ("shmdt()");
@@ -108,22 +111,28 @@ void xfermem_init_reader (txfermem *xf)
 
 int xfermem_get_freespace (txfermem *xf)
 {
-	int readindex;
-
-	if ((readindex = xf->readindex) > xf->freeindex)
-		return ((readindex - xf->freeindex) - 1);
+	int freeindex, readindex;
+	
+	if ((freeindex = xf->freeindex) < 0
+			|| (readindex = xf->readindex) < 0)
+		return (0);
+	if (readindex > freeindex)
+		return ((readindex - freeindex) - 1);
 	else
-		return ((xf->size - (xf->freeindex - readindex)) - 1);
+		return ((xf->size - (freeindex - readindex)) - 1);
 }
 
 int xfermem_get_usedspace (txfermem *xf)
 {
-	int freeindex;
+	int freeindex, readindex;
 
-	if ((freeindex = xf->freeindex) >= xf->readindex)
-		return (freeindex - xf->readindex);
+	if ((freeindex = xf->freeindex) < 0
+			|| (readindex = xf->readindex) < 0)
+		return (0);
+	if (freeindex >= readindex)
+		return (freeindex - readindex);
 	else
-		return (xf->size - (xf->readindex - freeindex));
+		return (xf->size - (readindex - freeindex));
 }
 
 int xfermem_write (txfermem *xf, byte *data, int count)
@@ -170,9 +179,9 @@ int xfermem_getcmd (int fd, int block)
 	struct timeval selto = {0, 0};
 	byte cmd;
 
-	FD_ZERO (&selfds);
-	FD_SET (fd, &selfds);
-	for (;;)
+	for (;;) {
+		FD_ZERO (&selfds);
+		FD_SET (fd, &selfds);
 		switch (select(FD_SETSIZE, &selfds, NULL, NULL, block ? NULL : &selto)) {
 			case 0:
 				if (!block)
@@ -201,6 +210,7 @@ int xfermem_getcmd (int fd, int block)
 			default: /* ?!? */
 				return (-6);
 		}
+	}
 }
 
 int xfermem_putcmd (int fd, byte cmd)

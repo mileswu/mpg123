@@ -43,6 +43,6 @@ extern int audio_set_channels(struct audio_info_struct *);
 extern int audio_write_sample(struct audio_info_struct *,short *,int);
 extern int audio_close(struct audio_info_struct *);
 extern void audio_info_struct_init(struct audio_info_struct *);
-
-
-
+#ifdef SOLARIS
+extern void audio_queueflush(struct audio_info_struct *ai);
+#endif

@@ -5,6 +5,7 @@
 
 #include        <stdio.h>
 #include        <string.h>
+#include        <signal.h>
 #include        <math.h>
 
 #include        <unistd.h>
@@ -15,6 +16,10 @@
 
 #define MPG123_REMOTE
 #define SHUFFLESUPPORT
+#ifdef HPUX
+#define random rand
+#define srandom srand
+#endif
 
 #define FRONTEND_SAJBER 1
 #define FRONTEND_TK3PLAY 2
@@ -111,7 +116,9 @@ extern int buffer_fd[2];
 extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
 
-extern void buffer_loop(struct audio_info_struct *ai);
+#ifndef OS2
+extern void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset);
+#endif
 
 /* ------ Declarations from "httpget.c" ------ */
 
@@ -124,9 +131,17 @@ extern FILE *http_open (char *url);
 extern void audio_flush(int, struct audio_info_struct *);
 extern void (*catchsignal(int signum, void(*handler)()))();
 
+extern void print_header(struct frame *);
+extern void print_header_compact(struct frame *);
+
+extern char *strndup(const char *src, int num);
+extern int split_dir_file(const char *path, char **dname, char **fname);
+
 extern unsigned int   get1bit(void);
 extern unsigned int   getbits(int);
 extern unsigned int   getbits_fast(int);
+
+extern void set_pointer(long);
 
 extern unsigned char *pcm_sample;
 extern int pcm_point;
@@ -175,8 +190,6 @@ extern void play_frame(int init,struct frame *fr);
 extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
-extern void print_header(struct frame *);
-extern void set_pointer(long);
 extern int synth_1to1 (real *,int,unsigned char *);
 extern int synth_1to1_8bit (real *,int,unsigned char *);
 extern int synth_2to1 (real *,int,unsigned char *);

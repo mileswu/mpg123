@@ -577,7 +577,8 @@ int audio_set_rate(struct audio_info_struct *ai)
     long params[2] = {AL_OUTPUT_RATE, 44100};
 
     params[1] = ai->rate;
-    ALsetparams(AL_DEFAULT_DEVICE, params, 2);    
+    ALsetparams(AL_DEFAULT_DEVICE, params, 2);
+    return 0;
 }
 
 int audio_set_channels(struct audio_info_struct *ai)
@@ -603,9 +604,10 @@ int audio_get_formats(struct audio_info_struct *ai)
 int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
 {
   if(ai->format == AUDIO_FORMAT_SIGNED_8)
-    return ALwritesamps(ai->port, buf, len);
+    ALwritesamps(ai->port, buf, len);
   else
-    return ALwritesamps(ai->port, buf, len>>1)*2;
+    ALwritesamps(ai->port, buf, len>>1);
+  return len;
 }
 
 int audio_close(struct audio_info_struct *ai)
@@ -614,6 +616,7 @@ int audio_close(struct audio_info_struct *ai)
 	sginap(1);  
     ALcloseport(ai->port);
     ALfreeconfig(ai->config);
+    return 0;
 }
 
 #elif defined(OS2)
@@ -723,7 +726,7 @@ int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
   pl[pos].operand2 = len;
   pl[pos].operand3 = 0;
 
-  return 1;
+  return len;
 }
 
 int audio_close(struct audio_info_struct *ai)

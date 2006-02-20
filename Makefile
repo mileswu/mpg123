@@ -21,14 +21,14 @@ nothing-specified:
 	@echo ""
 	@echo "make linux           Linux"
 	@echo "make freebsd         FreeBSD"
-	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1) using SparcWorks CC"
-	@echo "make solaris-gcc     Solaris 2.x using GNU CC (somewhat slower)"
+	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1) using SparcWorks cc"
+	@echo "make solaris-gcc     Solaris 2.x using GNU cc (somewhat slower)"
 	@echo "make sunos           SunOS 4.x (tested: 4.1.4)"
-	@echo "make hpux            HP/UX 7xx"
+	@echo "make hpux            HP/UX 9/10, /7xx"
 	@echo "make sgi             SGI running IRIX"
 	@echo "make dec             DEC Unix (tested: 3.2 and 4.0), OSF/1"
 	@echo "make ultrix          DEC Ultrix (tested: 4.4)"
-	@echo "make aix             IBM AIX (tested: 4.1)"
+	@echo "make aix             IBM AIX (tested: 4.2)"
 	@echo "make os2             IBM OS/2"
 	@echo "make generic         try this one if your system isn't listed above"
 	@echo ""
@@ -107,7 +107,7 @@ hpux:
 
 sgi:
 	$(MAKE) CC=cc LDFLAGS= OBJECTS='decode.o dct64.o' AUDIO_LIB=-laudio \
-		CFLAGS='-O2 -DSGI -DREAL_IS_FLOAT' \
+		CFLAGS='-O2 -DSGI -DREAL_IS_FLOAT -DUSE_MMAP' \
 		mpg123
 
 dec:
@@ -117,12 +117,12 @@ dec:
 
 ultrix:
 	$(MAKE) CC=cc LDFLAGS= OBJECTS='decode.o dct64.o' \
-		CFLAGS='-std1 -g -O0 -DULTRIX' \
+		CFLAGS='-std1 -O2 -DULTRIX' \
 		mpg123
 
 aix:
 	$(MAKE) LDFLAGS= OBJECTS='decode.o dct64.o' \
-		CFLAGS='-O -DAIX' \
+		CFLAGS='-O -DAIX -DUSE_MMAP' \
 		mpg123
 os2:
 	$(MAKE) CC=gcc LDFLAGS= \
@@ -138,7 +138,6 @@ generic:
 		CFLAGS='-O' \
 		mpg123
 
-	
 
 sajberplay: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 		tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
@@ -212,8 +211,9 @@ install:	prepared-for-install
 
 dist:	clean
 	DISTNAME="`basename \`pwd\``" ; \
+	sed '/prgDate/s_".*"_"'`date +%Y/%m/%d`'"_' version.h > version.new; \
+	mv -f version.new version.h; \
 	cd .. ; \
 	rm -f "$$DISTNAME".tar.gz "$$DISTNAME".tar ; \
 	tar cvf "$$DISTNAME".tar "$$DISTNAME" ; \
 	gzip -9 "$$DISTNAME".tar
-

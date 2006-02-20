@@ -1,3 +1,19 @@
+0.59k: (OF)
+------
+- fixed "Accept" header in httpget.c
+- fixed buffer overflow (causing core dumps) in httpget.c
+- fixed display of song length
+- fixed -b (buffer) problem on SGI / IRIX -- it definitely works now
+- fixed problem when files with different sample rates where played,
+  it now works with -b (buffer), too
+- fixed order of local variables in decode.c to work around a
+  compiler bug in ultrix
+- fixed Makefile for ultrix
+- reverted to old getbits.s (the new one could cause coredumps)
+- more compact MPEG header display in non-verbose mode
+- small fixes in buffer code and elsewhere
+
+
 0.59j: (MH)
 ------
 - added sajber jukebox control interface (it's currently a big hack)
@@ -22,7 +38,6 @@
 
 0.59h: (MH)
 ------
-
 - added '--8bit' option to force 'ULAW 8 BIT' playing
 - pcm buffer type changed to 'unsigned char *' 
 - plays 2:1 and 4:1 with the real frequency (ie 11025/22050 instead
@@ -40,19 +55,23 @@
 - Tried the new imdct from the maplay1.2+ (version 1.81) package. (but 
   it was slightly slower on my system, currently disabled)
 
+
 0.59f: (OF)
 ------
-HP-UX audio fix (provided by Damien Clermonte).
-Buffering (-b option) hopefully fixed.  Please test!
+- HP-UX audio fix (provided by Damien Clermonte)
+- Buffering (-b option) hopefully fixed.  Please test!
+
 
 0.59e:
 ------
-added Audio MPEG 2.0 support (but near untested) (MH)
+- added Audio MPEG 2.0 support (but near untested) (MH)
+
 
 0.59d: (MH)
 ------
-minor modifications to dct64_i386.c
-removed duplicated dependency 'dct64.o' in Makefile
+- minor modifications to dct64_i386.c
+- removed duplicated dependency 'dct64.o' in Makefile
+
 
 0.59c: (OF)
 ------

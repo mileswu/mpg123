@@ -1,13 +1,12 @@
 /* 
- * Mpeg Layer audio decoder V0.59j
- * -------------------------------
+ * Mpeg Layer audio decoder (see version.h for version number)
+ * ------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
  *
  */
 
 #include <stdlib.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/time.h>
@@ -123,13 +122,18 @@ void init_output(void)
 #ifndef OS2
   if (usebuffer) {
     unsigned int bufferbytes;
+    sigset_t newsigset, oldsigset;
+
     if (usebuffer < 32)
-      usebuffer = 32;
+      usebuffer = 32; /* minimum is 32 Kbytes! */
     bufferbytes = (usebuffer * 1024);
     bufferbytes -= bufferbytes % FRAMEBUFUNIT;
-    xfermem_init (&buffermem, bufferbytes);
+    xfermem_init (&buffermem, bufferbytes, sizeof(ai.rate));
     pcm_sample = (unsigned char *) buffermem->data;
     pcm_point = 0;
+    sigemptyset (&newsigset);
+    sigaddset (&newsigset, SIGUSR1);
+    sigprocmask (SIG_BLOCK, &newsigset, &oldsigset);
     catchsignal (SIGCHLD, catch_child);
     switch ((buffer_pid = fork())) {
       case -1: /* error */
@@ -137,10 +141,10 @@ void init_output(void)
         exit(1);
       case 0: /* child */
         xfermem_init_reader (buffermem);
-        buffer_loop (&ai);
+        buffer_loop (&ai, &oldsigset);
         xfermem_done_reader (buffermem);
         xfermem_done (buffermem);
-        exit(0);
+        _exit(0);
       default: /* parent */
         xfermem_init_writer (buffermem);
         outmode = DECODE_BUFFER;
@@ -161,7 +165,7 @@ void init_output(void)
       perror("audio");
       exit(1);
     }
-    audio_set_rate (&ai);
+    /* audio_set_rate (&ai);  should already be done in audio_open() [OF] */
   }
 }
 
@@ -309,11 +313,49 @@ topt opts[] = {
     {'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
     {'@', "list",        GLO_ARG | GLO_CHAR, 0, &listname,   0},
 #ifdef SHUFFLESUPPORT
-		/* 'z' comes from the the german word 'zufall' (eng: random) */
-	{'z', "shuffle",         0,        0, &shuffle,    1},
+	/* 'z' comes from the the german word 'zufall' (eng: random) */
+    {'z', "shuffle",         0,        0, &shuffle,    1},
 #endif
-    {'?', "help",        0,              usage, 0,           0}
+    {'?', "help",        0,              usage, 0,           0},
+    {0, 0, 0, 0, 0, 0}
 };
+
+/*
+ *   Change the playback sample rate.
+ */
+static void reset_audio_samplerate(void)
+{
+	if (usebuffer) {
+		/* wait until the buffer is empty,
+		 * then tell the buffer process to
+		 * change the sample rate.   [OF]
+		 */
+		while (xfermem_get_usedspace(buffermem)	> 0)
+			if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
+				intflag = TRUE;
+				break;
+			}
+		buffermem->freeindex = -1;
+		buffermem->readindex = 0; /* I know what I'm doing! ;-) */
+		buffermem->freeindex = 0;
+		if (intflag)
+			return;
+		memcpy (buffermem->metadata, &ai.rate, sizeof(ai.rate));
+		kill (buffer_pid, SIGUSR1);
+	}
+	else if (outmode == DECODE_AUDIO) {
+		/* audio_reset_parameters(&ai); */
+		/*   close and re-open in order to flush
+		 *   the device's internal buffer before
+		 *   changing the sample rate.   [OF]
+		 */
+		audio_close (&ai);
+		if (audio_open(&ai) < 0) {
+			perror("audio");
+			exit(1);
+		}
+	}
+}
 
 /*
  * play a frame read read_frame();
@@ -330,7 +372,10 @@ void play_frame(int init,struct frame *fr)
 			print_rheader(fr);
 
 		if (!quiet && init)
-			print_header(fr);
+			if (verbose)
+				print_header(fr);
+			else
+				print_header_compact(fr);
 
 		if(force_frequency < 0) {
 			if(ai.rate != freqs[fr->sampling_frequency]>>(fr->down_sample)) {
@@ -343,8 +388,11 @@ void play_frame(int init,struct frame *fr)
 			reset_audio = 1;
 		}
 		init_output();
-		if(reset_audio)
-			audio_reset_parameters(&ai);
+		if(reset_audio) {
+			reset_audio_samplerate();
+			if (intflag)
+				return;
+		}
 	}
 
 	if (fr->error_protection) {
@@ -363,7 +411,7 @@ void play_frame(int init,struct frame *fr)
 		}
 		pcm_sample = (unsigned char *) (buffermem->data + buffermem->freeindex);
 		pcm_point = 0;
-		while (xfermem_get_freespace(buffermem) < FRAMEBUFUNIT)
+		while (xfermem_get_freespace(buffermem) < (FRAMEBUFUNIT << 1))
 			if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
 				intflag = TRUE;
 				break;
@@ -425,51 +473,56 @@ int main(int argc, char *argv[])
     if (loptind >= argc && !listname && !frontend_type)
       usage(NULL);
 
-	if (remote){
-		verbose = 0;        
-		quiet = 1;
-		catchsignal(SIGUSR1, catch_remote);
-		fprintf(stderr,"@R MPG123\n");        
-	}
+    if (remote){
+        verbose = 0;        
+        quiet = 1;
+        catchsignal(SIGUSR1, catch_remote);
+        fprintf(stderr,"@R MPG123\n");        
+    }
 
     if (!quiet)
       print_title();
 
 
-	{
-		int fmts;
-		int i,j;
+    {
+        int fmts;
+        int i,j;
 
-		struct audio_info_struct ai;
+        struct audio_info_struct ai;
 
-		audio_info_struct_init(&ai);
-		audio_open(&ai);
-		fmts = audio_get_formats(&ai);
+        audio_info_struct_init(&ai);
+        if (outmode == DECODE_AUDIO) {
+        	audio_open(&ai);
+        	fmts = audio_get_formats(&ai);
+        }
+        else
+        	fmts = AUDIO_FORMAT_SIGNED_16;
 
         supported_rates = 0;
-		for(i=0;i<3;i++) {
+        for(i=0;i<3;i++) {
           for(j=0;j<3;j++) {
             ai.rate = rates[i][j];
-            audio_rate_best_match(&ai);
+            if (outmode == DECODE_AUDIO)
+              audio_rate_best_match(&ai);
             /* allow about 2% difference */
             if( ((rates[i][j]*98) < (ai.rate*100)) &&
                 ((rates[i][j]*102) > (ai.rate*100)) )
               supported_rates |= 1<<(i*3+j);
-          }	
+          } 
         }
-		
-		audio_close(&ai);
+        
+        if (outmode == DECODE_AUDIO)
+          audio_close(&ai);
 
-		if(!force_8bit && !(fmts & AUDIO_FORMAT_SIGNED_16))
-			force_8bit = 1;
+        if(!force_8bit && !(fmts & AUDIO_FORMAT_SIGNED_16))
+            force_8bit = 1;
 
-		if(force_8bit && !(fmts & AUDIO_FORMAT_ULAW_8)) {
-			fprintf(stderr,"No supported audio format found!\n");
-			exit(1);
-		}
-	}
+        if(force_8bit && !(fmts & AUDIO_FORMAT_ULAW_8)) {
+            fprintf(stderr,"No supported audio format found!\n");
+            exit(1);
+        }
+    }
 
-	
     if(force_8bit) {
 #if 0
       ai.format = AUDIO_FORMAT_UNSIGNED_8;
@@ -526,12 +579,18 @@ int main(int argc, char *argv[])
 	}
 
     while ((fname = get_next_file(argc, argv))) {
+      char *dirname, *filename;
+
       if(!*fname || !strcmp(fname, "-"))
         fname = NULL;
       open_stream(fname,-1);
-      if (!quiet)
-        fprintf(stderr, "\nPlaying MPEG stream from %s ...\n",
-                fname ? fname : "standard input");
+      
+      if (!quiet) {
+        if (split_dir_file(fname ? fname : "standard input",
+                &dirname, &filename))
+           fprintf(stderr, "\nDirectory: %s", dirname);
+        fprintf(stderr, "\nPlaying MPEG stream from %s ...\n", filename);
+      }
 
       gettimeofday (&start_time, NULL);
       read_frame_init();
@@ -559,11 +618,13 @@ int main(int argc, char *argv[])
 
       close_stream();
       if (!quiet) {
-        int sfreq = freqs[fr.sampling_frequency];
-        int secs = (frameNum * ((fr.lay == 1) ? 384 : 1152) + (sfreq / 2))
-                   / sfreq;
+        /* This formula seems to work at least for
+         * MPEG 1.0/2.0 layer 3 streams.
+         */
+        int sfd = freqs[fr.sampling_frequency] * (fr.lsf + 1);
+        int secs = (frameNum * (fr.lay==1 ? 384 : 1152) + sfd / 2) / sfd;
         fprintf(stderr,"[%d:%02d] Decoding of %s finished.\n", secs / 60,
-                secs % 60, fname ? fname : "standard input");
+        	secs % 60, filename);
       }
 
 	if(remote)
@@ -630,7 +691,6 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -0    decode channel 0 (left) only   -1    decode channel 1 (right) only\n");
    fprintf(stderr,"   -m    mix both channels (mono)       -p p  use HTTP proxy p [$HTTP_PROXY]\n");
    fprintf(stderr,"   -@ f  read filenames/URLs from f     -z    shuffle play (with wildcards)\n");
-   fprintf(stderr,"   -@ f  read filenames/URLs from f\n");
    fprintf(stderr,"See the manpage %s(1) for more information.\n", prgName);
    exit(1);
 }

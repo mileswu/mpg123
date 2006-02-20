@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59j                                * 
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59k                                * 
 *                                                                    *
 * (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                      *
 * Layer-3 realtime only with a 'fast' machine                        *
@@ -40,7 +40,7 @@ and you can get the latest release from here:
 
 ------------------------------------------------------------------------
 
-V0.59g plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
+V0.59k plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
 with about 66% CPU load. (on the console, NO X11)
 If your machine isn't fast enough you may try the downsampling
 feature (--2to1 and --4to1 options)
