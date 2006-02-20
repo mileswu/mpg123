@@ -29,6 +29,7 @@ typedef struct {
 	byte *metadata;
 	int size;
 	int metasize;
+	int buf[3];
 } txfermem;
 /*
  *   [W] -- May be written to by the writing process only!
@@ -36,7 +37,7 @@ typedef struct {
  *   All other entries are initialized once.
  */
 
-void xfermem_init (txfermem **xf, int bufsize, int msize);
+void xfermem_init (txfermem **xf, int bufsize, int msize,int skipbuf);
 void xfermem_init_writer (txfermem *xf);
 void xfermem_init_reader (txfermem *xf);
 
@@ -45,6 +46,7 @@ int  xfermem_read  (txfermem *xf, byte *data, int count);
 
 int xfermem_get_freespace (txfermem *xf);
 int xfermem_get_usedspace (txfermem *xf);
+#define XF_CMD_WAKEUP_INFO  0x04
 #define XF_CMD_WAKEUP    0x02
 #define XF_CMD_TERMINATE 0x03
 #define XF_WRITER 0

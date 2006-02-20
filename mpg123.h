@@ -27,6 +27,8 @@
 #define FRONTEND_SAJBER 1
 #define FRONTEND_TK3PLAY 2
 
+#define SKIP_JUNK 1
+
 #ifdef _WIN32	/* Win32 Additions By Tony Million */
 # undef WIN32
 # define WIN32
@@ -35,7 +37,6 @@
 # define M_SQRT2	1.41421356237309504880
 # define REAL_IS_FLOAT
 # define NEW_DCT9
-# define SKIP_JUNK
 
 # define random rand
 # define srandom srand
@@ -101,10 +102,10 @@ struct frame {
     int jsbound;
     int single;
     int II_sblimit;
+    int down_sample_sblimit;
     int lsf;
     int mpeg25;
     int down_sample;
-    int down_sample_orig;
     int header_change;
     int lay;
     int (*do_layer)(struct frame *fr,int,struct audio_info_struct *);
@@ -135,6 +136,11 @@ struct parameter {
 	int force_stereo;
 	int force_8bit;
 	int force_rate;
+	int down_sample;
+	int checkrange;
+	int doublespeed;
+	int halfspeed;
+	int force_reopen;
 };
 
 struct reader {
@@ -146,6 +152,8 @@ struct reader {
   int  (*read_frame_body)(int size);
   int  (*back_frame)(struct frame *fr,int num);
   long (*tell)(void);
+  void (*rewind)(void);
+  long filelen;
 };
 
 extern struct reader *rd,readers[];
@@ -174,7 +182,6 @@ extern void (*catchsignal(int signum, void(*handler)()))();
 extern void print_header(struct frame *);
 extern void print_header_compact(struct frame *);
 
-extern char *strndup(const char *src, int num);
 extern int split_dir_file(const char *path, char **dname, char **fname);
 
 extern unsigned int   get1bit(void);
@@ -270,12 +277,17 @@ extern int  hsstell(void);
 extern void set_pointer(long);
 extern void huffman_decoder(int ,int *);
 extern void huffman_count1(int,int *);
+extern void print_stat(struct frame *fr,int no,long buffsize,
+        struct audio_info_struct *ai);
+extern int get_songlen(struct frame *fr,int no);
 
 extern void init_layer3(int);
 extern void init_layer2(void);
 extern void make_decode_tables(long scale);
 extern void make_conv16to8_table(int);
 extern void dct64(real *,real *,real *);
+
+extern void synth_ntom_set_step(long,long);
 
 extern void control_sajber(struct frame *fr);
 extern void control_tk3play(struct frame *fr);

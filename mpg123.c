@@ -34,17 +34,19 @@ struct parameter param = {
   0 ,     /* second level buffer size */
   TRUE ,  /* resync after stream error */
   0 ,     /* verbose level */
-  0 ,     /* force mono */
+  -1 ,     /* force mono */
   0 ,     /* force stereo */
   0 ,     /* force 8bit */
-  0       /* force rate */
+  0 ,     /* force rate */
+  0 , 	  /* down sample */
+  FALSE , /* checkrange */
+  0 ,	  /* doublespeed */
+  0 ,	  /* halfspeed */
+  0	  /* force_reopen, always (re)opens audio device for next song */
 };
 
 char *listname = NULL;
 long outscale  = 32768;
-int checkrange = FALSE;
-int doublespeed= 0;
-int halfspeed  = 0;
 
 long numframes = -1;
 long startFrame= 0;
@@ -73,8 +75,8 @@ static void catch_interrupt(void)
 
 static char remote_buffer[1024];
 static struct frame fr;
-static struct audio_info_struct ai;
-txfermem *buffermem;
+struct audio_info_struct ai;
+txfermem *buffermem = NULL;
 #define FRAMEBUFUNIT (18 * 64 * 4)
 
 void print_rheader(struct frame *fr);
@@ -139,7 +141,8 @@ void init_output(void)
       param.usebuffer = 32; /* minimum is 32 Kbytes! */
     bufferbytes = (param.usebuffer * 1024);
     bufferbytes -= bufferbytes % FRAMEBUFUNIT;
-    xfermem_init (&buffermem, bufferbytes, sizeof(ai.rate));
+	/* +1024 for NtoM rounding problems */
+    xfermem_init (&buffermem, bufferbytes ,0,1024);
     pcm_sample = (unsigned char *) buffermem->data;
     pcm_point = 0;
     sigemptyset (&newsigset);
@@ -163,7 +166,8 @@ void init_output(void)
   }
   else {
 #endif
-    if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2))) {
+	/* + 1024 for NtoM rate converter */
+    if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2 + 1024))) {
       perror ("malloc()");
       exit (1);
 #if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
@@ -248,7 +252,7 @@ char *find_next_file (int argc, char *argv[])
                 return (line);
             }
             else {
-                if (*listname)
+                if (listname)
                    fclose (listfile);
                 listname = NULL;
                 listfile = NULL;
@@ -324,16 +328,6 @@ char *get_next_file(int argc, char **argv)
     return newfile;
 }
 
-void set_synth (char *arg)
-{
-    if (*arg == '2') {
-        fr.down_sample_orig = fr.down_sample = 1;
-    }
-    else {
-        fr.down_sample_orig = fr.down_sample = 2;
-    }
-}
-
 #ifdef VARMODESUPPORT
 void set_varmode (char *arg)
 {
@@ -362,20 +356,23 @@ void set_verbose (char *arg)
 topt opts[] = {
     {'k', "skip",        GLO_ARG | GLO_NUM,  0, &startFrame, 0},
     {'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &ai.device,  0},
-    {'2', "2to1",        0,          set_synth, 0,           0},
-    {'4', "4to1",        0,          set_synth, 0,           0},
+    {'2', "2to1",        0,                  0, &param.down_sample, 1},
+    {'4', "4to1",        0,                  0, &param.down_sample, 2},
     {'t', "test",        0,                  0, &param.outmode, DECODE_TEST},
     {'s', "stdout",      0,                  0, &param.outmode, DECODE_STDOUT},
-    {'c', "check",       0,                  0, &checkrange, TRUE},
+    {'c', "check",       0,                  0, &param.checkrange, TRUE},
     {'v', "verbose",     0,        set_verbose, 0,           0},
     {'q', "quiet",       0,                  0, &param.quiet,      TRUE},
     {'y', "resync",      0,                  0, &param.tryresync,  FALSE},
-    {'0', "single0",     0,                  0, &fr.single,  0},
-    {0,   "left",        0,                  0, &fr.single,  0},
-    {'1', "single1",     0,                  0, &fr.single,  1},
-    {0,   "right",       0,                  0, &fr.single,  1},
-    {'m', "singlemix",   0,                  0, &fr.single,  3},
-    {0,   "mix",         0,                  0, &fr.single,  3},
+    {'0', "single0",     0,                  0, &param.force_mono, 0},
+    {0,   "left",        0,                  0, &param.force_mono, 0},
+    {'1', "single1",     0,                  0, &param.force_mono, 1},
+    {0,   "right",       0,                  0, &param.force_mono, 1},
+    {'m', "singlemix",   0,                  0, &param.force_mono, 3},
+    {0,   "mix",         0,                  0, &param.force_mono, 3},
+    {0,   "mono",        0,                  0, &param.force_mono, 3},
+    {0,   "stereo",      0,                  0, &param.force_stereo, 1},
+    {0,   "reopen",      0,                  0, &param.force_reopen, 1},
     {'g', "gain",        GLO_ARG | GLO_NUM,  0, &ai.gain,    0},
     {'r', "rate",        GLO_ARG | GLO_NUM,  0, &param.force_rate,  0},
     {0,   "8bit",        0,                  0, &param.force_8bit, 1},
@@ -390,8 +387,8 @@ topt opts[] = {
 #endif
     {'b', "buffer",      GLO_ARG | GLO_NUM,  0, &param.usebuffer,  0},
 	{'R', "remote",      0,                  0, &param.remote,     TRUE},
-    {'d', "doublespeed", GLO_ARG | GLO_NUM,  0, &doublespeed,0},
-    {'h', "halfspeed",   GLO_ARG | GLO_NUM,  0, &halfspeed,  0},
+    {'d', "doublespeed", GLO_ARG | GLO_NUM,  0, &param.doublespeed,0},
+    {'h', "halfspeed",   GLO_ARG | GLO_NUM,  0, &param.halfspeed,  0},
     {'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
     {'@', "list",        GLO_ARG | GLO_CHAR, 0, &listname,   0},
 	/* 'z' comes from the the german word 'zufall' (eng: random) */
@@ -427,7 +424,9 @@ static void reset_audio(void)
 		buffermem->freeindex = 0;
 		if (intflag)
 			return;
-		memcpy (buffermem->metadata, &ai.rate, sizeof(ai.rate));
+		buffermem->buf[0] = ai.rate; 
+		buffermem->buf[1] = ai.channels; 
+		buffermem->buf[2] = ai.format;
 		kill (buffer_pid, SIGUSR1);
 	}
 	else 
@@ -472,35 +471,89 @@ void play_frame(int init,struct frame *fr)
 				print_header_compact(fr);
 		}
 
-		if(fr->header_change > 1) {
+		if(fr->header_change > 1 || init) {
 			old_rate = ai.rate;
 			old_format = ai.format;
 			old_channels = ai.channels;
 
-			newrate = freqs[fr->sampling_frequency]>>(fr->down_sample_orig);
+			newrate = freqs[fr->sampling_frequency]>>(param.down_sample);
 
-			fr->down_sample = fr->down_sample_orig;
+			fr->down_sample = param.down_sample;
 			audio_fit_capabilities(&ai,fr->stereo,newrate);
 
+			/* check, whether the fitter setted our proposed rate */
 			if(ai.rate != newrate) {
 				if(ai.rate == (newrate>>1) )
 					fr->down_sample++;
 				else if(ai.rate == (newrate>>2) )
 					fr->down_sample+=2;
 				else {
-					fprintf(stderr,"Ouch .. flexibel rate not yet supported!\n");
-					exit(1);
+					fr->down_sample = 3;
+					fprintf(stderr,"Warning, flexibel rate not heavily tested!\n");
 				}
+				if(fr->down_sample > 3)
+					fr->down_sample = 3;
+			}
+
+			switch(fr->down_sample) {
+				case 0:
+				case 1:
+				case 2:
+					fr->down_sample_sblimit = SBLIMIT>>(fr->down_sample);
+					break;
+				case 3:
+					{
+						long n = freqs[fr->sampling_frequency];
+                                                long m = ai.rate;
+
+						synth_ntom_set_step(n,m);
+
+						if(n>m) {
+							fr->down_sample_sblimit = SBLIMIT * m;
+							fr->down_sample_sblimit /= n;
+						}
+						else {
+							fr->down_sample_sblimit = SBLIMIT;
+						}
+					}
+					break;
 			}
 
 			init_output();
 			if(ai.rate != old_rate || ai.channels != old_channels ||
-			   ai.format != old_format) {
+			   ai.format != old_format || param.force_reopen) {
+				if(param.force_mono < 0) {
+					if(ai.channels == 1)
+						fr->single = 3;
+					else
+						fr->single = -1;
+				}
+				else
+					fr->single = param.force_mono;
+
+				param.force_stereo &= ~0x2;
+				if(fr->single >= 0 && ai.channels == 2) {
+					param.force_stereo |= 0x2;
+				}
+
 				set_synth_functions(fr);
-				init_layer3(fr->down_sample);
+				init_layer3(fr->down_sample_sblimit);
 				reset_audio();
 				if(param.verbose) {
-					fprintf(stderr,"Audio: %d:1 conversion, rate: %ld, encoding: %s, channels: %d\n",(int)pow(2.0,fr->down_sample),ai.rate,audio_encoding_name(ai.format),ai.channels);
+					if(fr->down_sample == 3) {
+						long n = freqs[fr->sampling_frequency];
+						long m = ai.rate;
+						if(n > m) {
+							fprintf(stderr,"Audio: %2.4f:1 conversion,",(float)n/(float)m);
+						}
+						else {
+							fprintf(stderr,"Audio: 1:%2.4f conversion,",(float)m/(float)n);
+						}
+					}
+					else {
+						fprintf(stderr,"Audio: %d:1 conversion,",(int)pow(2.0,fr->down_sample));
+					}
+ 					fprintf(stderr," rate: %ld, encoding: %s, channels: %d\n",ai.rate,audio_encoding_name(ai.format),ai.channels);
 				}
 			}
 			if (intflag)
@@ -521,7 +574,7 @@ void play_frame(int init,struct frame *fr)
 			buffermem->freeindex =
 				(buffermem->freeindex + pcm_point) % buffermem->size;
 			if (buffermem->wakeme[XF_READER])
-				xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
+				xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP_INFO);
 		}
 		pcm_sample = (unsigned char *) (buffermem->data + buffermem->freeindex);
 		pcm_point = 0;
@@ -535,7 +588,7 @@ void play_frame(int init,struct frame *fr)
 	}
 #endif
 
-	if(clip > 0 && checkrange)
+	if(clip > 0 && param.checkrange)
 		fprintf(stderr,"%d samples clipped\n", clip);
 }
 
@@ -579,14 +632,14 @@ void set_synth_functions(struct frame *fr)
 	if((ai.format & AUDIO_FORMAT_MASK) == AUDIO_FORMAT_8)
 		p8 = 1;
 	fr->synth = funcs[p8][ds];
-	fr->synth_mono = funcs_mono[param.force_mono][p8][ds];
+	fr->synth_mono = funcs_mono[param.force_stereo?0:1][p8][ds];
 
 	if(p8) {
 		make_conv16to8_table(ai.format);
 	}
 }
 
-int main(int argc, char *argv[])
+void main(int argc, char *argv[])
 {
 	int result;
 	unsigned long frameNum = 0;
@@ -611,13 +664,7 @@ int main(int argc, char *argv[])
 	if(!strcmp("mpg123m",argv[0]))
 		frontend_type = FRONTEND_TK3PLAY;
 
-	fr.single = -1; /* both channels */
-	fr.synth = synth_1to1;
-	fr.down_sample_orig = fr.down_sample = 0;
-
 	audio_info_struct_init(&ai);
-	ai.format = AUDIO_FORMAT_SIGNED_16;
-	ai.channels = 2;
 
 	(prgName = strrchr(argv[0], '/')) ? prgName++ : (prgName = argv[0]);
 
@@ -648,33 +695,16 @@ int main(int argc, char *argv[])
 	if (!param.quiet)
 		print_title();
 
-	if(fr.single >= 0)
-		param.force_mono = 1;
-	if(param.force_mono) {
-		if(fr.single < 0)
-			fr.single = 3;
-		ai.channels = 1;
+	if(param.force_mono >= 0) {
+		fr.single = param.force_mono;
 	}
 
+	if(param.force_rate && param.down_sample) {
+		fprintf(stderr,"Down smapling and fixed rate options not allowed together!\n");
+		exit(1);
+	}
 
 	audio_capabilities(&ai);
-
-#if 0
-	if(param.force_8bit) {
-		if(fmts & AUDIO_FORMAT_UNSIGNED_8)
-			ai.format = AUDIO_FORMAT_UNSIGNED_8;
-		else if(fmts & AUDIO_FORMAT_SIGNED_8)
-			ai.format = AUDIO_FORMAT_SIGNED_8;
-		else if(fmts & AUDIO_FORMAT_ULAW_8) 
-			ai.format = AUDIO_FORMAT_ULAW_8;
-		else if(fmts & AUDIO_FORMAT_ALAW_8)
-			ai.format = AUDIO_FORMAT_ALAW_8;
-		else {
-			fprintf(stderr,"No supported audio format found!\n");
-			exit(1);
-		}
-	}
-#endif
 
 	if(param.equalizer) { /* tst */
 		FILE *fe;
@@ -728,6 +758,7 @@ int main(int argc, char *argv[])
 
 	while ((fname = get_next_file(argc, argv))) {
 		char *dirname, *filename;
+		int newFrame;
 
 		if(!*fname || !strcmp(fname, "-"))
 			fname = NULL;
@@ -746,8 +777,9 @@ int main(int argc, char *argv[])
 		read_frame_init();
 
 		init = 1;
+		newFrame = startFrame;
 		for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) {
-			if(frameNum < startFrame || (doublespeed && (frameNum % doublespeed))) {
+			if(frameNum < startFrame || (param.doublespeed && (frameNum % param.doublespeed))) {
 				if(fr.lay == 3)
 					set_pointer(512);
 				continue;
@@ -755,27 +787,38 @@ int main(int argc, char *argv[])
 			numframes--;
 			play_frame(init,&fr);
 			init = 0;
+
 			if(param.verbose) {
-				if (param.verbose > 1 || !(frameNum & 0xf))
-					fprintf(stderr, "\r{%4lu} ",frameNum);
-#if !defined(OS2) && !defined(GENERIC)
-			if (param.verbose > 1 && param.usebuffer)
-				fprintf (stderr, "%7d ", xfermem_get_usedspace(buffermem));
-#endif
+				if (param.verbose > 1 || !(frameNum & 0x7))
+					print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
+				if(param.verbose > 2 && param.usebuffer)
+					fprintf(stderr,"[%08x %08x]",buffermem->readindex,buffermem->freeindex);
+
 			}
 
       }
 
-      rd->close();
-      if (!param.quiet) {
-        /* This formula seems to work at least for
-         * MPEG 1.0/2.0 layer 3 streams.
-         */
-        int sfd = freqs[fr.sampling_frequency] * (fr.lsf + 1);
-        int secs = (frameNum * (fr.lay==1 ? 384 : 1152) + sfd / 2) / sfd;
-        fprintf(stderr,"[%d:%02d] Decoding of %s finished.\n", secs / 60,
-        	secs % 60, filename);
-      }
+	if(param.usebuffer) {
+		int s;
+        	struct timeval wait100 = {0, 100000};
+		while ((s = xfermem_get_usedspace(buffermem))) {
+			if(buffermem->wakeme[XF_READER] == TRUE)
+				break;
+			print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
+                	select(1, NULL, NULL, NULL, &wait100);
+		}
+	}
+
+	if (!param.quiet) {
+		/* 
+		 * This formula seems to work at least for
+		 * MPEG 1.0/2.0 layer 3 streams.
+		 */
+		int secs = get_songlen(&fr,frameNum);
+		fprintf(stderr,"\n[%d:%02d] Decoding of %s finished.\n", secs / 60,
+			secs % 60, filename);
+	}
+	rd->close();
 
 	if(param.remote)
 		fprintf(stderr,"@R MPG123\n");        
@@ -814,12 +857,13 @@ int main(int argc, char *argv[])
 
     if(param.outmode==DECODE_AUDIO)
       audio_close(&ai);
+   
     exit( 0 );
 }
 
 static void print_title(void)
 {
-    fprintf(stderr,"High Performance MPEG 1.0/2.0 Audio Player for Layer 1, 2 and 3.\n");
+    fprintf(stderr,"High Performance MPEG 1.0/2.0/2.5 Audio Player for Layer 1, 2 and 3.\n");
     fprintf(stderr,"Version %s (%s). Written and copyrights by Michael Hipp.\n", prgVersion, prgDate);
     fprintf(stderr,"Uses code from various people. See 'README' for more!\n");
     fprintf(stderr,"THIS SOFTWARE COMES WITH ABSOLUTELY NO WARRANTY! USE AT YOUR OWN RISK!\n");
@@ -835,12 +879,12 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
    fprintf(stderr,"   -c    check range violations         -y    DISABLE resync on errors\n");
    fprintf(stderr,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [32768]\n");
-   fprintf(stderr,"   -r n  override samplerate [auto]     -g n  set audio hardware output gain\n");
-   fprintf(stderr,"   -os   output to built-in speaker     -oh   output to headphones\n");
+   fprintf(stderr,"   -r n  set/force samplerate [auto]    -g n  set audio hardware output gain\n");
+   fprintf(stderr,"   -os,-ol,-oh  output to built-in speaker,line-out connector,headphones\n");
 #ifdef NAS
-   fprintf(stderr,"   -ol   output to line-out connector   -a d  set NAS server\n");
+   fprintf(stderr,"                                        -a d  set NAS server\n");
 #else
-   fprintf(stderr,"   -ol   output to line-out connector   -a d  set audio device\n");
+   fprintf(stderr,"                                        -a d  set audio device\n");
 #endif
    fprintf(stderr,"   -2    downsample 1:2 (22 kHz)        -4    downsample 1:4 (11 kHz)\n");
    fprintf(stderr,"   -d n  play every n'th frame only     -h n  play every frame n times\n");

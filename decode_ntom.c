@@ -23,8 +23,11 @@ static unsigned long ntom_val[2] = { NTOM_MUL>>1,NTOM_MUL>>1 };
 static unsigned long ntom_step = NTOM_MUL;
 
 
-void synth_ntom_set_step(unsigned long n,unsigned long m)
+void synth_ntom_set_step(long m,long n)
 {
+	if(param.verbose > 1)
+		fprintf(stderr,"Init rate converter: %ld->%ld\n",m,n);
+
 	if(n >= 96000 || m >= 96000 || m == 0 || n == 0) {
 		fprintf(stderr,"NtoM converter: illegal rates\n");
 		exit(1);
@@ -124,15 +127,15 @@ int synth_ntom_mono(real *bandPtr,unsigned char *samples,int *pnt)
 int synth_ntom_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
 {
   int i,ret;
-  int pnt1 = 0;
+  int pnt1 = *pnt;
 
-  ret = synth_ntom(bandPtr,0,samples,&pnt1);
+  ret = synth_ntom(bandPtr,0,samples,pnt);
+  samples += pnt1;
   
-  for(i=0;i<(pnt1>>2);i++) {
+  for(i=0;i<((*pnt-pnt1)>>2);i++) {
     ((short *)samples)[1] = ((short *)samples)[0];
     samples+=4;
   }
-  *pnt += pnt1;
 
   return ret;
 }
@@ -148,7 +151,7 @@ int synth_ntom(real *bandPtr,int channel,unsigned char *out,int *pnt)
   real *b0,(*buf)[0x110];
   int clip = 0; 
   int bo1;
-  int ntom = ntom_val[channel];
+  int ntom;
 
   if(param.equalizer)
 	do_equalizer(bandPtr,channel);
@@ -157,11 +160,13 @@ int synth_ntom(real *bandPtr,int channel,unsigned char *out,int *pnt)
     bo--;
     bo &= 0xf;
     buf = buffs[0];
+    ntom = ntom_val[1] = ntom_val[0];
   }
   else {
     samples++;
     out += 2; /* to compute the right *pnt value */
     buf = buffs[1];
+    ntom = ntom_val[1];
   }
 
   if(bo & 0x1) {

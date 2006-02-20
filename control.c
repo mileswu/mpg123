@@ -224,12 +224,6 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 		}
 	}
 }
-
-void control_tk3play(struct frame *fr) 
-{
-
-}
-
 #endif
 
 

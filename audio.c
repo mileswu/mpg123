@@ -160,8 +160,9 @@ void audio_fit_capabilities(struct audio_info_struct *ai,int c,int r)
 		f0 = 2;
 	}
 
-	c--; /* stereo=1, mono=0 */
-	if(param.force_mono)
+	c--; /* stereo=1 ,mono=0 */
+
+	if(param.force_mono >= 0)
 		c = 0;
 	if(param.force_stereo)
 		c = 1;
@@ -177,7 +178,6 @@ void audio_fit_capabilities(struct audio_info_struct *ai,int c,int r)
 			c = 0;
 		else if(c == 0 && !param.force_mono)
 			c = 1;
-
 
 		if(audio_fit_cap_helper(ai,rn,f0,2,c))
 			return;

@@ -34,9 +34,9 @@ extern int errno;
 #define MAP_ANON MAP_ANONYMOUS
 #endif
 
-void xfermem_init (txfermem **xf, int bufsize, int msize)
+void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 {
-	int regsize = bufsize + msize + sizeof(txfermem);
+	int regsize = bufsize + msize + skipbuf + sizeof(txfermem);
 	extern int preload;
 
 #ifdef USE_MMAP
@@ -93,6 +93,8 @@ void xfermem_init (txfermem **xf, int bufsize, int msize)
 
 void xfermem_done (txfermem *xf)
 {
+	if(!xf)
+		return;
 #ifdef USE_MMAP
 	munmap ((caddr_t) xf, xf->size + xf->metasize + sizeof(txfermem));
 #else
@@ -105,17 +107,22 @@ void xfermem_done (txfermem *xf)
 
 void xfermem_init_writer (txfermem *xf)
 {
-	close (xf->fd[XF_READER]);
+	if(xf)
+		close (xf->fd[XF_READER]);
 }
 
 void xfermem_init_reader (txfermem *xf)
 {
-	close (xf->fd[XF_WRITER]);
+	if(xf)
+		close (xf->fd[XF_WRITER]);
 }
 
 int xfermem_get_freespace (txfermem *xf)
 {
 	int freeindex, readindex;
+
+	if(!xf)
+		return 0;
 	
 	if ((freeindex = xf->freeindex) < 0
 			|| (readindex = xf->readindex) < 0)
@@ -130,6 +137,9 @@ int xfermem_get_usedspace (txfermem *xf)
 {
 	int freeindex, readindex;
 
+	if(!xf)
+		return 0;
+
 	if ((freeindex = xf->freeindex) < 0
 			|| (readindex = xf->readindex) < 0)
 		return (0);
@@ -138,47 +148,6 @@ int xfermem_get_usedspace (txfermem *xf)
 	else
 		return (xf->size - (readindex - freeindex));
 }
-
-#if 0
-int xfermem_write (txfermem *xf, byte *data, int count)
-{
-	int nbytes;
-
-	if ((nbytes = xfermem_get_freespace(xf))> count)
-		nbytes = count;
-	if (nbytes) {
-		if (xf->freeindex + nbytes > xf->size) {
-			int first = xf->size - xf->freeindex;
-			memcpy (xf->data + xf->freeindex, data, first);
-			memcpy (xf->data, data + first, nbytes - first);
-		}
-		else
-			memcpy (xf->data + xf->freeindex, data, nbytes);
-		xf->freeindex = (xf->freeindex + nbytes) % xf->size;
-	}
-	return (nbytes);
-}
-
-int xfermem_read (txfermem *xf, byte *data, int count)
-{
-	int nbytes;
-
-	if ((nbytes = xfermem_get_usedspace(xf))> count)
-		nbytes = count;
-
-	if (nbytes) {
-		if (xf->readindex + nbytes > xf->size) {
-			int first = xf->size - xf->readindex;
-			memcpy (data, xf->data + xf->readindex, first);
-			memcpy (data + first, xf->data, nbytes - first);
-		}
-		else
-			memcpy (data, xf->data + xf->readindex, nbytes);
-		xf->readindex = (xf->readindex + nbytes) % xf->size;
-	}
-	return (nbytes);
-}
-#endif
 
 int xfermem_getcmd (int fd, int block)
 {
@@ -264,36 +233,39 @@ extern int errno;
 
 void xfermem_init (txfermem **xf, int bufsize, int msize)
 {
+  return 0;
 }
 void xfermem_done (txfermem *xf)
 {
+  return 0;
 }
 void xfermem_init_writer (txfermem *xf)
 {
+  return 0;
 }
 void xfermem_init_reader (txfermem *xf)
 {
+  return 0;
 }
 int xfermem_get_freespace (txfermem *xf)
 {
+  return 0;
 }
 int xfermem_get_usedspace (txfermem *xf)
 {
-}
-int xfermem_write (txfermem *xf, byte *data, int count)
-{
-}
-int xfermem_read (txfermem *xf, byte *data, int count)
-{
+  return 0;
 }
 int xfermem_getcmd (int fd, int block)
 {
+  return 0;
 }
 int xfermem_putcmd (int fd, byte cmd)
 {
+  return 0;
 }
 int xfermem_block (int readwrite, txfermem *xf)
 {
+  return 0;
 }
 #endif
 

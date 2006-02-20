@@ -107,7 +107,7 @@ static real pow1_1[2][16],pow2_1[2][16],pow1_2[2][16],pow2_2[2][16];
 /* 
  * init tables for layer-3 
  */
-void init_layer3(int down_samp)
+void init_layer3(int down_sample_sblimit)
 {
   int i,j,k,l;
 
@@ -253,13 +253,13 @@ void init_layer3(int down_samp)
   for(j=0;j<9;j++) {
     for(i=0;i<23;i++) {
       longLimit[j][i] = (bandInfo[j].longIdx[i] - 1 + 8) / 18 + 1;
-      if(longLimit[j][i] > (SBLIMIT >> down_samp) )
-        longLimit[j][i] = SBLIMIT >> down_samp;
+      if(longLimit[j][i] > (down_sample_sblimit) )
+        longLimit[j][i] = down_sample_sblimit;
     }
     for(i=0;i<14;i++) {
       shortLimit[j][i] = (bandInfo[j].shortIdx[i] - 1) / 18 + 1;
-      if(shortLimit[j][i] > (SBLIMIT >> down_samp) )
-        shortLimit[j][i] = SBLIMIT >> down_samp;
+      if(shortLimit[j][i] > (down_sample_sblimit) )
+        shortLimit[j][i] = down_sample_sblimit;
     }
   }
 
@@ -591,7 +591,7 @@ static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_ster
     slen >>= 3;
     if(num) {
       for(j=0;j<(int)(pnt[i]);j++)
-        *scf++ = getbits(num);
+        *scf++ = getbits_fast(num);
       numbits += pnt[i] * num;
     }
     else {
@@ -2039,11 +2039,11 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
   int sfreq = fr->sampling_frequency;
   int stereo1,granules;
 
-  if(stereo == 1) {
+  if(stereo == 1) { /* stream is mono */
     stereo1 = 1;
     single = 0;
   }
-  else if(single >= 0)
+  else if(single >= 0) /* stream is stereo, but force to mono */
     stereo1 = 1;
   else
     stereo1 = 2;

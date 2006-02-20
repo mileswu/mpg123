@@ -1,3 +1,25 @@
+0.59o: (MH)
+------
+- fixed Bug with stereo streams on mono audio hardware for OSS
+- fixed a bug with mono output and 1:1 (no) rate conversion
+- again changes in the probe code
+- fix in the buffer code for the case, that audio parameters are changing
+- more changes to the flexibel rate converter, should now work when
+  writing to STDOUT.
+- Added Andy's (<andy@snoogie.demon.co.uk>) float2int speed up proposal 
+  (check WRITE_SAMPLE in decode_i386.c) .. Maybe someone wanna take the 
+  idea and put it into the decode_i586.s part?
+- Added TK3Play support from Brian Foutz <foutz@anise.ee.cornell.edu>
+  (compiles but untested)
+- RIFF Header fix (according to Thomas Niederreiter's
+  <tn@tarantel.rz.fh-muenchen.de> patch)
+- m68k patch from Stefan Gybas <cab@studbox.uni-stuttgart.de> applied
+- minor additional PPC changes applied
+- resync and EOF hang fixed
+- resync and bitrate correction relaxed 
+- Slightly change verbose output; added countdown
+
+
 0.59n: (MH)
 ------
 - fixed shuffle bug
@@ -15,6 +37,7 @@
 - minor bug fix in the control interface for sajber jukebox
 - fixed the ugly 'Ctrl-Z in buffer mode' bug .. YES ;)
 - added buffer preload when underrun occurs (preload = 1/8 buffer size)
+- minor SUN audio clean up
 
 0.59m: (MH)
 ------

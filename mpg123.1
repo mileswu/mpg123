@@ -133,8 +133,11 @@ frames.  By default the complete stream is decoded.
 Change scale factor (default: 32768).
 .TP
 \fB\-r \fIrate\fR, \fB\-\^\-rate \fIrate
-Set sample rate (default: automatic).  You don't want to
-change this.
+Set sample rate (default: automatic).  You may want to
+change this if you need a constant bitrate independed of
+the mpeg stream rate. mpg123 automagically converts the
+rate. You should then combine this with \-\-stereo or \-\-mono.
+
 .TP
 \fB\-g \fIgain\fR, \fB\-\^\-gain \fIgain
 Set audio hardware output gain (default: don't change).
@@ -211,6 +214,18 @@ last one will be recognized).
 .BR \-z ", " \-\^\-shuffle
 Shuffle play.  Randomly shuffles the files specified on the command line
 and in the list file.
+.TP
+.BR \-\-stereo
+Force stereo output
+.TP
+.BR \-\-reopen
+Forces reopen of the audiodevice after ever song
+.TP
+.BR \-\-8bit
+Forces 8bit output
+.TP
+.BR \-Z ", " \-\-random
+Full random play
 .SH OPERANDS
 The following operands are supported:
 .TP 8

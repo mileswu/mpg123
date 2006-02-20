@@ -60,9 +60,12 @@ void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 			 *   the device's internal buffer before
 			 *   changing the sample rate.   [OF]
 			 */
+			xf->readindex = xf->freeindex;
 			if (param.outmode == DECODE_AUDIO) {
 				audio_close (ai);
-				memcpy (&ai->rate, xf->metadata, sizeof(ai->rate));
+				ai->rate = xf->buf[0]; 
+				ai->channels = xf->buf[1]; 
+				ai->format = xf->buf[2];
 				if (audio_open(ai) < 0) {
 					perror("audio");
 					exit(1);
@@ -78,11 +81,17 @@ void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 				preload = outburst;
 		}
 		if(bytes < preload) {
-			if (done)
+			int cmd;
+			if (done) {
 				break;
-			if (xfermem_block(XF_READER, xf) != XF_CMD_WAKEUP)
+			}
+			cmd = xfermem_block(XF_READER, xf);
+			if (cmd == XF_CMD_WAKEUP_INFO)
+				continue;
+			if (cmd != XF_CMD_WAKEUP) {
 				done = TRUE;
-			continue;
+				continue;
+			}
 		}
 		preload = outburst; /* set preload to lower mark */
 		if (bytes > xf->size - xf->readindex)
@@ -99,7 +108,7 @@ void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 		if(bytes < 0) {
 			bytes = 0;
 			if(errno != EINTR) {
-				fprintf(stderr,"Ouch ... error while writing audio data!\n");
+				perror("Ouch ... error while writing audio data: ");
 				done = TRUE;
 			}
 		}

@@ -8,11 +8,19 @@
 #include "mpg123.h"
 
 #ifndef AFMT_S16_NE
-#define AFMT_S16_NE AFMT_S16_LE 
+# ifdef OSS_BIG_ENDIAN
+#  define AFMT_S16_NE AFMT_S16_BE
+# else
+#  define AFMT_S16_NE AFMT_S16_LE
+# endif
 #endif
 
 #ifndef AFMT_U16_NE
-#define AFMT_U16_NE AFMT_U16_LE
+# ifdef OSS_BIG_ENDIAN
+#  define AFMT_U16_NE AFMT_U16_BE
+# else
+#  define AFMT_U16_NE AFMT_U16_LE
+# endif
 #endif
 
 extern int outburst;
@@ -82,11 +90,11 @@ int audio_reset_parameters(struct audio_info_struct *ai)
   ret = audio_set_format(ai);
   ret = audio_set_channels(ai);
   ret = audio_set_rate(ai);
+
   return ret;
 }
 
-#if 0
-int audio_get_parameters(struct audio_info_struct *ai)
+static int audio_get_parameters(struct audio_info_struct *ai)
 {
 	int c=-1;
 	int r=-1;
@@ -105,7 +113,6 @@ int audio_get_parameters(struct audio_info_struct *ai)
 
 	return 0;
 }
-#endif
 
 
 int audio_rate_best_match(struct audio_info_struct *ai)
@@ -255,30 +262,29 @@ fprintf(stderr,"No");
 int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
 {
 #ifdef PPC_ENDIAN
-
 #define BYTE0(n) ((unsigned char)(n) & (0xFF))
 #define BYTE1(n) BYTE0((unsigned int)(n) >> 8)
 #define BYTE2(n) BYTE0((unsigned int)(n) >> 16)
 #define BYTE3(n) BYTE0((unsigned int)(n) >> 24)
-  int newVal;
-  int *intPtr = NULL;
-  int i;
-  unsigned char byte0, byte1, byte2, byte3;
+   {
+     register int i;
+     int swappedInt;
+     int *intPtr;
 
-  intPtr = (int *)buf;
+     intPtr = (int *)buf;
 
-  for (i = 0; i < len / sizeof(int); i++) {
-    byte0 = BYTE0(*intPtr);
-    byte1 = BYTE1(*intPtr);
-    byte2 = BYTE2(*intPtr);
-    byte3 = BYTE3(*intPtr);
+     for (i = 0; i < len / sizeof(int); i++)
+       {
+         swappedInt = (BYTE0(*intPtr) << 24 |
+                       BYTE1(*intPtr) << 16 |
+                       BYTE2(*intPtr) <<  8 |
+                       BYTE3(*intPtr)         );
 
-    newVal = byte0 << 24 | byte1 << 16 | byte2 << 8 | byte3;
-
-    *intPtr = newVal;
-    intPtr++;
-  }
-#endif
+         *intPtr = swappedInt;
+         intPtr++;
+       }
+    }
+#endif /* PPC_ENDIAN */
 
   return write(ai->fn,buf,len);
 }

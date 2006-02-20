@@ -215,8 +215,8 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
 */
     }
 
-    if(sblimit > (SBLIMIT>>fr->down_sample) )
-      sblimit = SBLIMIT>>fr->down_sample;
+    if(sblimit > (fr->down_sample_sblimit) )
+      sblimit = fr->down_sample_sblimit;
 
     for(i=sblimit;i<SBLIMIT;i++)
       for (j=0;j<stereo;j++)
@@ -254,7 +254,7 @@ int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
           clip += (fr->synth) (fraction[1][j],1,pcm_sample,&pcm_point);
       }
 
-      if(pcm_point == audiobufsize)
+      if(pcm_point >= audiobufsize)
         audio_flush(outmode,ai);
     }
   }

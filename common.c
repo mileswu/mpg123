@@ -19,8 +19,6 @@
 /* max = 1728 */
 #define MAXFRAMESIZE 1792
 
-#define SKIP_JUNK 1
-
 int tabsel_123[2][3][16] = {
    { {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,},
      {0,32,48,56, 64, 80, 96,112,128,160,192,224,256,320,384,},
@@ -271,6 +269,11 @@ static long stream_tell(void)
   return lseek(filept,0,SEEK_CUR);
 }
 
+static void stream_rewind(void)
+{
+  lseek(filept,0,SEEK_SET);
+}
+
 
 #ifdef READ_MMAP
 /*********************************************************+
@@ -289,7 +292,8 @@ static int mapped_init(struct reader *rd_struct)
         if((len=lseek(filept,0,SEEK_END)) < 0) {
                 return -1;
         }
-	lseek(filept,-128,SEEK_END);
+	if(lseek(filept,-128,SEEK_END) < 0)
+		return -1;
 	if(read(filept,buf,128) != 128) {
 		return -1;
 	}
@@ -297,7 +301,8 @@ static int mapped_init(struct reader *rd_struct)
 		print_id3_tag(buf);
 		len -= 128;
 	}
-	lseek(filept,0,SEEK_SET);
+	if(lseek(filept,0,SEEK_SET) < 0)
+		return -1;
 	if(len <= 0)
 		return -1;
 
@@ -307,10 +312,17 @@ static int mapped_init(struct reader *rd_struct)
 		return -1;
 
 	mapend = mapbuf + len;
+	
+	if(param.verbose > 1)
+		fprintf(stderr,"Using memory mapped IO for this stream.\n");
 
-fprintf(stderr,"Using memory mapped IO\n");
-
+	rd_struct->filelen = len;
 	return 0;
+}
+
+static void mapped_rewind(void)
+{
+	mappnt = mapbuf;
 }
 
 static void mapped_close(void)
@@ -446,7 +458,8 @@ struct reader readers[] = {
    mapped_skip_bytes,
    mapped_read_frame_body,
    mapped_back_frame,
-   mapped_tell } ,
+   mapped_tell,
+   mapped_rewind } ,
 #endif
  { NULL,
    stream_close,
@@ -455,7 +468,8 @@ struct reader readers[] = {
    stream_skip_bytes,
    stream_read_frame_body,
    stream_back_frame,
-   stream_tell }
+   stream_tell,
+   stream_rewind }
 };
 
 
@@ -491,7 +505,7 @@ int read_frame(struct frame *fr)
 
   fsizeold=fr->framesize;       /* for Layer3 */
 
-  if (halfspeed) {
+  if (param.halfspeed) {
     static int halfphase = 0;
     if (halfphase--) {
       bitindex = 0;
@@ -501,14 +515,14 @@ int read_frame(struct frame *fr)
       return 1;
     }
     else
-      halfphase = halfspeed - 1;
+      halfphase = param.halfspeed - 1;
   }
 
 read_again:
   if(!rd->head_read(hbuf,&newhead))
     return FALSE;
 
-  if(oldhead != newhead || !oldhead)
+  if(1 || oldhead != newhead || !oldhead)
   {
 
 init_resync:
@@ -532,7 +546,14 @@ init_resync:
 
 		/* I even saw RIFF headers at the beginning of MPEG streams ;( */
 		if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
-			rd->skip_bytes(68);
+			if(!rd->head_read(hbuf,&newhead))
+				return 0;
+			while(newhead != ('d'<<24)+('a'<<16)+('t'<<8)+'a') {
+				if(!rd->head_shift(hbuf,&newhead))
+					return 0;
+			}
+			if(!rd->head_read(hbuf,&newhead))
+				return 0;
 			fprintf(stderr,"Skipped RIFF header!\n");
 			goto read_again;
 		}
@@ -587,7 +608,8 @@ init_resync:
                too much distortion in the audio output).  */
         do {
           try++;
-          rd->head_shift(hbuf,&newhead);
+          if(!rd->head_shift(hbuf,&newhead))
+		return 0;
           if (!oldhead)
             goto init_resync;       /* "considered harmful", eh? */
 
@@ -618,7 +640,7 @@ init_resync:
   if(!rd->read_frame_body(fr->framesize))
     return 0;
 
-  if (halfspeed && fr->lay == 3)
+  if (param.halfspeed && fr->lay == 3)
     memcpy (ssave, bsbuf, ssize);
 
   return 1;
@@ -645,7 +667,6 @@ static int decode_header(struct frame *fr,unsigned long newhead)
           /* If "tryresync" is true, assume that certain
              parameters do not change within the stream! */
       fr->lay = 4-((newhead>>17)&3);
-      fr->bitrate_index = ((newhead>>12)&0xf);
       if( ((newhead>>10)&0x3) == 0x3) {
         fprintf(stderr,"Stream error\n");
         exit(1);
@@ -661,6 +682,7 @@ static int decode_header(struct frame *fr,unsigned long newhead)
     if(fr->mpeg25) /* allow Bitrate change for 2.5 ... */
       fr->bitrate_index = ((newhead>>12)&0xf);
 
+    fr->bitrate_index = ((newhead>>12)&0xf);
     fr->padding   = ((newhead>>9)&0x1);
     fr->extension = ((newhead>>8)&0x1);
     fr->mode      = ((newhead>>6)&0x3);
@@ -907,6 +929,7 @@ void open_stream(char *bs_filenam,int fd)
 	}
 
     for(i=0;;i++) {
+      readers[i].filelen = -1;
       if(!readers[i].init) {
         rd = &readers[i];
         break;
@@ -1053,3 +1076,90 @@ void set_pointer(long backstep)
     memcpy(wordpointer,bsbufold+fsizeold-backstep,backstep);
   bitindex = 0; 
 }
+
+/********************************/
+
+static double compute_bpf(struct frame *fr)
+{
+	double bpf;
+
+        switch(fr->lay) {
+                case 1:
+                        bpf = tabsel_123[fr->lsf][0][fr->bitrate_index];
+                        bpf *= 12000.0 * 4.0;
+                        bpf /= freqs[fr->sampling_frequency] <<(fr->lsf);
+                        break;
+                case 2:
+                case 3:
+                        bpf = tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index];                        bpf *= 144000;
+                        bpf /= freqs[fr->sampling_frequency] << (fr->lsf);
+                        break;
+                default:
+                        bpf = 1.0;
+        }
+
+	return bpf;
+}
+
+static double compute_tpf(struct frame *fr)
+{
+	static int bs[4] = { 0,384,1152,1152 };
+	double tpf;
+
+	tpf = (double) bs[fr->lay];
+	tpf /= freqs[fr->sampling_frequency] << (fr->lsf);
+	return tpf;
+}
+
+void print_stat(struct frame *fr,int no,long buffsize,
+	struct audio_info_struct *ai)
+{
+	double bpf,tpf,tim1,tim2;
+	double dt = 0.0;
+	int rno;
+
+	if(!rd || !fr || rd->filelen < 0) 
+		return;
+
+	bpf = compute_bpf(fr);
+	tpf = compute_tpf(fr);
+
+	if(buffsize > 0 && ai && ai->rate > 0 && ai->channels > 0) {
+		dt = (double) buffsize / ai->rate / ai->channels;
+		if( (ai->format & AUDIO_FORMAT_MASK) == AUDIO_FORMAT_16)
+			dt *= 0.5;
+	}
+
+	rno = (int)((double)(rd->filelen-rd->tell())/bpf);
+
+	fprintf(stderr,"\rFrame# %5d [%5d], ",no,rno);
+
+	tim1 = no*tpf-dt;
+	tim2 = rno*tpf+dt;
+
+	tim1 = tim1 < 0 ? 0.0 : tim1;
+	tim2 = tim2 < 0 ? 0.0 : tim2;
+
+	fprintf(stderr,"Time: %3.2f [%3.2f], ",tim1,tim2);
+	if(param.usebuffer)
+		fprintf(stderr,"[%8d] ",buffsize);
+}
+
+int get_songlen(struct frame *fr,int no)
+{
+	double tpf;
+	
+	if(!fr)
+		return 0;
+	
+	if(no < 0) {
+		if(!rd || rd->filelen < 0)
+			return 0;
+		no = (double) rd->filelen / compute_bpf(fr);
+	}
+
+	tpf = compute_tpf(fr);
+	return no*tpf;
+}
+
+
