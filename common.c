@@ -7,7 +7,9 @@
 /* max = 1728 */
 #define MAXFRAMESIZE 1792
 
-static int tabsel_123[2][3][16] = {
+#define SKIP_JUNK 1
+
+int tabsel_123[2][3][16] = {
    { {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,},
      {0,32,48,56, 64, 80, 96,112,128,160,192,224,256,320,384,},
      {0,32,40,48, 56, 64, 80, 96,112,128,160,192,224,256,320,} },
@@ -71,6 +73,7 @@ int playlimit;
 #endif
 
 static FILE *filept;
+static int filept_opened;
 
 static void get_II_stuff(struct frame *fr)
 {
@@ -129,18 +132,66 @@ void (*catchsignal(int signum, void(*handler)()))()
 }
 
 static unsigned long oldhead = 0;
+static unsigned long firsthead=0;
 
 void read_frame_init (void)
 {
     oldhead = 0;
+	firsthead = 0;
 }
 
-#define HDRCMPMASK 0xfffffddf
+#define HDRCMPMASK 0xfffffd00
+#if 0
+#define HDRCMPMASK 0xfffffdft
+#endif
+
+/* 
+ * HACK,HACK,HACK 
+ * step back <num> frames 
+ */
+int back_frame(struct frame *fr,int num)
+{
+	long bytes;
+	unsigned char buf[4];
+	unsigned long newhead;
+
+	if(!firsthead)
+		return 0;
+
+	bytes = (fsize+8)*(num+2);
+
+	if(fseek(filept,-bytes,SEEK_CUR) < 0)
+		return -1;
+
+	if(fread(buf,1,4,filept) != 4)
+		return -1;
+
+	newhead = (buf[0]<<24) + (buf[1]<<16) + (buf[2]<<8) + buf[3];
+	
+	while( (newhead & HDRCMPMASK) != (firsthead & HDRCMPMASK) ) {
+		if(fread(buf,1,1,filept) != 1)
+			return -1;
+		newhead <<= 8;
+		newhead |= buf[0];
+		newhead &= 0xffffffff;
+	}
+
+	if( fseek(filept,-4,SEEK_CUR) < 0)
+		return -1;
+	
+	read_frame(fr);
+	read_frame(fr);
+
+	if(fr->lay == 3) {
+		set_pointer(512);
+	}
+
+	return 0;
+}
 
 int read_frame(struct frame *fr)
 {
   static unsigned long newhead;
-  static unsigned long firsthead=0;
 
   static unsigned char ssave[34];
   unsigned char hbuf[8];
@@ -167,6 +218,7 @@ int read_frame(struct frame *fr)
   }
   else
 #endif
+read_again:
     if(fread(hbuf,1,4,filept) != 4)
       return 0;
 
@@ -182,6 +234,30 @@ int read_frame(struct frame *fr)
 
 init_resync:
     if( (newhead & 0xffe00000) != 0xffe00000) {
+#ifdef SKIP_JUNK
+		if(!firsthead) {
+			int i;
+			/* I even saw RIFF headers at the beginning of MPEG streams ;( */
+			if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
+				char buf[40];
+				fprintf(stderr,"Skipped RIFF header\n");
+				fread(buf,1,68,filept);
+				goto read_again;
+			}
+			/* give up after 1024 bytes */
+			for(i=0;i<1024;i++) {
+          		memmove (&hbuf[0], &hbuf[1], 3);
+				if(fread(hbuf+3,1,1,filept) != 1)
+					return 0;
+				newhead <<= 8;
+				newhead |= hbuf[3];
+				newhead &= 0xffffffff;
+				goto init_resync;
+			}
+			fprintf(stderr,"Giving up searching valid MPEG header\n");
+			return 0;
+		}
+#endif
       if (!quiet)
         fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
               newhead,ftell(filept)-4);
@@ -243,15 +319,15 @@ init_resync:
       fr->error_protection = ((newhead>>16)&0x1)^0x1;
     }
 
-    fr->padding = ((newhead>>9)&0x1);
+    fr->padding   = ((newhead>>9)&0x1);
     fr->extension = ((newhead>>8)&0x1);
+    fr->mode      = ((newhead>>6)&0x3);
+    fr->mode_ext  = ((newhead>>4)&0x3);
     fr->copyright = ((newhead>>3)&0x1);
-    fr->original = ((newhead>>2)&0x1);
-    fr->emphasis = newhead & 0x3;
-    fr->mode = ((newhead>>6)&0x3);
-    fr->mode_ext = ((newhead>>4)&0x3);
-    fr->padding = ((newhead>>9)&0x1);
-    fr->stereo = (fr->mode == MPG_MD_MONO) ? 1 : 2;
+    fr->original  = ((newhead>>2)&0x1);
+    fr->emphasis  = newhead & 0x3;
+
+    fr->stereo    = (fr->mode == MPG_MD_MONO) ? 1 : 2;
 
     oldhead = newhead;
 
@@ -264,6 +340,7 @@ init_resync:
     switch(fr->lay)
     {
       case 1:
+		fr->do_layer = do_layer1;
 #ifdef VARMODESUPPORT
         if (varmode) {
           fprintf(stderr,"Sorry, layer-1 not supported in varmode.\n"); 
@@ -277,6 +354,7 @@ init_resync:
         framesize  = ((framesize+fr->padding)<<2)-4;
         break;
       case 2:
+		fr->do_layer = do_layer2;
 #ifdef VARMODESUPPORT
         if (varmode) {
           fprintf(stderr,"Sorry, layer-2 not supported in varmode.\n"); 
@@ -291,6 +369,7 @@ init_resync:
         framesize += fr->padding - 4;
         break;
       case 3:
+		fr->do_layer = do_layer3;
         if(fr->lsf)
           ssize = (fr->stereo == 1) ? 9 : 17;
         else
@@ -378,10 +457,17 @@ void print_header(struct frame *fr)
 
 /* open the device to read the bit stream from it */
 
-void open_stream(char *bs_filenam)
+void open_stream(char *bs_filenam,int fd)
 {
-    if (!bs_filenam)
-        filept = stdin;
+	filept_opened = 1;
+    if (!bs_filenam) {
+		if(fd < 0) {
+        	filept = stdin;
+			filept_opened = 0;
+		}
+		else
+			filept = fdopen(fd,"r");
+	}
     else if (!strncmp(bs_filenam, "http://", 7)) 
         filept = http_open(bs_filenam);
     else if (!(filept = fopen(bs_filenam, "rb"))) {
@@ -392,10 +478,15 @@ void open_stream(char *bs_filenam)
 
 /*close the device containing the bit stream after a read process*/
 
-void close_stream(char *bs_filenam)
+void close_stream(void)
 {
-    if (bs_filenam)
+    if (filept_opened)
         fclose(filept);
+}
+
+long tell_stream(void)
+{
+	return ftell(filept);
 }
 
 #if !defined(I386_ASSEM) || defined(DEBUG_GETBITS)

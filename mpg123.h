@@ -16,6 +16,10 @@
 #define MPG123_REMOTE
 #define SHUFFLESUPPORT
 
+#define FRONTEND_SAJBER 1
+#define FRONTEND_TK3PLAY 2
+
+
 #ifdef SGI
 #include <audio.h>
 #endif
@@ -85,6 +89,7 @@ struct frame {
     int header_change;
     int block_size;
     int lay;
+	int (*do_layer)(struct frame *fr,int,struct audio_info_struct *);
     int error_protection;
     int bitrate_index;
     int sampling_frequency;
@@ -118,6 +123,7 @@ extern FILE *http_open (char *url);
 
 extern void audio_flush(int, struct audio_info_struct *);
 extern void (*catchsignal(int signum, void(*handler)()))();
+
 extern unsigned int   get1bit(void);
 extern unsigned int   getbits(int);
 extern unsigned int   getbits_fast(int);
@@ -159,10 +165,13 @@ struct III_sideinfo
   } ch[2];
 };
 
-extern void open_stream(char *);
-extern void close_stream(char *);
+extern void open_stream(char *,int fd);
+extern void close_stream(void);
+extern long tell_stream(void);
 extern void read_frame_init (void);
 extern int read_frame(struct frame *fr);
+extern int back_frame(struct frame *fr,int num);
+extern void play_frame(int init,struct frame *fr);
 extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
@@ -191,6 +200,9 @@ extern void init_layer2(void);
 extern void make_decode_tables(long scale);
 extern void make_conv16to8_table(int);
 extern void dct64(real *,real *,real *);
+
+extern void control_sajber(struct frame *fr);
+extern void control_tk3play(struct frame *fr);
 
 extern unsigned char *conv16to8;
 extern long freqs[7];

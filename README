@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59h                                * 
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59j                                * 
 *                                                                    *
 * (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                      *
 * Layer-3 realtime only with a 'fast' machine                        *
@@ -25,6 +25,7 @@ Uses code (or at least ideas) from:
   Thomas Woerner (SGI Audio)
   Damien Clermonte (HP-UX audio fixes)
   Niclas Lindstrom (OS2 port)
+  and more ....
 
 current original distribution site is:
   http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html

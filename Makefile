@@ -43,6 +43,14 @@ linux-devel:
             -finline-functions -ffast-math' \
         mpg123
 
+linux-profile:
+	$(MAKE) OBJECTS='decode_i386.o dct64_i386.o' \
+        CC=gcc LDFLAGS='-pg' \
+        CFLAGS='-DREAL_IS_FLOAT -DLINUX -Wall -pg -m486 \
+            -funroll-all-loops \
+            -finline-functions -ffast-math' \
+        mpg123
+
 linux:
 	$(MAKE) CC=gcc LDFLAGS= \
 		OBJECTS='decode_i386.o dct64_i386.o getbits.o' \
@@ -50,6 +58,15 @@ linux:
 			-fomit-frame-pointer -funroll-all-loops \
 			-finline-functions -ffast-math' \
 		mpg123
+
+linux-sajber:
+	$(MAKE) CC=gcc LDFLAGS= \
+		OBJECTS='decode_i386.o dct64_i386.o getbits.o control.o' \
+		CFLAGS='-DFRONTEND -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486\
+			-fomit-frame-pointer -funroll-all-loops \
+			-finline-functions -ffast-math' \
+		sajberplay
+
 
 #### the following defines are for experimental use ... 
 #
@@ -121,6 +138,16 @@ generic:
 		CFLAGS='-O' \
 		mpg123
 
+	
+
+sajberplay: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
+		tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
+		getlopt.o httpget.o xfermem.o Makefile
+	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o \
+		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
+		decode_4to1.o getlopt.o httpget.o xfermem.o $(OBJECTS) \
+		-o sajberplay -lm $(AUDIO_LIB)
+
 mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 		tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
 		getlopt.o httpget.o xfermem.o Makefile
@@ -131,7 +158,7 @@ mpg123: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 
 mpg123.exe: mpg123.o common.o $(OBJECTS) decode_2to1.o decode_4to1.o \
 	tabinit.o audio.o layer1.o layer2.o layer3.o buffer.o \
-	getlopt.o httpget.o Makefile
+	getlopt.o httpget.o Makefile 
 	$(CC) $(CFLAGS) $(LDFLAGS)  mpg123.o tabinit.o common.o layer1.o \
 		layer2.o layer3.o audio.o buffer.o decode_2to1.o \
 		decode_4to1.o getlopt.o httpget.o $(OBJECTS) \
@@ -142,7 +169,7 @@ tst:
 
 layer1.o:	mpg123.h
 layer2.o:	mpg123.h
-layer3.o:	mpg123.h huffman.h
+layer3.o:	mpg123.h huffman.h get1bit.h
 decode.o:	mpg123.h
 decode_int.o:	mpg123.h
 decode_2to1.o:	mpg123.h
@@ -163,7 +190,7 @@ dct64_i386.o:	mpg123.h
 xfermem.o:	xfermem.h
 
 clean:
-	rm -f *.o *core *~ mpg123 gmon.out
+	rm -f *.o *core *~ mpg123 gmon.out sajberplay
 
 prepared-for-install:
 	@if [ ! -x mpg123 ]; then \

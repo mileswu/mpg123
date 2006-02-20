@@ -47,7 +47,6 @@ getbits_fast:
 	ret
 
 
-
 .globl	get1bit
 	.type    get1bit,@function
 get1bit:

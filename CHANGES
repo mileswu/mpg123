@@ -1,3 +1,10 @@
+0.59j: (MH)
+------
+- added sajber jukebox control interface (it's currently a big hack)
+  (see 'JUKEBOX' file for more)
+- added simple rewind facility .. (only used by sajber interface at the moment)
+
+
 0.59i: (MH)
 -----------
 - added front-end (remote) patch from "Brian J. Swetland" <swetland@uiuc.edu>

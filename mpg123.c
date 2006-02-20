@@ -1,5 +1,5 @@
 /* 
- * Mpeg Layer audio decoder V0.59i
+ * Mpeg Layer audio decoder V0.59j
  * -------------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp, All rights reserved.
  * See also 'README' !
@@ -36,7 +36,7 @@ int outmode = DECODE_AUDIO;
 char *listname = NULL;
 long outscale  = 32768;
 int checkrange = FALSE;
-int tryresync  = FALSE;
+int tryresync  = TRUE;
 int quiet      = FALSE;
 int verbose    = 0;
 int doublespeed= 0;
@@ -48,9 +48,8 @@ int force_frequency = -1;
 long numframes = -1;
 long startFrame= 0;
 int usebuffer  = 0;
-#ifdef MPG123_REMOTE
+int frontend_type = 0;
 int remote     = 0;
-#endif
 int buffer_fd[2];
 int buffer_pid;
 
@@ -60,50 +59,59 @@ static void catch_child(void)
 }
 
 static int intflag = FALSE;
-#ifdef MPG123_REMOTE
 static int remflag = FALSE;
-#endif
 
 static void catch_interrupt(void)
 {
   intflag = TRUE;
 }
 
-#ifdef MPG123_REMOTE
-static void catch_remote(void)
-{
-	remflag = TRUE;
-	intflag = TRUE;
-	if(usebuffer)
-		kill(buffer_pid,SIGINT);    
-}
-
 static char remote_buffer[1024];
-
-void print_rheader(struct frame *fr);
-
-char *handle_remote(void)
-{
-	fgets(remote_buffer,1024,stdin);
-	remote_buffer[strlen(remote_buffer)-1]=0;
-  
-	switch(remote_buffer[0]) {
-		case 'P':
-			return remote_buffer +1;        
-	}
-
-	if(usebuffer)
-		kill(buffer_pid,SIGINT);    
-
-	return NULL;    
-}
-#endif
-
 static struct frame fr;
 static struct audio_info_struct ai;
 txfermem *buffermem;
-
 #define FRAMEBUFUNIT (18 * 64 * 4)
+
+void print_rheader(struct frame *fr);
+
+static void catch_remote(void)
+{
+    remflag = TRUE;
+    intflag = TRUE;
+    if(usebuffer)
+        kill(buffer_pid,SIGINT);
+}
+
+
+char *handle_remote(void)
+{
+	switch(frontend_type) {
+		case FRONTEND_SAJBER:
+#ifdef FRONTEND
+			control_sajber(&fr);
+#endif
+			break;
+		case FRONTEND_TK3PLAY:
+#ifdef FRONTEND
+			control_tk3play(&fr);
+#endif
+			break;
+		default:
+			fgets(remote_buffer,1024,stdin);
+			remote_buffer[strlen(remote_buffer)-1]=0;
+  
+			switch(remote_buffer[0]) {
+				case 'P':
+					return remote_buffer+1;        
+			}
+
+			if(usebuffer)
+				kill(buffer_pid,SIGINT);
+			break;
+	}
+
+	return NULL;    
+}
 
 void init_output(void)
 {
@@ -169,10 +177,8 @@ char *get_next_file (int argc, char *argv[])
 	time_t t;
 #endif
 
-#ifdef MPG123_REMOTE
 	if (remote)
 		return handle_remote();
-#endif
 
     if (listname || listfile) {
         if (!listfile) {
@@ -277,7 +283,7 @@ topt opts[] = {
     {'c', "check",       0,                  0, &checkrange, TRUE},
     {'v', "verbose",     0,        set_verbose, 0,           0},
     {'q', "quiet",       0,                  0, &quiet,      TRUE},
-    {'y', "resync",      0,                  0, &tryresync,  TRUE},
+    {'y', "resync",      0,                  0, &tryresync,  FALSE},
     {'0', "single0",     0,                  0, &fr.single,  0},
     {0,   "left",        0,                  0, &fr.single,  0},
     {'1', "single1",     0,                  0, &fr.single,  1},
@@ -297,9 +303,7 @@ topt opts[] = {
     {'v', "var",         0,        set_varmode, &varmode,    TRUE},
 #endif
     {'b', "buffer",      GLO_ARG | GLO_NUM,  0, &usebuffer,  0},
-#ifdef MPG123_REMOTE
-	{'R', "remote",      0,                  0,  &remote,     TRUE},
-#endif
+	{'R', "remote",      0,                  0, &remote,     TRUE},
     {'d', "doublespeed", GLO_ARG | GLO_NUM,  0, &doublespeed,0},
     {'h', "halfspeed",   GLO_ARG | GLO_NUM,  0, &halfspeed,  0},
     {'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
@@ -311,13 +315,77 @@ topt opts[] = {
     {'?', "help",        0,              usage, 0,           0}
 };
 
+/*
+ * play a frame read read_frame();
+ * (re)initialize audio if necessary.
+ */
+void play_frame(int init,struct frame *fr)
+{
+	int clip;
+
+	if((fr->header_change && change_always) || init) {
+		int reset_audio = 0;
+
+		if(remote)
+			print_rheader(fr);
+
+		if (!quiet && init)
+			print_header(fr);
+
+		if(force_frequency < 0) {
+			if(ai.rate != freqs[fr->sampling_frequency]>>(fr->down_sample)) {
+				ai.rate = freqs[fr->sampling_frequency]>>(fr->down_sample);
+				reset_audio = 1;
+			}
+		}
+		else if(ai.rate != force_frequency) {
+			ai.rate = force_frequency;
+			reset_audio = 1;
+		}
+		init_output();
+		if(reset_audio)
+			audio_reset_parameters(&ai);
+	}
+
+	if (fr->error_protection) {
+		getbits(16); /* crc */
+	}
+
+	clip = (fr->do_layer)(fr,outmode,&ai);
+
+#ifndef OS2
+	if (usebuffer) {
+		if (!intflag) {
+			buffermem->freeindex =
+				(buffermem->freeindex + pcm_point) % buffermem->size;
+			if (buffermem->wakeme[XF_READER])
+				xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
+		}
+		pcm_sample = (unsigned char *) (buffermem->data + buffermem->freeindex);
+		pcm_point = 0;
+		while (xfermem_get_freespace(buffermem) < FRAMEBUFUNIT)
+			if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
+				intflag = TRUE;
+				break;
+			}
+		if (intflag)
+			return;
+	}
+#endif
+
+	if(clip > 0 && checkrange)
+		fprintf(stderr,"%d samples clipped\n", clip);
+}
+
+
 int main(int argc, char *argv[])
 {
-    int result, stereo, clip=0;
+    int result;
     unsigned long frameNum = 0;
     char *fname;
     struct timeval start_time, now;
     unsigned long secdiff;
+	int init;
 
 #ifdef OS2
         _wildcard(&argc,&argv);
@@ -327,6 +395,11 @@ int main(int argc, char *argv[])
 	int mypid = getpid();
 	setpriority(PRIO_PROCESS,mypid,-20);
 #endif
+
+	if(!strcmp("sajberplay",argv[0]))
+		frontend_type = FRONTEND_SAJBER;
+	if(!strcmp("mpg123m",argv[0]))
+		frontend_type = FRONTEND_TK3PLAY;
 
     fr.single = -1; /* both channels */
     fr.synth = synth_1to1;
@@ -349,17 +422,15 @@ int main(int argc, char *argv[])
               prgName, loptarg);
           exit (1);
       }
-    if (loptind >= argc && !listname)
+    if (loptind >= argc && !listname && !frontend_type)
       usage(NULL);
 
-#ifdef MPG123_REMOTE
 	if (remote){
 		verbose = 0;        
 		quiet = 1;
 		catchsignal(SIGUSR1, catch_remote);
 		fprintf(stderr,"@R MPG123\n");        
 	}
-#endif
 
     if (!quiet)
       print_title();
@@ -449,98 +520,44 @@ int main(int argc, char *argv[])
     init_layer3(fr.down_sample);
     catchsignal (SIGINT, catch_interrupt);
 
+	if(frontend_type) {
+		handle_remote();
+		exit(0);
+	}
+
     while ((fname = get_next_file(argc, argv))) {
       if(!*fname || !strcmp(fname, "-"))
         fname = NULL;
-      open_stream(fname);
+      open_stream(fname,-1);
       if (!quiet)
         fprintf(stderr, "\nPlaying MPEG stream from %s ...\n",
                 fname ? fname : "standard input");
 
       gettimeofday (&start_time, NULL);
       read_frame_init();
-      for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) 
-      {
-         stereo = fr.stereo;
 
-         if((fr.header_change && change_always) || !frameNum)
-         {
-           int reset_audio = 0;
-#ifdef MPG123_REMOTE
-           if(remote)
-				print_rheader(&fr);
-#endif
-           if (!quiet && !frameNum)
-             print_header(&fr);
-           if(force_frequency < 0) {
-             if(ai.rate != freqs[fr.sampling_frequency]>>(fr.down_sample)) {
-               ai.rate = freqs[fr.sampling_frequency]>>(fr.down_sample);
-               reset_audio = 1;
-             }
-           }
-           else if(ai.rate != force_frequency) {
-             ai.rate = force_frequency;
-             reset_audio = 1;
-           }
-           init_output();
-           if(reset_audio)
-             audio_reset_parameters(&ai);
-         }
-         if(frameNum < startFrame || (doublespeed && (frameNum % doublespeed))) {
-           if(fr.lay == 3) {
-             set_pointer(512);
-           }
-           continue;
-         }
-         numframes--;
-
-         if (fr.error_protection) {
-            getbits(16); /* crc */
-         }
-
-         switch(fr.lay)
-         {
-           case 3:
-             clip = do_layer3(&fr,outmode,&ai);
-             break;
-           case 2:
-             clip = do_layer2(&fr,outmode,&ai);
-             break;
-           case 1:
-             clip = do_layer1(&fr,outmode,&ai);
-             break;
-         }
+      init = 1;
+      for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) {
+			if(frameNum < startFrame || (doublespeed && (frameNum % doublespeed))) {
+				if(fr.lay == 3)
+					set_pointer(512);
+				continue;
+			}
+			numframes--;
+			play_frame(init,&fr);
+			init = 0;
+			if(verbose) {
+				if (verbose > 1 || !(frameNum & 0xf))
+					fprintf(stderr, "\r{%4lu} ",frameNum);
 #ifndef OS2
-         if (usebuffer) {
-           if (!intflag) {
-             buffermem->freeindex =
-                   (buffermem->freeindex + pcm_point) % buffermem->size;
-             if (buffermem->wakeme[XF_READER])
-               xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
-           }
-           pcm_sample = (unsigned char *) (buffermem->data + buffermem->freeindex);
-           pcm_point = 0;
-           while (xfermem_get_freespace(buffermem) < FRAMEBUFUNIT)
-             if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
-               intflag = TRUE;
-               break;
-             }
-           if (intflag)
-             break;
-         }
+			if (verbose > 1 && usebuffer)
+				fprintf (stderr, "%7d ", xfermem_get_usedspace(buffermem));
 #endif
-         if(verbose) {
-           if (verbose > 1 || !(frameNum & 0xf))
-             fprintf(stderr, "\r{%4lu} ",frameNum);
-#ifndef OS2
-           if (verbose > 1 && usebuffer)
-             fprintf (stderr, "%7d ", xfermem_get_usedspace(buffermem));
-#endif
-         }
-         if(clip > 0 && checkrange)
-           fprintf(stderr,"%d samples clipped\n", clip);
+			}
+
       }
-      close_stream(fname);
+
+      close_stream();
       if (!quiet) {
         int sfreq = freqs[fr.sampling_frequency];
         int secs = (frameNum * ((fr.lay == 1) ? 384 : 1152) + (sfreq / 2))
@@ -548,14 +565,14 @@ int main(int argc, char *argv[])
         fprintf(stderr,"[%d:%02d] Decoding of %s finished.\n", secs / 60,
                 secs % 60, fname ? fname : "standard input");
       }
-#ifdef MPG123_REMOTE
+
 	if(remote)
 		fprintf(stderr,"@R MPG123\n");        
 	if (remflag) {
 		intflag = FALSE;
 		remflag = FALSE;
 	}
-#endif
+
       if (intflag) {
         gettimeofday (&now, NULL);
         secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
@@ -603,7 +620,7 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -v    increase verbosity level       -q    quiet (don't print title)\n");
    fprintf(stderr,"   -t    testmode (no output)           -s    write to stdout\n");
    fprintf(stderr,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
-   fprintf(stderr,"   -c    check range violations         -y    try to resync on errors\n");
+   fprintf(stderr,"   -c    check range violations         -y    DISABLE resync on errors\n");
    fprintf(stderr,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [32768]\n");
    fprintf(stderr,"   -r n  override samplerate [auto]     -g n  set audio hardware output gain\n");
    fprintf(stderr,"   -os   output to built-in speaker     -oh   output to headphones\n");

@@ -15,6 +15,10 @@
 #include "mpg123.h"
 #include "huffman.h"
 
+#if 0
+#include "get1bit.h"
+#endif
+
 static real ispow[8207];
 static real aa_ca[8],aa_cs[8];
 static real COS1[12][6];
