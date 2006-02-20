@@ -15,6 +15,12 @@ void audio_info_struct_init(struct audio_info_struct *ai)
   ai->rate = -1;
   ai->gain = -1;
   ai->output = -1;
+#ifdef ALSA
+  ai->handle = NULL;
+  ai->alsa_format.format = -1;
+  ai->alsa_format.rate = -1;
+  ai->alsa_format.channels = -1;
+#endif
   ai->device = NULL;
   ai->channels = -1;
   ai->format = -1;
@@ -75,7 +81,10 @@ void audio_capabilities(struct audio_info_struct *ai)
 		k1 = NUM_RATES;
 	}
 
-	audio_open(&ai1);
+	if(audio_open(&ai1) < 0) {
+		perror("audio");
+		exit(1);
+	}
 
 	for(i=0;i<NUM_CHANNELS;i++) {
 		for(j=0;j<NUM_RATES;j++) {

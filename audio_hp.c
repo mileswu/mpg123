@@ -44,11 +44,11 @@ int audio_open(struct audio_info_struct *ai)
   
   if(ai->output != -1)
   {
-     if(ai->output == AUDIO_OUT_INTERNAL_SPEAKER)
+     if(ai->output & AUDIO_OUT_INTERNAL_SPEAKER)
        ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_SPEAKER);
-     else if(ai->output == AUDIO_OUT_HEADPHONES)
+     else if(ai->output & AUDIO_OUT_HEADPHONES)
        ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_HEADPHONE);
-     else if(ai->output == AUDIO_OUT_LINE_OUT)
+     else if(ai->output & AUDIO_OUT_LINE_OUT)
        ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_LINE);
   }
   

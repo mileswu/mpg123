@@ -48,7 +48,7 @@ int performoption (int argc, char *argv[], topt *opt)
 			if (opt->flags & 2) /* var is *char */
 				*((char *) opt->var) = (char) opt->value;
 			else
-				*((int *) opt->var) = opt->value;
+				*((long *) opt->var) = opt->value;
 		else
 			result = opt->value ? opt->value : opt->sname;
 	else { /* requires argument */
@@ -60,7 +60,7 @@ int performoption (int argc, char *argv[], topt *opt)
 			if (opt->flags & 2) /* var is *char */
 				*((char **) opt->var) = strdup(loptarg);
 			else
-				*((int *) opt->var) = atoi(loptarg);
+				*((long *) opt->var) = atoi(loptarg);
 		else
 			result = opt->value ? opt->value : opt->sname;
 	}

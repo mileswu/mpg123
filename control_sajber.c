@@ -1,3 +1,4 @@
+
 /*
  * Control interface to front ends.
  * written/copyrights 1997 by Michael Hipp
@@ -5,18 +6,18 @@
 
 #include <stdio.h>
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 #include <sys/time.h>
 #include <unistd.h>
 #endif
 #include <sys/types.h>
+#include <sys/uio.h>
 
-#ifndef WIN32
-#include <linux/socket.h>
+#if !defined(WIN32) && !defined(GENERIC)
+#include <sys/socket.h>
 #endif
-/* <sys/socket.h> */
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 #include "jukebox/controldata.h"
 #endif
 #include "mpg123.h"
@@ -28,7 +29,7 @@
 extern FILE *filept;
 extern int tabsel_123[2][3][16];
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 
 int sajber_sendmsg(int type,int data)
 {
@@ -44,6 +45,7 @@ void control_sajber(struct frame *fr)
 	fd_set readfds;
 	int n;
 	int mode = MODE_STOPPED;
+	int mode_rev;
 	TControlMsg smsg,rmsg;
 	struct msghdr msghdr;
 	struct m_cmsghdr cmsghdr;
@@ -63,7 +65,7 @@ void control_sajber(struct frame *fr)
 			if(n == 0) {
 				if(!read_frame(fr)) {
 					mode = MODE_STOPPED;
-					rd->close();
+					rd->close(rd);
 					sajber_sendmsg(MSG_NEXT,0);
 					continue;
 				}
@@ -83,7 +85,7 @@ void control_sajber(struct frame *fr)
 				framecnt++;
 				if(!(framecnt & 0xf)) {
 					sajber_sendmsg(MSG_FRAMES,framecnt);
-					sajber_sendmsg(MSG_POSITION,rd->tell());
+					sajber_sendmsg(MSG_POSITION,rd->tell(rd));
 				}
 			}
 		}
@@ -115,37 +117,54 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 								int i;
 								for(i=0;i<16;i++) {
 									read_frame(fr);
+	
 									if(framecnt && fr->lay == 3)
 										set_pointer(512);
 									framecnt++;
+									sajber_sendmsg(MSG_FRAMES,framecnt);
+									sajber_sendmsg(MSG_POSITION,rd->tell(rd));
 								}
 							}
 							sajber_sendmsg(MSG_RESPONSE,FORWARD_STEP);
 							break;
 						case FORWARD_BEGIN:
-							sajber_sendmsg(MSG_RESPONSE,FORWARD_BEGIN);
+							mode_rev = mode;
+							if(mode != MODE_STOPPED) {
+								mode = MODE_PAUSED;
+								sajber_sendmsg(MSG_RESPONSE,FORWARD_BEGIN);
+							}
 							break;
 						case FORWARD_END:
+							mode = mode_rev;
 							sajber_sendmsg(MSG_RESPONSE,FORWARD_END);
 							break;
 						case REWIND_BEGIN:
-							sajber_sendmsg(MSG_RESPONSE,REWIND_BEGIN);
+							mode_rev = mode;
+							if(mode != MODE_STOPPED) {
+								mode = MODE_STOPPED;
+								sajber_sendmsg(MSG_RESPONSE,REWIND_BEGIN);
+							}
 							break;
 						case REWIND_STEP:
-							if(!rd->back_frame)
-								break;
-							if(rd->back_frame(fr,16) == 0)
-								framecnt -= 16;
-							else
-								framecnt = 0;
-							sajber_sendmsg(MSG_RESPONSE,REWIND_STEP);
+							if(mode != MODE_STOPPED) {
+								if(!rd->back_frame)
+									break;
+								if(rd->back_frame(rd,fr,16) == 0)
+									framecnt -= 16;
+								else
+									framecnt = 0;
+								sajber_sendmsg(MSG_RESPONSE,REWIND_STEP);
+								sajber_sendmsg(MSG_FRAMES,framecnt);
+							}
+							sajber_sendmsg(MSG_POSITION,rd->tell(rd));
 							break;
 						case REWIND_END:
+							mode = mode_rev;
 							sajber_sendmsg(MSG_RESPONSE,REWIND_END);
 							break;
 						case PLAY_STOP:
 							mode = MODE_STOPPED;
-							rd->close();
+							rd->close(rd);
 							break;
 						case PLAY_PAUSE:
 							if (mode == MODE_PAUSED)
@@ -159,7 +178,7 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 					break;
 				case MSG_SONG:
 					if(mode == MODE_PLAYING) {
-						rd->close();
+						rd->close(rd);
 						mode = MODE_STOPPED;
 					}
 
@@ -214,6 +233,38 @@ fprintf(stderr,"%d.%d\n",rmsg.type,rmsg.data);
 				case MSG_BUFAHEAD:
 					break;
 				case MSG_SEEK:
+					if (mode == MODE_STOPPED) break;
+					if (rmsg.data > rd->tell(rd)) {
+						while (rmsg.data > rd->tell(rd)) {
+							if(!read_frame(fr)) {
+								sajber_sendmsg(MSG_FRAMES,framecnt);
+								sajber_sendmsg(MSG_POSITION,rd->tell(rd));
+								mode = MODE_STOPPED;
+								rd->close(rd);
+								sajber_sendmsg(MSG_NEXT,0);
+								continue;
+							}
+							framecnt++;
+							if(framecnt && fr->lay == 3)
+								set_pointer(512);
+						/*
+							rd->back_frame(rd,fr,-16);
+							framecnt += 16;
+						*/
+						}
+					}
+					else {
+						if(!rd->back_frame)
+							break;
+						while (rmsg.data < rd->tell(rd)) {
+							if(rd->back_frame(rd,fr,16) == 0)
+								framecnt -= 16;
+							else
+								framecnt = 0;
+						}
+					}
+					sajber_sendmsg(MSG_FRAMES,framecnt);
+					sajber_sendmsg(MSG_POSITION,rd->tell(rd));
 					break;
 				case MSG_PRIORITY:
 					break;

@@ -1,8 +1,6 @@
 /*
  * Control interface to front ends.
- * written/copyrights 1997 by Michael Hipp and (mainly)
- * 
- *
+ * written/copyrights 1997 by Brian Foutz (and Michael Hipp) 
  */
 
 #include <stdio.h>
@@ -13,8 +11,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include <linux/socket.h>
-/* <sys/socket.h> */
+#include <sys/socket.h>
 
 #include "control_tk3play.h"
 
@@ -54,7 +51,7 @@ int still_playing_old(void)
     return (bufferused/(float)outrate > sai.length*8/(float)sai.bitrate);
   }
 
-  return ((bufferused)/(float)outrate > rd->tell()*8/(float)sai.bitrate);
+  return ((bufferused)/(float)outrate > rd->tell(rd)*8/(float)sai.bitrate);
 }
 
 int buffer_used(void) 
@@ -73,7 +70,7 @@ float calc_time(void)
   float stream_sec, buffer_sec, time;
 
   if (!param.usebuffer)
-    return rd->tell()*8/(float)sai.bitrate;
+    return rd->tell(rd)*8/(float)sai.bitrate;
 
   channels = sai.stereo ? 2 : 1;
   old_channels = oldsai.stereo ? 2 : 1;
@@ -86,7 +83,7 @@ float calc_time(void)
 
   if (mode == MODE_PLAYING_AND_DECODING) {
 
-    stream_sec = rd->tell()*8/(float)sai.bitrate;
+    stream_sec = rd->tell(rd)*8/(float)sai.bitrate;
     time = stream_sec - buffer_sec;
   }
 
@@ -97,7 +94,7 @@ float calc_time(void)
 
   if (mode == MODE_PLAYING_OLD_DECODING_NEW) {
 
-    stream_sec = rd->tell()*8/(float)sai.bitrate;
+    stream_sec = rd->tell(rd)*8/(float)sai.bitrate;
     new_buf_bytes = stream_sec * outrate;
     old_buf_bytes = bufferused - new_buf_bytes;
     old_buf_sec = old_buf_bytes / (float)old_outrate;
@@ -144,11 +141,11 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 	kill(buffer_pid,SIGINT);
 	if (mode == MODE_PLAYING_AND_DECODING ||
             mode == MODE_PLAYING_OLD_DECODING_NEW) {
-	  rd->close();
+	  rd->close(rd);
 	}
 	mode = MODE_STOPPED;
       }
-      // tk3play_sendmsg(MSG_RESPONSE,PLAY_STOP);
+      /* tk3play_sendmsg(MSG_RESPONSE,PLAY_STOP); */
       break;
 
     case PLAY_PAUSE:
@@ -163,7 +160,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 	  kill(buffer_pid,SIGSTOP);
 	}
       }
-      // tk3play_sendmsg(MSG_RESPONSE,PLAY_PAUSE);
+      /* tk3play_sendmsg(MSG_RESPONSE,PLAY_PAUSE); */
       break;
     }
     break;
@@ -204,7 +201,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
       read_frame_init();
     }
 
-    // tk3play_sendmsg(MSG_RESPONSE,MSG_SONG);
+    /* tk3play_sendmsg(MSG_RESPONSE,MSG_SONG); */
     break;
 
   case MSG_JUMPTO:
@@ -213,7 +210,7 @@ int tk3play_handlemsg(struct frame *fr,struct timeval *timeout)
 
     ok = 1;
     if (rdata < framecnt) {
-      rd->rewind();
+      rd->rewind(rd);
       read_frame_init();
       for (framecnt = 0; ok && framecnt < rdata; framecnt++) {
         ok = read_frame(fr);
@@ -301,8 +298,8 @@ void control_tk3play(struct frame *fr)
 	continue;
 
       if (!read_frame(fr)) {
-        sai.length = rd->tell();
-        rd->close();
+        sai.length = rd->tell(rd);
+        rd->close(rd);
 	tk3play_sendmsg(MSG_FRAMES,framecnt);
         tk3play_sendmsg(MSG_NEXT,0);
         if (param.usebuffer) {
@@ -349,7 +346,7 @@ void control_tk3play(struct frame *fr)
 	  hp = param.halfspeed - 1;
 
       if (rewindspeed && (framecnt>1)) {
-        rd->back_frame(fr,rewindspeed+1);
+        rd->back_frame(rd,fr,rewindspeed+1);
 	framecnt -= rewindspeed+1;
       }
 
@@ -368,8 +365,8 @@ void control_tk3play(struct frame *fr)
 	continue;
 
       if (!read_frame(fr)) {
-	sai.length = rd->tell();
-        rd->close();
+	sai.length = rd->tell(rd);
+        rd->close(rd);
 	tk3play_sendmsg(MSG_FRAMES,framecnt);
 	mode = MODE_PLAYING_OLD_FINISHED_DECODING_NEW;
 	continue;

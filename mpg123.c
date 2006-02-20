@@ -8,13 +8,17 @@
 
 #include <stdlib.h>
 #include <sys/types.h>
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
 
-/* #define SET_PRIO */
+/* #define SET_RT   */
+
+#ifdef SET_RT
+#include <sched.h>
+#endif
 
 #include "mpg123.h"
 #include "getlopt.h"
@@ -22,6 +26,7 @@
 #include "version.h"
 
 static void usage(char *dummy);
+static void long_usage(char *);
 static void print_title(void);
 
 struct parameter param = { 
@@ -42,12 +47,13 @@ struct parameter param = {
   FALSE , /* checkrange */
   0 ,	  /* doublespeed */
   0 ,	  /* halfspeed */
-  0	  /* force_reopen, always (re)opens audio device for next song */
+  0 ,	  /* force_reopen, always (re)opens audio device for next song */
+  FALSE,  /* try to run process in 'realtime mode' */   
+  { 0,},  /* wavfilename */
 };
 
 char *listname = NULL;
 long outscale  = 32768;
-
 long numframes = -1;
 long startFrame= 0;
 int frontend_type = 0;
@@ -61,7 +67,7 @@ int shuffle_listsize = 0;
 static int intflag = FALSE;
 static int remflag = FALSE;
 
-#ifndef _WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 static void catch_child(void)
 {
   while (waitpid(-1, NULL, WNOHANG) > 0);
@@ -83,7 +89,7 @@ void print_rheader(struct frame *fr);
 void set_synth_functions(struct frame *fr);
 
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 static void catch_remote(void)
 {
     remflag = TRUE;
@@ -115,7 +121,7 @@ char *handle_remote(void)
 					return remote_buffer+1;        
 			}
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 			if(param.usebuffer)
 				kill(buffer_pid,SIGINT);
 #endif
@@ -181,13 +187,16 @@ void init_output(void)
       exit(1);
     }
   }
+  else if(param.outmode == DECODE_WAV) {
+    wav_open(&ai,param.wavfilename);
+  }
 }
 
 void shuffle_files(int numfiles)
 {
     int loop, rannum;
 
-    srandom(time(NULL));
+    srand(time(NULL));
     if(shuffleord)
       free(shuffleord);
     shuffleord = malloc((numfiles + 1) * sizeof(int));
@@ -203,7 +212,7 @@ void shuffle_files(int numfiles)
     /* now shuffle them */
     if(numfiles >= 2) {
       for (loop = 0; loop < numfiles; loop++) {
-	rannum = (random() % (numfiles * 4 - 4)) / 4;
+	rannum = (rand() % (numfiles * 4 - 4)) / 4;
         rannum += (rannum >= loop);
 	shuffleord[loop] ^= shuffleord[rannum];
 	shuffleord[rannum] ^= shuffleord[loop];
@@ -322,7 +331,7 @@ char *get_next_file(int argc, char **argv)
         curfile++;
     }
     else {
-       newfile = shufflist[ random() % shuffle_listsize ];
+       newfile = shufflist[ rand() % shuffle_listsize ];
     }
 
     return newfile;
@@ -335,12 +344,34 @@ void set_varmode (char *arg)
 }
 #endif
 
-void set_output (char *arg)
+static void set_output_h(char *a)
+{
+  if(ai.output <= 0)
+    ai.output = AUDIO_OUT_HEADPHONES;
+  else
+    ai.output |= AUDIO_OUT_HEADPHONES;
+}
+static void set_output_s(char *a)
+{
+  if(ai.output <= 0)
+    ai.output = AUDIO_OUT_INTERNAL_SPEAKER;
+  else
+    ai.output |= AUDIO_OUT_INTERNAL_SPEAKER;
+}
+static void set_output_l(char *a)
+{
+  if(ai.output <= 0)
+    ai.output = AUDIO_OUT_LINE_OUT;
+  else
+    ai.output |= AUDIO_OUT_LINE_OUT;
+}
+
+static void set_output (char *arg)
 {
     switch (*arg) {
-        case 'h': ai.output = AUDIO_OUT_HEADPHONES; break;
-        case 's': ai.output = AUDIO_OUT_INTERNAL_SPEAKER; break;
-        case 'l': ai.output = AUDIO_OUT_LINE_OUT; break;
+        case 'h': set_output_h(arg); break;
+        case 's': set_output_s(arg); break;
+        case 'l': set_output_l(arg); break;
         default:
             fprintf (stderr, "%s: Unknown argument \"%s\" to option \"%s\".\n",
                 prgName, arg, loptarg);
@@ -352,9 +383,20 @@ void set_verbose (char *arg)
 {
     param.verbose++;
 }
+void set_wav(char *arg)
+{
+  param.outmode = DECODE_WAV;
+  strncpy(param.wavfilename,arg,255);
+  param.wavfilename[255] = 0;
+}
+void not_compiled(char *arg)
+{
+  fprintf(stderr,"Option '-T / --realtime' not compiled into this binary\n");
+}
 
+/* Please note: GLO_NUM expects point to LONG! */
 topt opts[] = {
-    {'k', "skip",        GLO_ARG | GLO_NUM,  0, &startFrame, 0},
+    {'k', "skip",        GLO_ARG | GLO_LONG, 0, &startFrame, 0},
     {'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &ai.device,  0},
     {'2', "2to1",        0,                  0, &param.down_sample, 1},
     {'4', "4to1",        0,                  0, &param.down_sample, 2},
@@ -373,33 +415,40 @@ topt opts[] = {
     {0,   "mono",        0,                  0, &param.force_mono, 3},
     {0,   "stereo",      0,                  0, &param.force_stereo, 1},
     {0,   "reopen",      0,                  0, &param.force_reopen, 1},
-    {'g', "gain",        GLO_ARG | GLO_NUM,  0, &ai.gain,    0},
-    {'r', "rate",        GLO_ARG | GLO_NUM,  0, &param.force_rate,  0},
+    {'g', "gain",        GLO_ARG | GLO_LONG, 0, &ai.gain,    0},
+    {'r', "rate",        GLO_ARG | GLO_LONG, 0, &param.force_rate,  0},
     {0,   "8bit",        0,                  0, &param.force_8bit, 1},
-    {0,   "headphones",  0,                  0, &ai.output, AUDIO_OUT_HEADPHONES},
-    {0,   "speaker",     0,                  0, &ai.output, AUDIO_OUT_INTERNAL_SPEAKER},
-    {0,   "lineout",     0,                  0, &ai.output, AUDIO_OUT_LINE_OUT},
+    {0,   "headphones",  0,                  set_output_h, 0,0},
+    {0,   "speaker",     0,                  set_output_s, 0,0},
+    {0,   "lineout",     0,                  set_output_l, 0,0},
     {'o', "output",      GLO_ARG | GLO_CHAR, set_output, 0,  0},
-    {'f', "scale",       GLO_ARG | GLO_NUM,  0, &outscale,   0},
-    {'n', "frames",      GLO_ARG | GLO_NUM,  0, &numframes,  0},
+    {'f', "scale",       GLO_ARG | GLO_LONG, 0, &outscale,   0},
+    {'n', "frames",      GLO_ARG | GLO_LONG, 0, &numframes,  0},
 #ifdef VARMODESUPPORT
     {'v', "var",         0,        set_varmode, &varmode,    TRUE},
 #endif
-    {'b', "buffer",      GLO_ARG | GLO_NUM,  0, &param.usebuffer,  0},
-	{'R', "remote",      0,                  0, &param.remote,     TRUE},
-    {'d', "doublespeed", GLO_ARG | GLO_NUM,  0, &param.doublespeed,0},
-    {'h', "halfspeed",   GLO_ARG | GLO_NUM,  0, &param.halfspeed,  0},
+    {'b', "buffer",      GLO_ARG | GLO_LONG, 0, &param.usebuffer,  0},
+    {'R', "remote",      0,                  0, &param.remote,     TRUE},
+    {'d', "doublespeed", GLO_ARG | GLO_LONG, 0, &param.doublespeed,0},
+    {'h', "halfspeed",   GLO_ARG | GLO_LONG, 0, &param.halfspeed,  0},
     {'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
     {'@', "list",        GLO_ARG | GLO_CHAR, 0, &listname,   0},
 	/* 'z' comes from the the german word 'zufall' (eng: random) */
-    {'z', "shuffle",         0,        0, &param.shuffle,    1},
-    {'Z', "random",         0,        0, &param.shuffle,    2},
-    {0,   "equalizer",	0,	0, &param.equalizer,1},
-    {0,   "aggressive",	0,	0, &param.aggressive,2},
-#ifndef WIN32
+    {'z', "shuffle",     0,                  0, &param.shuffle,    1},
+    {'Z', "random",      0,                  0, &param.shuffle,    2},
+    {0,   "equalizer",	 0,                  0, &param.equalizer,1},
+    {0,   "aggressive",	 0,   	             0, &param.aggressive,2},
+#if !defined(WIN32) && !defined(GENERIC)
     {'u', "auth",        GLO_ARG | GLO_CHAR, 0, &httpauth,   0},
 #endif
-    {'?', "help",        0,              usage, 0,           0},
+#if defined(SET_RT)
+    {'T', "realtime",    0,                  0, &param.relatime, TRUE },
+#else
+    {'T', "realtime",    0,       not_compiled, 0,           0 },    
+#endif
+    {'w', "wav",         GLO_ARG | GLO_CHAR, set_wav, 0 , 0 },
+    {'?', "help",       0,              usage, 0,           0 },
+    {0 , "longhelp" ,    0,        long_usage, 0,           0 },
     {0, 0, 0, 0, 0, 0}
 };
 
@@ -459,7 +508,7 @@ void play_frame(int init,struct frame *fr)
 
 	if(fr->header_change || init) {
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 		if(param.remote)
 			print_rheader(fr);
 #endif
@@ -551,7 +600,7 @@ void play_frame(int init,struct frame *fr)
 						}
 					}
 					else {
-						fprintf(stderr,"Audio: %d:1 conversion,",(int)pow(2.0,fr->down_sample));
+						fprintf(stderr,"Audio: %ld:1 conversion,",(long)pow(2.0,fr->down_sample));
 					}
  					fprintf(stderr," rate: %ld, encoding: %s, channels: %d\n",ai.rate,audio_encoding_name(ai.format),ai.channels);
 				}
@@ -639,12 +688,12 @@ void set_synth_functions(struct frame *fr)
 	}
 }
 
-void main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int result;
 	unsigned long frameNum = 0;
 	char *fname;
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 	struct timeval start_time, now;
 #endif
 	unsigned long secdiff;
@@ -655,7 +704,7 @@ void main(int argc, char *argv[])
 #endif
 
 	if(sizeof(short) != 2) {
-		fprintf(stderr,"Ouch SHORT has size of %d bytes (required: '2')\n",sizeof(short));
+		fprintf(stderr,"Ouch SHORT has size of %d bytes (required: '2')\n",(int)sizeof(short));
 		exit(1);
 	}
 
@@ -683,7 +732,7 @@ void main(int argc, char *argv[])
 	if (loptind >= argc && !listname && !frontend_type)
 		usage(NULL);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 	if (param.remote) {
 		param.verbose = 0;        
 		param.quiet = 1;
@@ -720,11 +769,14 @@ void main(int argc, char *argv[])
 		if(fe) {
 			char line[256];
 			for(i=0;i<32;i++) {
+				float e1,e0; /* %f -> float! */
 				line[0]=0;
 				fgets(line,255,fe);
 				if(line[0]=='#')
 					continue;
-				sscanf(line,"%f %f",&equalizer[0][i],&equalizer[1][i]);
+				sscanf(line,"%f %f",&e0,&e1);
+				equalizer[0][i] = e0;
+				equalizer[1][i] = e1;	
 			}
 			fclose(fe);
 		}
@@ -732,10 +784,21 @@ void main(int argc, char *argv[])
 			fprintf(stderr,"Can't open 'equalizer.dat'\n");
 	}
 
-#ifndef WIN32
+#if  !defined(WIN32) && !defined(GENERIC)
 	if(param.aggressive) { /* tst */
 		int mypid = getpid();
 		setpriority(PRIO_PROCESS,mypid,-20);
+	}
+#endif
+
+#ifdef SET_RT
+	if (param.realtime) {  /* Get real-time priority */
+	  struct sched_param sp;
+	  fprintf(stderr,"Getting real-time priority\n");
+	  memset(&sp, 0, sizeof(struct sched_param));
+	  sp.sched_priority = sched_get_priority_min(SCHED_FIFO);
+	  if (sched_setscheduler(0, SCHED_RR, &sp) == -1)
+	    fprintf(stderr,"Can't get real-time priority\n");
 	}
 #endif
 
@@ -747,7 +810,7 @@ void main(int argc, char *argv[])
 	init_layer2(); /* inits also shared tables with layer1 */
 	init_layer3(fr.down_sample);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 	catchsignal (SIGINT, catch_interrupt);
 
 	if(frontend_type) {
@@ -758,7 +821,7 @@ void main(int argc, char *argv[])
 
 	while ((fname = get_next_file(argc, argv))) {
 		char *dirname, *filename;
-		int newFrame;
+		long leftFrames,newFrame;
 
 		if(!*fname || !strcmp(fname, "-"))
 			fname = NULL;
@@ -771,43 +834,58 @@ void main(int argc, char *argv[])
 			fprintf(stderr, "\nPlaying MPEG stream from %s ...\n", filename);
 		}
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 		gettimeofday (&start_time, NULL);
 #endif
 		read_frame_init();
 
 		init = 1;
 		newFrame = startFrame;
-		for(frameNum=0;read_frame(&fr) && numframes && !intflag;frameNum++) {
+#ifdef TERM_CONTROL
+		term_init();
+#endif
+		leftFrames = numframes;
+		for(frameNum=0;read_frame(&fr) && leftFrames && !intflag;frameNum++) {
 			if(frameNum < startFrame || (param.doublespeed && (frameNum % param.doublespeed))) {
 				if(fr.lay == 3)
 					set_pointer(512);
 				continue;
 			}
-			numframes--;
+			if(leftFrames > 0)
+			  leftFrames--;
 			play_frame(init,&fr);
 			init = 0;
 
 			if(param.verbose) {
+#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
 				if (param.verbose > 1 || !(frameNum & 0x7))
 					print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
 				if(param.verbose > 2 && param.usebuffer)
 					fprintf(stderr,"[%08x %08x]",buffermem->readindex,buffermem->freeindex);
-
+#else
+				if (param.verbose > 1 || !(frameNum & 0x7))
+					print_stat(&fr,frameNum,0,&ai);
+#endif
 			}
+#ifdef TERM_CONTROL
+			term_control();
+#endif
 
       }
 
+#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
 	if(param.usebuffer) {
 		int s;
-        	struct timeval wait100 = {0, 100000};
 		while ((s = xfermem_get_usedspace(buffermem))) {
+        		struct timeval wait100 = {0, 100000};
 			if(buffermem->wakeme[XF_READER] == TRUE)
 				break;
-			print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
+			if(param.verbose > 1)
+				print_stat(&fr,frameNum,xfermem_get_usedspace(buffermem),&ai);
                 	select(1, NULL, NULL, NULL, &wait100);
 		}
 	}
+#endif
 
 	if (!param.quiet) {
 		/* 
@@ -818,7 +896,7 @@ void main(int argc, char *argv[])
 		fprintf(stderr,"\n[%d:%02d] Decoding of %s finished.\n", secs / 60,
 			secs % 60, filename);
 	}
-	rd->close();
+	rd->close(rd);
 
 	if(param.remote)
 		fprintf(stderr,"@R MPG123\n");        
@@ -828,7 +906,7 @@ void main(int argc, char *argv[])
 	}
 
       if (intflag) {
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
         gettimeofday (&now, NULL);
         secdiff = (now.tv_sec - start_time.tv_sec) * 1000;
         if (now.tv_usec >= start_time.tv_usec)
@@ -857,8 +935,10 @@ void main(int argc, char *argv[])
 
     if(param.outmode==DECODE_AUDIO)
       audio_close(&ai);
+    if(param.outmode==DECODE_WAV)
+      wav_close();
    
-    exit( 0 );
+    return 0;
 }
 
 static void print_title(void)
@@ -876,6 +956,7 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"supported options [defaults in brackets]:\n");
    fprintf(stderr,"   -v    increase verbosity level       -q    quiet (don't print title)\n");
    fprintf(stderr,"   -t    testmode (no output)           -s    write to stdout\n");
+   fprintf(stderr,"   -w <filename> write Output as WAV file\n");
    fprintf(stderr,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
    fprintf(stderr,"   -c    check range violations         -y    DISABLE resync on errors\n");
    fprintf(stderr,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [32768]\n");
@@ -883,6 +964,8 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -os,-ol,-oh  output to built-in speaker,line-out connector,headphones\n");
 #ifdef NAS
    fprintf(stderr,"                                        -a d  set NAS server\n");
+#elif defined(SGI)
+   fprintf(stderr,"                                        -a [1..4] set RAD device\n");
 #else
    fprintf(stderr,"                                        -a d  set audio device\n");
 #endif
@@ -890,11 +973,63 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"   -d n  play every n'th frame only     -h n  play every frame n times\n");
    fprintf(stderr,"   -0    decode channel 0 (left) only   -1    decode channel 1 (right) only\n");
    fprintf(stderr,"   -m    mix both channels (mono)       -p p  use HTTP proxy p [$HTTP_PROXY]\n");
+#ifdef SET_RT
+   fprintf(stderr,"   -@ f  read filenames/URLs from f     -T get realtime priority\n");
+#else
    fprintf(stderr,"   -@ f  read filenames/URLs from f\n");
+#endif
    fprintf(stderr,"   -z    shuffle play (with wildcards)  -Z    random play\n");
    fprintf(stderr,"   -u a  HTTP authentication string\n");
-   fprintf(stderr,"See the manpage %s(1) for more information.\n", prgName);
+   fprintf(stderr,"See the manpage %s(1) or call %s with --longhelp for more information.\n", prgName,prgName);
    exit(1);
+}
+
+static void long_usage(char *d)
+{
+  FILE *o = stderr;
+  fprintf(o,"-k <n> --skip <n>         \n");
+  fprintf(o,"-a <f> --audiodevice <f>  \n");
+  fprintf(o,"-2     --2to1             2:1 Downsampling\n");
+  fprintf(o,"-4     --4to1             4:1 Downsampling\n");
+  fprintf(o,"-r     --test             \n");
+  fprintf(o,"-s     --stdout           \n");
+  fprintf(o,"-c     --check            \n");
+  fprintf(o,"-v[*]  --verbose          Increase verboselevel\n");
+  fprintf(o,"-q     --quiet            Enables quite mode\n");
+  fprintf(o,"-y     --resync           DISABLES resync on error\n");
+  fprintf(o,"-0     --left --single0   Play only left channel\n");
+  fprintf(o,"-1     --right --single1  Play only right channel\n");
+  fprintf(o,"-m     --mono --mix       Mix stereo to mono\n");
+  fprintf(o,"       --stereo           Duplicate mono channel\n");
+  fprintf(o,"       --reopen           Force close/open on audiodevice\n");
+  fprintf(o,"-g     --gain             Set audio hardware output gain\n");
+  fprintf(o,"-r     --rate             Force a specific audio output rate\n");
+  fprintf(o,"       --8bit             Force 8 bit output\n");
+  fprintf(o,"-o h   --headphones       Output on headphones\n");
+  fprintf(o,"-o s   --speaker          Output on speaker\n");
+  fprintf(o,"-o l   --lineout          Output to lineout\n");
+  fprintf(o,"-f <n> --scale <n>        Scale output samples (soft gain)\n");
+  fprintf(o,"-n     --frames <n>       Play only <n> frames of every stream\n");
+#ifdef VARMODESUPPORT
+  fprintf(o,"-v     --var              Varmode\n");
+#endif
+  fprintf(o,"-b <n> --buffer <n>       Set play buffer (\"output cache\")\n");
+#if 0
+  fprintf(o,"-R     --remote\n");
+#endif
+  fprintf(o,"-d     --doublespeed      Play only every second frame\n");
+  fprintf(o,"-h     --halfspeed        Play every frame twice\n");
+  fprintf(o,"-p <f> --proxy <f>        Set WWW proxy\n");
+  fprintf(o,"-@ <f> --list <f>         Play songs in <f> file-list\n");
+  fprintf(o,"-z     --shuffle          Shuffle song-list before playing\n");
+  fprintf(o,"-Z     --random           full random play\n");
+  fprintf(o,"       --equalizer        Exp.: scales freq. bands acrd. to 'equalizer.dat'\n");
+  fprintf(o,"       --aggressive       Tries to get higher priority (nice)\n");
+  fprintf(o,"-u     --auth             Set auth values for HTTP access\n");
+#if defined(SET_RT)
+  fprintf(o,"-T     --realtime         Tries to get realtime priority\n");
+#endif
+  fprintf(o,"-w <f> --wav <f>          Writes samples as WAV file in <f>\n");
 }
 
 

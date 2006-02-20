@@ -14,6 +14,8 @@
 
 #include        <math.h>
 
+typedef unsigned char byte;
+
 #ifdef OS2
 #include <float.h>
 #endif
@@ -123,38 +125,46 @@ struct frame {
 };
 
 struct parameter {
-	int equalizer;
-	int aggressive; /* renice to max. priority */
-	int shuffle;	/* shuffle/random play */
-	int remote;	/* remote operation */
-	int outmode;	/* where to out the decoded sampels */
-	int quiet;	/* shut up! */
-	int usebuffer;	/* second level buffer size */
-	int tryresync;  /* resync stream after error */
-	int verbose;    /* verbose level */
-	int force_mono;
-	int force_stereo;
-	int force_8bit;
-	int force_rate;
-	int down_sample;
-	int checkrange;
-	int doublespeed;
-	int halfspeed;
-	int force_reopen;
+  int equalizer;
+  int aggressive; /* renice to max. priority */
+  int shuffle;	/* shuffle/random play */
+  int remote;	/* remote operation */
+  int outmode;	/* where to out the decoded sampels */
+  int quiet;	/* shut up! */
+  long usebuffer;	/* second level buffer size */
+  int tryresync;  /* resync stream after error */
+  int verbose;    /* verbose level */
+  int force_mono;
+  int force_stereo;
+  int force_8bit;
+  long force_rate;
+  int down_sample;
+  int checkrange;
+  long doublespeed;
+  long halfspeed;
+  int force_reopen;
+  long realtime;
+  char wavfilename[256];
 };
 
 struct reader {
   int  (*init)(struct reader *);
-  void (*close)(void);
-  int  (*head_read)(unsigned char *hbuf,unsigned long *newhead);
-  int  (*head_shift)(unsigned char *hbuf,unsigned long *head);
-  int  (*skip_bytes)(int len);
-  int  (*read_frame_body)(int size);
-  int  (*back_frame)(struct frame *fr,int num);
-  long (*tell)(void);
-  void (*rewind)(void);
+  void (*close)(struct reader *);
+  int  (*head_read)(struct reader *,unsigned long *newhead);
+  int  (*head_shift)(struct reader *,unsigned long *head);
+  int  (*skip_bytes)(struct reader *,int len);
+  int  (*read_frame_body)(struct reader *,unsigned char *,int size);
+  int  (*back_bytes)(struct reader *,int bytes);
+  long (*tell)(struct reader *);
+  void (*rewind)(struct reader *);
   long filelen;
+  long filepos;
+  int  filept;
+  int  flags;
+  unsigned char id3buf[128];
 };
+#define READER_FD_OPENED 0x1
+#define READER_ID3TAG    0x2
 
 extern struct reader *rd,readers[];
 
@@ -230,11 +240,8 @@ struct III_sideinfo
 };
 
 extern void open_stream(char *,int fd);
-extern void close_stream(void);
-extern long tell_stream(void);
 extern void read_frame_init (void);
 extern int read_frame(struct frame *fr);
-extern int back_frame(struct frame *fr,int num);
 extern void play_frame(int init,struct frame *fr);
 extern int do_layer3(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
@@ -243,6 +250,9 @@ extern void do_equalizer(real *bandPtr,int channel);
 
 #ifdef PENTIUM_OPT
 extern int synth_1to1_pent (real *,int,unsigned char *);
+#endif
+#ifdef USE_3DNOW
+extern int synth_1to1_3dnow (real *,int,unsigned char *);
 #endif
 extern int synth_1to1 (real *,int,unsigned char *,int *);
 extern int synth_1to1_8bit (real *,int,unsigned char *,int *);
@@ -292,6 +302,10 @@ extern void synth_ntom_set_step(long,long);
 extern void control_sajber(struct frame *fr);
 extern void control_tk3play(struct frame *fr);
 
+extern int wav_open(struct audio_info_struct *ai, char *wavfilename);
+extern int wav_write(unsigned char *buf,int len);
+extern int wav_close(void);
+
 extern unsigned char *conv16to8;
 extern long freqs[9];
 extern real muls[27][64];
@@ -305,5 +319,11 @@ extern int equalizer_cnt;
 extern struct audio_name audio_val2name[];
 
 extern struct parameter param;
+
+/* 486 optimizations */
+#define FIR_BUFFER_SIZE  128
+extern void dct64_486(int *a,int *b,real *c);
+extern int synth_1to1_486(real *bandPtr,int channel,unsigned char *out,int nb_blocks);
+
 
 

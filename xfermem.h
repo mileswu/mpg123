@@ -18,8 +18,6 @@
 #define TRUE  1
 #endif
 
-typedef unsigned char byte;
-
 typedef struct {
 	int freeindex;	/* [W] next free index */
 	int readindex;	/* [R] next index to read */

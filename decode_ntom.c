@@ -74,7 +74,7 @@ int synth_ntom_8bit_mono(real *bandPtr,unsigned char *samples,int *pnt)
   ret = synth_ntom(bandPtr,0,(unsigned char *) samples_tmp,&pnt1);
   samples += *pnt;
 
-  for(i=0;i<(pnt1>>21);i++) {
+  for(i=0;i<(pnt1>>2);i++) {
     *samples++ = conv16to8[*tmp1>>AUSHIFT];
     tmp1 += 2;
   }

@@ -9,6 +9,9 @@
 
 int audio_open(struct audio_info_struct *ai)
 {
+  int dev;
+  char *dev_name;
+
   ai->config = ALnewconfig();
 
   if(ai->channels == 2)
@@ -16,14 +19,34 @@ int audio_open(struct audio_info_struct *ai)
   else
     ALsetchannels(ai->config, AL_MONO);
   ALsetwidth(ai->config, AL_SAMPLE_16);
-
   ALsetqueuesize(ai->config, 131069);
-    
-  ai->port = ALopenport("mpg132", "w", ai->config);
-  if(ai->port == NULL){
-    fprintf(stderr, "Unable to open audio channel.");
+  
+
+  /* setup output device to specified RAD module, default is RAD1 */
+  dev_name=malloc(sizeof(char)*15);
+  if ((ai->device) != NULL)
+    sprintf(dev_name,"%s%s%s","RAD",ai->device,".AnalogOut");
+  else 
+    dev_name="RAD1.AnalogOut";
+
+  /* find the device resource */
+  dev=alGetResourceByName(AL_SYSTEM,dev_name,AL_DEVICE_TYPE);
+  if (!dev) {
+    fprintf(stderr,"Invalid audio resource: %d\n",oserror());
     exit(-1);
   }
+
+  /* set the resource */
+  if (!quiet)
+    printf("Decoding stream to audio device: %s\n",dev_name);
+  alSetDevice(ai->config,dev);
+
+  ai->port = ALopenport("mpg123-VSC", "w", ai->config);
+  if(ai->port == NULL){
+    fprintf(stderr, "Unable to open audio channel: %d\n",oserror());
+    exit(-1);
+  }
+  free(dev_name);
 
   audio_reset_parameters(ai);
     

@@ -36,7 +36,7 @@ Uses code (or at least ideas) from:
   and more ....
 
 current distribution site for new test versions is:
-  http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html
+  http://www-ti.informatik.uni-tuebingen.de/~hippm/mpg123.html
 
 here's Oliver Fromme's mpg123 page:
   http://mpg.123.org/
@@ -79,11 +79,10 @@ The mpegaudio package was written by various people from the MPEG/audio
 software simulation group. The maplay is under GPL .. You can find the
 original source code and the mpegaudio package on: ftp.tnt.uni-hannover.de.
 
-You will find code from the mpegaudio package in:
-   layer3.c
-   common.c
-   mpg123.h
-I also often used the same variable names in the rewritten parts.
+Especially layer3.c common.c and mpg123.h is based on the dist10 package.
+The code is fullly rewritten but I'm using sometimes the
+same variable names or similar function names as in the
+original package.
 
 In the current layer3.c I'm using a DCT36 from Jeff Tsay's 
 (ctsay@pasteur.eecs.berkeley.edu) maplay 1.2+ package. His code is
@@ -93,10 +92,12 @@ it was slightly slower than the unrolled 9 point DCT (at least on
 _my_ system)). Theoretically it should be faster. You may try it on
 your system.
 
-The output is always 'two channel interleaved'. If the input is a
-a mono-stream or single-channel is enabled, the player duplicates
-the channel. Currently, only (very simple) audiosupport for
-Linux,HP7xx,SGI,SunOS/Solaris and FreeBSD systems.
+The output can converted to different audio formats and
+rates. Currently, only (very simple) audiosupport for
+the most common computer systems. It's possible
+to build a 'generic' version which needs an external
+audio player for playing.
+
 I have tested the program with a lot of teststreams, but it's very 
 likely, that there are still a few bugs.
 
@@ -109,6 +110,12 @@ Change them to optimize the player for your environment. For slow
 networks a proven config is:
 #define NAS_SOUND_PORT_DURATION 10 /* seconds */
 #define NAS_SOUND_LOW_WATER_MARK 75 /* percent */
+
+Pentium optimization notes:
+---------------------------
+The ASM optimaztions are especially for Intel Pentium FPUs.
+On other processorts the egcs compiler optimiazation
+may do a better job.
 
 
 have fun,

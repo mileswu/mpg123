@@ -5,7 +5,9 @@
  *   Wed Apr  9 20:57:47 MET DST 1997
  */
 
-#ifndef WIN32
+#undef ALSA
+
+#if !defined(WIN32) && !defined(GENERIC)
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -279,7 +281,7 @@ unsigned int proxyport;
 
 #define ACCEPT_HEAD "Accept: audio/mpeg, audio/x-mpegurl, */*\r\n"
 
-FILE *http_open (char *url)
+int http_open (char *url)
 {
 }
 #endif

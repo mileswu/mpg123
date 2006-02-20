@@ -17,13 +17,14 @@ typedef struct {
 	char *lname;	/* long option name, can be 0 */
 	int flags;	/* see below */
 	void (*func)(char *);	/* called if != 0 (after setting of var) */
-	void *var;	/* type is *int, *char or **char, see below */
+	void *var;	/* type is *long, *char or **char, see below */
 	int value;
 } topt;
 
 #define GLO_ARG  1
 #define GLO_CHAR 2
 #define GLO_NUM  0
+#define GLO_LONG GLO_NUM
 
 /* flags:
  *	bit 0 = 0 - no argument

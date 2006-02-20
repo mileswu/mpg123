@@ -2,8 +2,11 @@
  * Audio 'LIB' defines
  */
 
-enum { AUDIO_OUT_HEADPHONES,AUDIO_OUT_INTERNAL_SPEAKER,AUDIO_OUT_LINE_OUT };
-enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT, DECODE_BUFFER };
+#define AUDIO_OUT_HEADPHONES       0x01
+#define AUDIO_OUT_INTERNAL_SPEAKER 0x02
+#define AUDIO_OUT_LINE_OUT         0x04
+
+enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT, DECODE_BUFFER, DECODE_WAV };
 
 #define AUDIO_FORMAT_MASK	  0x100
 #define AUDIO_FORMAT_16		  0x100
@@ -19,12 +22,21 @@ enum { DECODE_TEST, DECODE_AUDIO, DECODE_STDOUT, DECODE_BUFFER };
 /* 3% rate tolerance */
 #define AUDIO_RATE_TOLERANCE	  3
 
-#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(OSS) || defined(__NetBSD__)
-#define AUDIO_USES_FD
+#if 0
+#if defined(HPUX) || defined(SUNOS) || defined(SOLARIS) || defined(OSS) || defined(__NetBSD__) || defined(SPARCLINUX) || defined(__FreeBSD__)
+#endif
 #endif
 
+#define AUDIO_USES_FD
+
 #ifdef SGI
-#include <audio.h>
+/* #include <audio.h> */
+#include <dmedia/audio.h>
+#endif
+
+
+#ifdef ALSA
+#include <sys/asoundlib.h>
 #endif
 
 struct audio_info_struct
@@ -37,8 +49,12 @@ struct audio_info_struct
   ALport port;
 #endif
   long rate;
-  int gain;
+  long gain;
   int output;
+#ifdef ALSA
+  void *handle;
+  snd_pcm_format_t alsa_format;
+#endif
   char *device;
   int channels;
   int format;

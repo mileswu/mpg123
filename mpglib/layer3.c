@@ -3,22 +3,17 @@
  * --------------------------
  * copyright (c) 1995,1996,1997 by Michael Hipp.
  * All rights reserved. See also 'README'
- *
- * - I'm currently working on that .. needs a few more optimizations,
- *   though the code is now fast enough to run in realtime on a 100Mhz 486
- * - a few personal notes are in german .. 
- *
- * used source: 
- *   mpeg1_iis package
  */ 
 
 #include <stdlib.h>
 #include "mpg123.h"
+#include "mpglib.h"
 #include "huffman.h"
 
-#if 0
-#include "get1bit.h"
-#endif
+extern struct mpstr *gmp;
+
+#define MPEG1
+
 
 static real ispow[8207];
 static real aa_ca[8],aa_cs[8];
@@ -30,15 +25,12 @@ static real COS9[9];
 static real COS6_1,COS6_2;
 static real tfcos36[9];
 static real tfcos12[3];
-#ifdef NEW_DCT9
-static real cos9[3],cos18[3];
-#endif
 
 struct bandInfoStruct {
-  int longIdx[23];
-  int longDiff[22];
-  int shortIdx[14];
-  int shortDiff[13];
+  short longIdx[23];
+  short longDiff[22];
+  short shortIdx[14];
+  short shortDiff[13];
 };
 
 int longLimit[9][23];
@@ -150,15 +142,6 @@ void init_layer3(int down_sample_sblimit)
   COS6_1 = cos( M_PI / 6.0 * (double) 1);
   COS6_2 = cos( M_PI / 6.0 * (double) 2);
 
-#ifdef NEW_DCT9
-  cos9[0] = cos(1.0*M_PI/9.0);
-  cos9[1] = cos(5.0*M_PI/9.0);
-  cos9[2] = cos(7.0*M_PI/9.0);
-  cos18[0] = cos(1.0*M_PI/18.0);
-  cos18[1] = cos(11.0*M_PI/18.0);
-  cos18[2] = cos(13.0*M_PI/18.0);
-#endif
-
   for(i=0;i<12;i++)
   {
     win[2][i]  = 0.5 * sin( M_PI / 24.0 * (double) (2*i+1) ) / cos ( M_PI * (double) (2*i+7) / 24.0 );
@@ -203,7 +186,7 @@ void init_layer3(int down_sample_sblimit)
    struct bandInfoStruct *bi = &bandInfo[j];
    int *mp;
    int cb,lwin;
-   int *bdf;
+   short *bdf;
 
    mp = map[j][0] = mapbuf0[j];
    bdf = bi->longDiff;
@@ -310,6 +293,7 @@ void init_layer3(int down_sample_sblimit)
 /*
  * read additional side information
  */
+#ifdef MPEG1 
 static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
  int ms_stereo,long sfreq,int single)
 {
@@ -385,6 +369,7 @@ static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
      }
    }
 }
+#endif
 
 /*
  * Side Info for MPEG 2.0 / LSF
@@ -466,6 +451,7 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
 /*
  * read scalefactors
  */
+#ifdef MPEG1
 static int III_get_scale_factors_1(int *scf,struct gr_info_s *gr_info)
 {
    static unsigned char slen[2][16] = {
@@ -553,6 +539,7 @@ static int III_get_scale_factors_1(int *scf,struct gr_info_s *gr_info)
     }
     return numbits;
 }
+#endif
 
 static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_stereo)
 {
@@ -975,6 +962,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
   return 0;
 }
 
+#if 0
 static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
    struct gr_info_s *gr_info,int sfreq,int part2bits)
 {
@@ -1384,6 +1372,7 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
   }
   return 0;
 }
+#endif
 
 /* 
  * III_stereo: calculate real channel values for Joint-I-Stereo-mode
@@ -1569,53 +1558,18 @@ static void III_antialias(real xr[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info)
   }
 }
 
-/* 
-// This is an optimized DCT from Jeff Tsay's maplay 1.2+ package.
-// Saved one multiplication by doing the 'twiddle factor' stuff
-// together with the window mul. (MH)
-//
-// This uses Byeong Gi Lee's Fast Cosine Transform algorithm, but the
-// 9 point IDCT needs to be reduced further. Unfortunately, I don't
-// know how to do that, because 9 is not an even number. - Jeff.
-//
-//////////////////////////////////////////////////////////////////
-//
-// 9 Point Inverse Discrete Cosine Transform
-//
-// This piece of code is Copyright 1997 Mikko Tommila and is freely usable
-// by anybody. The algorithm itself is of course in the public domain.
-//
-// Again derived heuristically from the 9-point WFTA.
-//
-// The algorithm is optimized (?) for speed, not for small rounding errors or
-// good readability.
-//
-// 36 additions, 11 multiplications
-//
-// Again this is very likely sub-optimal.
-//
-// The code is optimized to use a minimum number of temporary variables,
-// so it should compile quite well even on 8-register Intel x86 processors.
-// This makes the code quite obfuscated and very difficult to understand.
-//
-// References:
-// [1] S. Winograd: "On Computing the Discrete Fourier Transform",
-//     Mathematics of Computation, Volume 32, Number 141, January 1978,
-//     Pages 175-199
-*/
+/*
+ DCT insipired by Jeff Tsay's DCT from the maplay package
+ this is an optimized version with manual unroll.
 
-/*------------------------------------------------------------------*/
-/*                                                                  */
-/*    Function: Calculation of the inverse MDCT                     */
-/*                                                                  */
-/*------------------------------------------------------------------*/
+ References:
+ [1] S. Winograd: "On Computing the Discrete Fourier Transform",
+     Mathematics of Computation, Volume 32, Number 141, January 1978,
+     Pages 175-199
+*/
 
 static void dct36(real *inbuf,real *o1,real *o2,real *wintab,real *tsbuf)
 {
-#ifdef NEW_DCT9
-  real tmp[18];
-#endif
-
   {
     register real *in = inbuf;
 
@@ -1629,120 +1583,6 @@ static void dct36(real *inbuf,real *o1,real *o2,real *wintab,real *tsbuf)
     in[17]+=in[15]; in[15]+=in[13]; in[13]+=in[11]; in[11]+=in[9];
     in[9] +=in[7];  in[7] +=in[5];  in[5] +=in[3];  in[3] +=in[1];
 
-
-#ifdef NEW_DCT9
-    {
-      real t0, t1, t2, t3, t4, t5, t6, t7;
-
-      t1 = COS6_2 * in[12];
-      t2 = COS6_2 * (in[8] + in[16] - in[4]);
-
-      t3 = in[0] + t1;
-      t4 = in[0] - t1 - t1;
-      t5 = t4 - t2;
-
-      t0 = cos9[0] * (in[4] + in[8]);
-      t1 = cos9[1] * (in[8] - in[16]);
-
-      tmp[4] = t4 + t2 + t2;
-      t2 = cos9[2] * (in[4] + in[16]);
-
-      t6 = t3 - t0 - t2;
-      t0 += t3 + t1;
-      t3 += t2 - t1;
-
-      t2 = cos18[0] * (in[2]  + in[10]);
-      t4 = cos18[1] * (in[10] - in[14]);
-      t7 = COS6_1 * in[6];
-
-      t1 = t2 + t4 + t7;
-      tmp[0] = t0 + t1;
-      tmp[8] = t0 - t1;
-      t1 = cos18[2] * (in[2] + in[14]);
-      t2 += t1 - t7;
-
-      tmp[3] = t3 + t2;
-      t0 = COS6_1 * (in[10] + in[14] - in[2]);
-      tmp[5] = t3 - t2;
-
-      t4 -= t1 + t7;
-
-      tmp[1] = t5 - t0;
-      tmp[7] = t5 + t0;
-      tmp[2] = t6 + t4;
-      tmp[6] = t6 - t4;
-    }
-
-    {
-      real t0, t1, t2, t3, t4, t5, t6, t7;
-
-      t1 = COS6_2 * in[13];
-      t2 = COS6_2 * (in[9] + in[17] - in[5]);
-
-      t3 = in[1] + t1;
-      t4 = in[1] - t1 - t1;
-      t5 = t4 - t2;
-
-      t0 = cos9[0] * (in[5] + in[9]);
-      t1 = cos9[1] * (in[9] - in[17]);
-
-      tmp[13] = (t4 + t2 + t2) * tfcos36[17-13];
-      t2 = cos9[2] * (in[5] + in[17]);
-
-      t6 = t3 - t0 - t2;
-      t0 += t3 + t1;
-      t3 += t2 - t1;
-
-      t2 = cos18[0] * (in[3]  + in[11]);
-      t4 = cos18[1] * (in[11] - in[15]);
-      t7 = COS6_1 * in[7];
-
-      t1 = t2 + t4 + t7;
-      tmp[17] = (t0 + t1) * tfcos36[17-17];
-      tmp[9]  = (t0 - t1) * tfcos36[17-9];
-      t1 = cos18[2] * (in[3] + in[15]);
-      t2 += t1 - t7;
-
-      tmp[14] = (t3 + t2) * tfcos36[17-14];
-      t0 = COS6_1 * (in[11] + in[15] - in[3]);
-      tmp[12] = (t3 - t2) * tfcos36[17-12];
-
-      t4 -= t1 + t7;
-
-      tmp[16] = (t5 - t0) * tfcos36[17-16];
-      tmp[10] = (t5 + t0) * tfcos36[17-10];
-      tmp[15] = (t6 + t4) * tfcos36[17-15];
-      tmp[11] = (t6 - t4) * tfcos36[17-11];
-   }
-
-#define MACRO(v) { \
-    real tmpval; \
-    real sum0 = tmp[(v)]; \
-    real sum1 = tmp[17-(v)]; \
-    out2[9+(v)] = (tmpval = sum0 + sum1) * w[27+(v)]; \
-    out2[8-(v)] = tmpval * w[26-(v)]; \
-    sum0 -= sum1; \
-    ts[SBLIMIT*(8-(v))] = out1[8-(v)] + sum0 * w[8-(v)]; \
-    ts[SBLIMIT*(9+(v))] = out1[9+(v)] + sum0 * w[9+(v)]; }
-
-{
-   register real *out2 = o2;
-   register real *w = wintab;
-   register real *out1 = o1;
-   register real *ts = tsbuf;
-
-   MACRO(0);
-   MACRO(1);
-   MACRO(2);
-   MACRO(3);
-   MACRO(4);
-   MACRO(5);
-   MACRO(6);
-   MACRO(7);
-   MACRO(8);
-}
-
-#else
 
   {
 
@@ -1828,7 +1668,6 @@ static void dct36(real *inbuf,real *o1,real *o2,real *wintab,real *tsbuf)
 		MACRO0(4);
 	}
   }
-#endif
 
   }
 }
@@ -1980,8 +1819,8 @@ static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
    int ch,struct gr_info_s *gr_info)
 {
    real *tspnt = (real *) tsOut;
-   static real block[2][2][SBLIMIT*SSLIMIT] = { { { 0, } } };
-   static int blc[2]={0,0};
+   real (*block)[2][SBLIMIT*SSLIMIT] = gmp->hybrid_block;
+   int *blc = gmp->hybrid_blc;
    real *rawout1,*rawout2;
    int bt;
    int sb = 0;
@@ -2028,7 +1867,7 @@ static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
 /*
  * main layer3 handler
  */
-int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
+int do_layer3(struct frame *fr,unsigned char *pcm_sample,int *pcm_point)
 {
   int gr, ch, ss,clip=0;
   int scalefacs[39]; /* max 39 for short[13][3] mode, mixed: 38, long: 22 */
@@ -2061,10 +1900,15 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
   }
   else {
     granules = 2;
+#ifdef MPEG1
     III_get_side_info_1(&sideinfo,stereo,ms_stereo,sfreq,single);
+#else
+    fprintf(stderr,"Not supported\n");
+#endif
   }
 
-  set_pointer(sideinfo.main_data_begin);
+  if(set_pointer(sideinfo.main_data_begin) == MP3_ERR)
+    return 0;
 
   for (gr=0;gr<granules;gr++) 
   {
@@ -2076,8 +1920,13 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
       long part2bits;
       if(fr->lsf)
         part2bits = III_get_scale_factors_2(scalefacs,gr_info,0);
-      else
+      else {
+#ifdef MPEG1
         part2bits = III_get_scale_factors_1(scalefacs,gr_info);
+#else
+	fprintf(stderr,"Not supported\n");
+#endif
+      }
       if(III_dequantize_sample(hybridIn[0], scalefacs,gr_info,sfreq,part2bits))
         return clip;
     }
@@ -2086,20 +1935,30 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
       long part2bits;
       if(fr->lsf) 
         part2bits = III_get_scale_factors_2(scalefacs,gr_info,i_stereo);
-      else
-        part2bits = III_get_scale_factors_1(scalefacs,gr_info);
-      if(ms_stereo) {
-        if(III_dequantize_sample_ms(hybridIn,scalefacs,gr_info,sfreq,part2bits))
-          return clip;
-      }
       else {
-        if(III_dequantize_sample(hybridIn[1],scalefacs,gr_info,sfreq,part2bits))
+#ifdef MPEG1
+        part2bits = III_get_scale_factors_1(scalefacs,gr_info);
+#else
+	fprintf(stderr,"Not supported\n");
+#endif
+      }
+
+      if(III_dequantize_sample(hybridIn[1],scalefacs,gr_info,sfreq,part2bits))
           return clip;
+
+      if(ms_stereo) {
+        int i;
+        for(i=0;i<SBLIMIT*SSLIMIT;i++) {
+          real tmp0,tmp1;
+          tmp0 = ((real *) hybridIn[0])[i];
+          tmp1 = ((real *) hybridIn[1])[i];
+          ((real *) hybridIn[1])[i] = tmp0 - tmp1;  
+          ((real *) hybridIn[0])[i] = tmp0 + tmp1;
+        }
       }
 
       if(i_stereo)
         III_i_stereo(hybridIn,scalefacs,gr_info,sfreq,ms_stereo,fr->lsf);
-
 
       if(ms_stereo || i_stereo || (single == 3) ) {
         if(gr_info->maxb > sideinfo.ch[0].gr[gr].maxb) 
@@ -2134,50 +1993,16 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
       III_hybrid(hybridIn[ch], hybridOut[ch], ch,gr_info);
     }
 
-#ifdef I486_OPT
-    if (fr->synth != synth_1to1) {
-#endif
     for(ss=0;ss<SSLIMIT;ss++) {
       if(single >= 0) {
-        clip += (fr->synth_mono)(hybridOut[0][ss],pcm_sample,&pcm_point);
+        clip += synth_1to1_mono(hybridOut[0][ss],pcm_sample,pcm_point);
       }
       else {
-        int p1 = pcm_point;
-        clip += (fr->synth)(hybridOut[0][ss],0,pcm_sample,&p1);
-        clip += (fr->synth)(hybridOut[1][ss],1,pcm_sample,&pcm_point);
-      }
-
-#ifdef VARMODESUPPORT
-      if (playlimit < 128) {
-        pcm_point -= playlimit >> 1;
-        playlimit = 0;
-      }
-      else
-        playlimit -= 128;
-#endif
-
-      if(pcm_point >= audiobufsize)
-        audio_flush(outmode,ai);
-    }
-#ifdef I486_OPT
-    } else {
-      /* Only stereo, 16 bits benefit from the 486 optimization. */
-      ss=0;
-      while (ss < SSLIMIT) {
-        int n;
-        n=(audiobufsize - pcm_point) / (2*2*32);
-        if (n > (SSLIMIT-ss)) n=SSLIMIT-ss;
-        
-        synth_1to1_486(hybridOut[0][ss],0,pcm_sample+pcm_point,n);
-        synth_1to1_486(hybridOut[1][ss],1,pcm_sample+pcm_point,n);
-        ss+=n;
-        pcm_point+=(2*2*32)*n;
-        
-        if(pcm_point >= audiobufsize)
-          audio_flush(outmode,ai);
+        int p1 = *pcm_point;
+        clip += synth_1to1(hybridOut[0][ss],0,pcm_sample,&p1);
+        clip += synth_1to1(hybridOut[1][ss],1,pcm_sample,pcm_point);
       }
     }
-#endif
   }
   
   return clip;

@@ -15,6 +15,7 @@
 
 #include "mpg123.h"
 #include "tables.h"
+#include "genre.h"
 
 /* max = 1728 */
 #define MAXFRAMESIZE 1792
@@ -47,19 +48,6 @@ static int bsnum=0;
 static unsigned long oldhead = 0;
 static unsigned long firsthead=0;
 
-struct ibuf {
-	struct ibuf *next;
-	struct ibuf *prev;
-	unsigned char *buf;
-	unsigned char *pnt;
-	int len;
-	/* skip,time stamp */
-};
-
-struct ibuf ibufs[2];
-struct ibuf *cibuf;
-int ibufnum=0;
-
 unsigned char *pcm_sample;
 int pcm_point = 0;
 int audiobufsize = AUDIOBUFSIZE;
@@ -85,11 +73,8 @@ int varmode = FALSE;
 int playlimit;
 #endif
 
-static int filept;
-static int filept_opened;
-
 static int decode_header(struct frame *fr,unsigned long newhead);
-static void print_id3_tag(char *buf);
+void print_id3_tag(char *buf);
 
 static void get_II_stuff(struct frame *fr)
 {
@@ -116,6 +101,7 @@ static void get_II_stuff(struct frame *fr)
   fr->II_sblimit = sblim;
 }
 
+
 void audio_flush(int outmode, struct audio_info_struct *ai)
 {
   if (pcm_point) {
@@ -129,12 +115,15 @@ void audio_flush(int outmode, struct audio_info_struct *ai)
       case DECODE_BUFFER:
         write (buffer_fd[1], pcm_sample, pcm_point);
         break;
+      case DECODE_WAV:
+        wav_write(pcm_sample, pcm_point);
+        break;
     }
     pcm_point = 0;
   }
 }
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(GENERIC)
 void (*catchsignal(int signum, void(*handler)()))()
 {
   struct sigaction new_sa;
@@ -155,322 +144,6 @@ void (*catchsignal(int signum, void(*handler)()))()
 #endif
 
 #define HDRCMPMASK 0xfffffd00
-
-/*******************************************************************
- * stream based operation
- */
-
-void stream_close(void)
-{
-    if (filept_opened)
-        close(filept);
-}
-
-/**************************************** 
- * HACK,HACK,HACK: step back <num> frames 
- * can only work if the 'stream' isn't a real stream but a file
- */
-static int stream_back_frame(struct frame *fr,int num)
-{
-	long bytes;
-	unsigned char buf[4];
-	unsigned long newhead;
-
-	if(!firsthead)
-		return 0;
-
-	bytes = (fr->framesize+8)*(num+2);
-
-	if(lseek(filept,-bytes,SEEK_CUR) < 0)
-		return -1;
-
-	if(read(filept,buf,4) != 4)
-		return -1;
-
-	newhead = (buf[0]<<24) + (buf[1]<<16) + (buf[2]<<8) + buf[3];
-	
-	while( (newhead & HDRCMPMASK) != (firsthead & HDRCMPMASK) ) {
-		if(read(filept,buf,1) != 1)
-			return -1;
-		newhead <<= 8;
-		newhead |= buf[0];
-		newhead &= 0xffffffff;
-	}
-
-	if( lseek(filept,-4,SEEK_CUR) < 0)
-		return -1;
-	
-	read_frame(fr);
-	read_frame(fr);
-
-	if(fr->lay == 3) {
-		set_pointer(512);
-	}
-
-	return 0;
-}
-
-static int stream_head_read(unsigned char *hbuf,unsigned long *newhead)
-{
-#ifdef VARMODESUPPORT
-	if(varmode) {
-		if(read(filept,hbuf,8) != 8)
-			return FALSE;
-	}
-	else
-#else
-	if(read(filept,hbuf,4) != 4)
-		return FALSE;
-#endif
-
-	*newhead = ((unsigned long) hbuf[0] << 24) |
-	           ((unsigned long) hbuf[1] << 16) |
-	           ((unsigned long) hbuf[2] << 8)  |
-	            (unsigned long) hbuf[3];
-
-	return TRUE;
-}
-
-static int stream_head_shift(unsigned char *hbuf,unsigned long *head)
-{
-  memmove (&hbuf[0], &hbuf[1], 3);
-  if(read(filept,hbuf+3,1) != 1)
-    return 0;
-  *head <<= 8;
-  *head |= hbuf[3];
-  *head &= 0xffffffff;
-  return 1;
-}
-
-static int stream_skip_bytes(int len)
-{
-  return lseek(filept,len,SEEK_CUR);
-}
-
-static int stream_read_frame_body(int size)
-{
-  long l;
-
-  if( (l=read(filept,bsbuf,size)) != size)
-  {
-    if(l <= 0)
-      return 0;
-    memset(bsbuf+l,0,size-l);
-  }
-
-  bitindex = 0;
-  wordpointer = (unsigned char *) bsbuf;
-
-  return 1;
-}
-
-static long stream_tell(void)
-{
-  return lseek(filept,0,SEEK_CUR);
-}
-
-static void stream_rewind(void)
-{
-  lseek(filept,0,SEEK_SET);
-}
-
-
-#ifdef READ_MMAP
-/*********************************************************+
- * memory mapped operation 
- *
- */
-static unsigned char *mapbuf;
-static unsigned char *mappnt;
-static unsigned char *mapend;
-
-static int mapped_init(struct reader *rd_struct) 
-{
-	long len;
-	char buf[128];
-
-        if((len=lseek(filept,0,SEEK_END)) < 0) {
-                return -1;
-        }
-	if(lseek(filept,-128,SEEK_END) < 0)
-		return -1;
-	if(read(filept,buf,128) != 128) {
-		return -1;
-	}
-	if(!strncmp(buf,"TAG",3)) {
-		print_id3_tag(buf);
-		len -= 128;
-	}
-	if(lseek(filept,0,SEEK_SET) < 0)
-		return -1;
-	if(len <= 0)
-		return -1;
-
-        mappnt = mapbuf = 
-		mmap(NULL, len, PROT_READ, MAP_SHARED , filept, 0);
-	if(!mapbuf || mapbuf == MAP_FAILED)
-		return -1;
-
-	mapend = mapbuf + len;
-	
-	if(param.verbose > 1)
-		fprintf(stderr,"Using memory mapped IO for this stream.\n");
-
-	rd_struct->filelen = len;
-	return 0;
-}
-
-static void mapped_rewind(void)
-{
-	mappnt = mapbuf;
-}
-
-static void mapped_close(void)
-{
-	munmap(mapbuf,mapend-mapbuf);
-	if (filept_opened)
-		close(filept);
-}
-
-static int mapped_head_read(unsigned char *hbuf,unsigned long *newhead) 
-{
-	unsigned long nh;
-
-	if(mappnt + 4 > mapend)
-		return FALSE;
-
-	nh = (*hbuf++ = *mappnt++)  << 24;
-	nh |= (*hbuf++ = *mappnt++) << 16;
-	nh |= (*hbuf++ = *mappnt++) << 8;
-	nh |= (*hbuf++ = *mappnt++) ;
-
-	*newhead = nh;
-	return TRUE;
-}
-
-static int mapped_head_shift(unsigned char *hbuf,unsigned long *head)
-{
-  if(mappnt + 1 > mapend)
-    return FALSE;
-  memmove (&hbuf[0], &hbuf[1], 3);
-  hbuf[3] = *mappnt++;
-  *head <<= 8;
-  *head |= hbuf[3];
-  *head &= 0xffffffff;
-  return TRUE;
-}
-
-static int mapped_skip_bytes(int len)
-{
-  if(mappnt + len > mapend)
-    return FALSE;
-  mappnt += len;
-  return TRUE;
-}
-
-static int mapped_read_frame_body(int size)
-{
-
-#if 1
-  if(mappnt + size > mapend)
-    return FALSE;
-#else
-  long l;
-  if(size > (mapend-mappnt)) {
-    l = mapend-mappnt;
-    memcpy(bsbuf,mappnt,l);
-    memset(bsbuf+l,0,size-l);
-  }
-  else
-#endif
-    memcpy(bsbuf,mappnt,size);
-
-  mappnt += size;
-  bitindex = 0;
-  wordpointer = (unsigned char *) bsbuf;
-
-  return TRUE;
-}
-
-static int mapped_back_frame(struct frame *fr,int num)
-{
-    long bytes;
-    unsigned long newhead;
-
-    if(!firsthead)
-        return 0;
-
-    bytes = (fr->framesize+8)*(num+2);
-
-    if( (mappnt - bytes) < mapbuf || (mappnt - bytes + 4) > mapend)
-        return -1;
-    mappnt -= bytes;
-
-    newhead = (mappnt[0]<<24) + (mappnt[1]<<16) + (mappnt[2]<<8) + mappnt[3];
-    mappnt += 4;
-
-    while( (newhead & HDRCMPMASK) != (firsthead & HDRCMPMASK) ) {
-        if(mappnt + 1 > mapend)
-            return -1;
-        newhead <<= 8;
-        newhead |= *mappnt++;
-        newhead &= 0xffffffff;
-    }
-    mappnt -= 4;
-
-    read_frame(fr);
-    read_frame(fr);
-
-    if(fr->lay == 3)
-        set_pointer(512);
-
-    return 0;
-}
-
-static long mapped_tell(void)
-{
-  return mappnt - mapbuf;
-}
-
-#endif
-
-/*****************************************************************
- * read frame helper
- */
-
-struct reader *rd;
-struct reader readers[] = {
-#ifdef READ_SYSTEM
- { system_init,
-   NULL,	/* filled in by system_init() */
-   NULL,
-   NULL,
-   NULL,
-   NULL,
-   NULL,
-   NULL } ,
-#endif
-#ifdef READ_MMAP
- { mapped_init,
-   mapped_close,
-   mapped_head_read,
-   mapped_head_shift,
-   mapped_skip_bytes,
-   mapped_read_frame_body,
-   mapped_back_frame,
-   mapped_tell,
-   mapped_rewind } ,
-#endif
- { NULL,
-   stream_close,
-   stream_head_read,
-   stream_head_shift,
-   stream_skip_bytes,
-   stream_read_frame_body,
-   stream_back_frame,
-   stream_tell,
-   stream_rewind }
-};
 
 
 void read_frame_init (void)
@@ -501,7 +174,6 @@ int read_frame(struct frame *fr)
 {
   unsigned long newhead;
   static unsigned char ssave[34];
-  unsigned char hbuf[8];
 
   fsizeold=fr->framesize;       /* for Layer3 */
 
@@ -519,7 +191,7 @@ int read_frame(struct frame *fr)
   }
 
 read_again:
-  if(!rd->head_read(hbuf,&newhead))
+  if(!rd->head_read(rd,&newhead))
     return FALSE;
 
   if(1 || oldhead != newhead || !oldhead)
@@ -546,28 +218,22 @@ init_resync:
 
 		/* I even saw RIFF headers at the beginning of MPEG streams ;( */
 		if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
-			if(!rd->head_read(hbuf,&newhead))
+			if(!rd->head_read(rd,&newhead))
 				return 0;
 			while(newhead != ('d'<<24)+('a'<<16)+('t'<<8)+'a') {
-				if(!rd->head_shift(hbuf,&newhead))
+				if(!rd->head_shift(rd,&newhead))
 					return 0;
 			}
-			if(!rd->head_read(hbuf,&newhead))
+			if(!rd->head_read(rd,&newhead))
 				return 0;
 			fprintf(stderr,"Skipped RIFF header!\n");
 			goto read_again;
 		}
 
-		/* and those ugly ID3 tags */
-		if((newhead & 0xffffff00) == ('T'<<24)+('A'<<16)+('G'<<8)) {
-			rd->skip_bytes(124);
-			fprintf(stderr,"Skipped ID3 Tag!\n");
-			goto read_again;
-		}
 #if 0
 		/* search in 32 bit steps through the first 2K */
 		for(i=0;i<512;i++) {
-			if(!rd->head_read(hbuf,&newhead))
+			if(!rd->head_read(rd,&newhead))
 				return 0;
 			if(head_check(newhead))
 				break;
@@ -577,7 +243,7 @@ init_resync:
 		{
 			/* step in byte steps through next 64K */
 			for(i=0;i<65536;i++) {
-				if(!rd->head_shift(hbuf,&newhead))
+				if(!rd->head_shift(rd,&newhead))
 					return 0;
 				if(head_check(newhead))
 					break;
@@ -598,7 +264,13 @@ init_resync:
     if( (newhead & 0xffe00000) != 0xffe00000) {
       if (!param.quiet)
         fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
-              newhead,rd->tell()-4);
+              newhead,rd->tell(rd)-4);
+    /* and those ugly ID3 tags */
+      if((newhead & 0xffffff00) == ('T'<<24)+('A'<<16)+('G'<<8)) {
+           rd->skip_bytes(rd,124);
+           fprintf(stderr,"Skipped ID3 Tag!\n");
+           goto read_again;
+      }
       if (param.tryresync) {
         int try = 0;
             /* Read more bytes until we find something that looks
@@ -608,7 +280,7 @@ init_resync:
                too much distortion in the audio output).  */
         do {
           try++;
-          if(!rd->head_shift(hbuf,&newhead))
+          if(!rd->head_shift(rd,&newhead))
 		return 0;
           if (!oldhead)
             goto init_resync;       /* "considered harmful", eh? */
@@ -637,8 +309,11 @@ init_resync:
   bsnum = (bsnum + 1) & 1;
 
   /* read main data into memory */
-  if(!rd->read_frame_body(fr->framesize))
+  if(!rd->read_frame_body(rd,bsbuf,fr->framesize))
     return 0;
+
+  bitindex = 0;
+  wordpointer = (unsigned char *) bsbuf;
 
   if (param.halfspeed && fr->lay == 3)
     memcpy (ssave, bsbuf, ssize);
@@ -647,9 +322,46 @@ init_resync:
 
 }
 
+/****************************************
+ * HACK,HACK,HACK: step back <num> frames
+ * can only work if the 'stream' isn't a real stream but a file
+ */
+int back_frame(struct reader *rds,struct frame *fr,int num)
+{
+  long bytes;
+  unsigned long newhead;
+  
+  if(!firsthead)
+    return 0;
+  
+  bytes = (fr->framesize+8)*(num+2);
+  
+  if(rds->back_bytes(rds,bytes) < 0)
+    return -1;
+  if(!rds->head_read(rds,&newhead))
+    return -1;
+  
+  while( (newhead & HDRCMPMASK) != (firsthead & HDRCMPMASK) ) {
+    if(!rds->head_shift(rds,&newhead))
+      return -1;
+  }
+  
+  if(rds->back_bytes(rds,4) <0)
+    return -1;
+
+  read_frame(fr);
+  read_frame(fr);
+  
+  if(fr->lay == 3) {
+    set_pointer(512);
+  }
+  
+  return 0;
+}
+
 
 /*
- * the code a header and write the information
+ * decode a header and write the information
  * into the frame structure
  */
 static int decode_header(struct frame *fr,unsigned long newhead)
@@ -704,7 +416,7 @@ static int decode_header(struct frame *fr,unsigned long newhead)
     switch(fr->lay)
     {
       case 1:
-		fr->do_layer = do_layer1;
+	fr->do_layer = do_layer1;
 #ifdef VARMODESUPPORT
         if (varmode) {
           fprintf(stderr,"Sorry, layer-1 not supported in varmode.\n"); 
@@ -740,19 +452,9 @@ static int decode_header(struct frame *fr,unsigned long newhead)
           ssize = (fr->stereo == 1) ? 17 : 32;
         if(fr->error_protection)
           ssize += 2;
-#ifdef VARMODESUPPORT
-        if (varmode)
-          playlimit = ((unsigned int) hbuf[6] << 8) | (unsigned int) hbuf[7];
-          fr->framesize = ssize + 
-                      (((unsigned int) hbuf[4] << 8) | (unsigned int) hbuf[5]);
-        else {
-#endif
           fr->framesize  = (long) tabsel_123[fr->lsf][2][fr->bitrate_index] * 144000;
           fr->framesize /= freqs[fr->sampling_frequency]<<(fr->lsf);
           fr->framesize = fr->framesize + fr->padding - 4;
-#ifdef VARMODESUPPORT
-        }
-#endif
         break; 
       default:
         fprintf(stderr,"Sorry, unknown layer type.\n"); 
@@ -806,7 +508,7 @@ void print_header_compact(struct frame *fr)
 		freqs[fr->sampling_frequency], modes[fr->mode]);
 }
 
-static void print_id3_tag(char *buf)
+void print_id3_tag(char *buf)
 {
 	struct id3tag {
 		char tag[3];
@@ -823,6 +525,7 @@ static void print_id3_tag(char *buf)
 	char album[31]={0,};
 	char year[5]={0,};
 	char comment[31]={0,};
+	char genre[31]={0,};
 
 	if(param.quiet)
 		return;
@@ -833,9 +536,15 @@ static void print_id3_tag(char *buf)
 	strncpy(year,tag->year,4);
 	strncpy(comment,tag->comment,30);
 
+	if ( tag->genre <= sizeof(genre_table)/sizeof(*genre_table) ) {
+		strncpy(genre, genre_table[tag->genre], 30);
+	} else {
+		strncpy(genre,"Unknown",30);
+	}
+	
 	fprintf(stderr,"Title  : %30s  Artist: %s\n",title,artist);
-	fprintf(stderr,"Album  : %30s  Year: %4s, Genre: %d\n",album,year,(int)tag->genre);
-	fprintf(stderr,"Comment: %30s \n",comment);
+	fprintf(stderr,"Album  : %30s  Year: %4s\n",album,year);
+	fprintf(stderr,"Comment: %30s  Genre: %s\n",comment,genre);
 }
 
 #if 0
@@ -906,41 +615,6 @@ int split_dir_file (const char *path, char **dname, char **fname)
 	}
 }
 
-/* open the device to read the bit stream from it */
-
-void open_stream(char *bs_filenam,int fd)
-{
-    int i;
-    filept_opened = 1;
-
-    if (!bs_filenam) {
-		if(fd < 0) {
-			filept = 0;
-			filept_opened = 0;
-		}
-		else
-			filept = fd;
-	}
-	else if (!strncmp(bs_filenam, "http://", 7)) 
-		filept = http_open(bs_filenam);
-	else if (!(filept = open(bs_filenam, O_RDONLY))) {
-		perror (bs_filenam);
-		exit(1);
-	}
-
-    for(i=0;;i++) {
-      readers[i].filelen = -1;
-      if(!readers[i].init) {
-        rd = &readers[i];
-        break;
-      }
-      if(readers[i].init(readers+i) >= 0) {
-        rd = &readers[i];
-        break;
-      }
-    }
-
-}
 
 #if 0
 static void check_buffer_range(int size)
@@ -1116,9 +790,9 @@ void print_stat(struct frame *fr,int no,long buffsize,
 {
 	double bpf,tpf,tim1,tim2;
 	double dt = 0.0;
-	int rno;
+	int sno,rno;
 
-	if(!rd || !fr || rd->filelen < 0) 
+	if(!rd || !fr) 
 		return;
 
 	bpf = compute_bpf(fr);
@@ -1130,19 +804,28 @@ void print_stat(struct frame *fr,int no,long buffsize,
 			dt *= 0.5;
 	}
 
-	rno = (int)((double)(rd->filelen-rd->tell())/bpf);
+        rno = 0;
+        sno = no;
+	if(rd->filelen >= 0) {
+          long t = rd->tell(rd);
+	  rno = (int)((double)(rd->filelen-t)/bpf);
+          sno = (int)((double)t/bpf);
+        }
+ 
+	fprintf(stderr,"\rFrame# %5d [%5d], ",sno,rno);
 
-	fprintf(stderr,"\rFrame# %5d [%5d], ",no,rno);
-
-	tim1 = no*tpf-dt;
+	tim1 = sno*tpf-dt;
 	tim2 = rno*tpf+dt;
 
+#if 0
 	tim1 = tim1 < 0 ? 0.0 : tim1;
+#endif
 	tim2 = tim2 < 0 ? 0.0 : tim2;
 
 	fprintf(stderr,"Time: %3.2f [%3.2f], ",tim1,tim2);
 	if(param.usebuffer)
-		fprintf(stderr,"[%8d] ",buffsize);
+		fprintf(stderr,"[%8ld] ",(long)buffsize);
+	fflush(stderr); /* hmm not really nec. */
 }
 
 int get_songlen(struct frame *fr,int no)

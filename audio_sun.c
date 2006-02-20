@@ -17,11 +17,15 @@
 
 #include "mpg123.h"
 
+#ifndef SPARCLINUX
 #include <sys/filio.h>
 #ifdef SUNOS
 #include <sun/audioio.h>
 #else
 #include <sys/audioio.h>
+#endif
+#else
+#include <asm/audioio.h>
 #endif
 
 static void audio_set_format_helper(struct audio_info_struct *ai,audio_info_t *ainfo);
@@ -56,7 +60,7 @@ int audio_open(struct audio_info_struct *ai)
       return -1;
   }
 #else
-#ifdef SOLARIS
+#if defined(SOLARIS) || defined(SPARCLINUX)
   {
     struct audio_device ad;
     if(ioctl(ai->fn, AUDIO_GETDEV, &ad) == -1)
@@ -76,17 +80,14 @@ int audio_open(struct audio_info_struct *ai)
 #ifndef NETBSD
   AUDIO_INITINFO(&ainfo);
 
-  switch(ai->output) {
-    case AUDIO_OUT_INTERNAL_SPEAKER:
-      ainfo.play.port = AUDIO_SPEAKER;
-      break;
-    case AUDIO_OUT_HEADPHONES:
-      ainfo.play.port = AUDIO_HEADPHONE;
-      break;
-    case AUDIO_OUT_LINE_OUT:
-      ainfo.play.port = AUDIO_LINE_OUT;
-      break;
-  }
+  if(ai->output)
+    ainfo.play.port = 0;
+  if(ai->output & AUDIO_OUT_INTERNAL_SPEAKER)
+    ainfo.play.port |= AUDIO_SPEAKER;
+  if(ai->output & AUDIO_OUT_HEADPHONES)
+    ainfo.play.port |= AUDIO_HEADPHONE;
+  if(ai->output & AUDIO_OUT_LINE_OUT)
+    ainfo.play.port |= AUDIO_LINE_OUT;
 
   if(ai->gain != -1)
     ainfo.play.gain = ai->gain;
@@ -170,7 +171,7 @@ static void audio_set_format_helper(struct audio_info_struct *ai,audio_info_t *a
       ainfo->play.precision = 16;
       break;
     case AUDIO_FORMAT_UNSIGNED_8:
-#ifdef SOLARIS
+#if defined(SOLARIS) || defined(SPARCLINUX)
       ainfo->play.encoding = AUDIO_ENCODING_LINEAR8;
       ainfo->play.precision = 8;
       break;
@@ -212,7 +213,7 @@ int audio_get_formats(struct audio_info_struct *ai)
     { AUDIO_ENCODING_ULAW , 8,  AUDIO_FORMAT_ULAW_8 } ,
     { AUDIO_ENCODING_ALAW , 8,  AUDIO_FORMAT_ALAW_8 } ,
     { AUDIO_ENCODING_LINEAR , 16,  AUDIO_FORMAT_SIGNED_16 } ,
-#ifdef SOLARIS
+#if defined(SOLARIS) || defined(SPARCLINUX)
     { AUDIO_ENCODING_LINEAR8 , 8,  AUDIO_FORMAT_UNSIGNED_8 } ,
 #endif
 #ifdef NETBSD

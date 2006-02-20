@@ -15,84 +15,15 @@
 #include <string.h>
 
 #include "mpg123.h"
+#include "mpglib.h"
 
-#if 0
+extern struct mpstr *gmp;
+
  /* old WRITE_SAMPLE */
 #define WRITE_SAMPLE(samples,sum,clip) \
   if( (sum) > 32767.0) { *(samples) = 0x7fff; (clip)++; } \
   else if( (sum) < -32768.0) { *(samples) = -0x8000; (clip)++; } \
   else { *(samples) = sum; }
-#else
- /* new WRITE_SAMPLE */
-#define WRITE_SAMPLE(samples,sum,clip) { \
-  double dtemp; int v; /* sizeof(int) == 4 */ \
-  dtemp = ((((65536.0 * 65536.0 * 16)+(65536.0 * 0.5))* 65536.0)) + (sum);  \
-  v = ((*(int *)&dtemp) - 0x80000000); \
-  if( v > 32767) { *(samples) = 0x7fff; (clip)++; } \
-  else if( v < -32768) { *(samples) = -0x8000; (clip)++; } \
-  else { *(samples) = v; }  \
-}
-#endif
-
-
-int synth_1to1_8bit(real *bandPtr,int channel,unsigned char *samples,int *pnt)
-{
-  short samples_tmp[64];
-  short *tmp1 = samples_tmp + channel;
-  int i,ret;
-  int pnt1 = 0;
-
-  ret = synth_1to1(bandPtr,channel,(unsigned char *)samples_tmp,&pnt1);
-  samples += channel + *pnt;
-
-  for(i=0;i<32;i++) {
-    *samples = conv16to8[*tmp1>>AUSHIFT];
-    samples += 2;
-    tmp1 += 2;
-  }
-  *pnt += 64;
-
-  return ret;
-}
-
-int synth_1to1_8bit_mono(real *bandPtr,unsigned char *samples,int *pnt) 
-{
-  short samples_tmp[64];
-  short *tmp1 = samples_tmp;
-  int i,ret;
-  int pnt1 = 0;
-
-  ret = synth_1to1(bandPtr,0,(unsigned char *)samples_tmp,&pnt1);
-  samples += *pnt;
-
-  for(i=0;i<32;i++) {
-    *samples++ = conv16to8[*tmp1>>AUSHIFT];
-    tmp1+=2;
-  }
-  *pnt += 32;
-
-  return ret;
-}
-
-int synth_1to1_8bit_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
-{
-  short samples_tmp[64];
-  short *tmp1 = samples_tmp;
-  int i,ret;
-  int pnt1 = 0;
-
-  ret = synth_1to1(bandPtr,0,(unsigned char *)samples_tmp,&pnt1);
-  samples += *pnt;
-
-  for(i=0;i<32;i++) {
-    *samples++ = conv16to8[*tmp1>>AUSHIFT];
-    *samples++ = conv16to8[*tmp1>>AUSHIFT];
-    tmp1 += 2;
-  }
-  *pnt += 64;
-
-  return ret;
-}
 
 int synth_1to1_mono(real *bandPtr,unsigned char *samples,int *pnt)
 {
@@ -115,46 +46,26 @@ int synth_1to1_mono(real *bandPtr,unsigned char *samples,int *pnt)
 }
 
 
-int synth_1to1_mono2stereo(real *bandPtr,unsigned char *samples,int *pnt)
-{
-  int i,ret;
-
-  ret = synth_1to1(bandPtr,0,samples,pnt);
-  samples = samples + *pnt - 128;
-
-  for(i=0;i<32;i++) {
-    ((short *)samples)[1] = ((short *)samples)[0];
-    samples+=4;
-  }
-
-  return ret;
-}
-
 int synth_1to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
 {
-#ifndef PENTIUM_OPT
-  static real buffs[2][2][0x110];
   static const int step = 2;
-  static int bo = 1;
+  int bo;
   short *samples = (short *) (out + *pnt);
 
   real *b0,(*buf)[0x110];
   int clip = 0; 
   int bo1;
-#endif
 
-  if(param.equalizer)
-	do_equalizer(bandPtr,channel);
+  bo = gmp->synth_bo;
 
-#ifndef PENTIUM_OPT
   if(!channel) {
     bo--;
     bo &= 0xf;
-    buf = buffs[0];
+    buf = gmp->synth_buffs[0];
   }
   else {
     samples++;
-    buf = buffs[1];
+    buf = gmp->synth_buffs[1];
   }
 
   if(bo & 0x1) {
@@ -167,6 +78,8 @@ int synth_1to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
     bo1 = bo+1;
     dct64(buf[0]+bo,buf[1]+bo+1,bandPtr);
   }
+
+  gmp->synth_bo = bo;
   
   {
     register int j;
@@ -236,22 +149,5 @@ int synth_1to1(real *bandPtr,int channel,unsigned char *out,int *pnt)
   *pnt += 128;
 
   return clip;
-#else
-#ifdef USE_3DNOW
-  {
-    int ret;
-    ret = synth_1to1_3dnow(bandPtr,channel,out+*pnt);
-    *pnt += 128;
-    return ret;
-  }
-#else
-  {
-    int ret;
-    ret = synth_1to1_pent(bandPtr,channel,out+*pnt);
-    *pnt += 128;
-    return ret;
-  }
-#endif
-#endif
 }
 

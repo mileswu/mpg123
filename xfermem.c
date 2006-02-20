@@ -21,7 +21,7 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 
-#include "xfermem.h"
+#include "mpg123.h"
 
 #ifndef USE_MMAP
 #include <sys/ipc.h>
@@ -152,10 +152,11 @@ int xfermem_get_usedspace (txfermem *xf)
 int xfermem_getcmd (int fd, int block)
 {
 	fd_set selfds;
-	struct timeval selto = {0, 0};
 	byte cmd;
 
 	for (;;) {
+		struct timeval selto = {0, 0};
+
 		FD_ZERO (&selfds);
 		FD_SET (fd, &selfds);
 #ifdef HPUX
