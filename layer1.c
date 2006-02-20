@@ -85,7 +85,7 @@ void I_step_two(real fraction[2][SBLIMIT],unsigned int balloc[2*SBLIMIT],
       else
         *f1++ = 0.0;
     }
-    for (sample=smpb,i=jsbound;i<SBLIMIT;i++) {
+    for (i=jsbound;i<SBLIMIT;i++) {
       if ((n=*ba++)) {
         real samp = ( ((-1)<<n) + (*sample++) + 1);
         *f0++ = samp * muls[n+1][*sca++];

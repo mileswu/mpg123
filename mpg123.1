@@ -190,6 +190,10 @@ means not to use any proxy, and to retrieve files directly
 from the respective servers.  See also the
 ``HTTP SUPPORT'' section.
 .TP
+\fB\-u \fIauth\fR, \fB\-\^\-auth \fIauth
+HTTP authentication to use when recieving files via HTTP.
+The format used is user:password.
+.TP
 \fB\-@ \fIfile\fR, \fB\-\^\-list \fIfile
 Read filenames and/or URLs of MPEG audio streams from the specified
 .I file
@@ -203,6 +207,10 @@ one
 .B \-@
 option can be used (if more than one is specified, only the
 last one will be recognized).
+.TP
+.BR \-z ", " \-\^\-shuffle
+Shuffle play.  Randomly shuffles the files specified on the command line
+and in the list file.
 .SH OPERANDS
 The following operands are supported:
 .TP 8
@@ -255,6 +263,9 @@ audio files in realtime, you can first download the files
 to your local harddisk (e.g. using
 .BR lynx (1))
 and then play them from there.
+.P
+If authentication is needed to access the file it can be
+specified with the .B "\-u user:pass".
 .SH INTERRUPT
 You can abort
 .B mpg123

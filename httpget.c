@@ -5,6 +5,8 @@
  *   Wed Apr  9 20:57:47 MET DST 1997
  */
 
+#ifndef WIN32
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -55,6 +57,36 @@ void readstring (char *string, int maxlen, FILE *f)
 	}
 }
 
+void encode64 (char *source,char *destination)
+{
+  static char *Base64Digits =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  int n = 0;
+  int ssiz=strlen(source);
+  int i;
+
+  for (i = 0 ; i < ssiz ; i += 3) {
+    unsigned int buf;
+    buf = ((unsigned char *)source)[i] << 16;
+    if (i+1 < ssiz)
+      buf |= ((unsigned char *)source)[i+1] << 8;
+    if (i+2 < ssiz)
+      buf |= ((unsigned char *)source)[i+2];
+
+    destination[n++] = Base64Digits[(buf >> 18) % 64];
+    destination[n++] = Base64Digits[(buf >> 12) % 64];
+    if (i+1 < ssiz)
+      destination[n++] = Base64Digits[(buf >> 6) % 64];
+    else
+      destination[n++] = '=';
+    if (i+2 < ssiz)
+      destination[n++] = Base64Digits[buf % 64];
+    else
+      destination[n++] = '=';
+  }
+  destination[n++] = 0;
+}
+
 char *url2hostport (char *url, char **hname, unsigned long *hip, unsigned int *port)
 {
 	char *cptr;
@@ -70,10 +102,12 @@ char *url2hostport (char *url, char **hname, unsigned long *hip, unsigned int *p
 			isip = 0;
 		cptr++;
 	}
-	if (!(*hname = strndup(url, cptr - url))) {
+	*hname = strdup(url); /* removed the strndup for better portability */
+	if (!(*hname)) {
 		*hname = NULL;
 		return (NULL);
 	}
+	(*hname)[cptr - url] = 0;
 	if (!isip) {
 		if (!(myhostent = gethostbyname(*hname)))
 			return (NULL);
@@ -98,6 +132,8 @@ unsigned long proxyip = 0;
 unsigned int proxyport;
 
 #define ACCEPT_HEAD "Accept: audio/mpeg, audio/x-mpegurl, */*\r\n"
+
+char *httpauth = NULL;
 
 FILE *http_open (char *url)
 {
@@ -171,6 +207,15 @@ FILE *http_open (char *url)
 			perror ("connect");
 			exit (1);
 		}
+
+		if (httpauth) {
+			char buf[1023];
+			strcat (request,"Authorization: Basic ");
+			encode64(httpauth,buf);
+			strcat (request,buf);
+			strcat (request,"\r\n");
+		}
+
 		writestring (sock, request);
 		if (!(myfile = fdopen(sock, "rb"))) {
 			perror ("fdopen");
@@ -206,4 +251,37 @@ FILE *http_open (char *url)
 	return (myfile);
 }
 
+#else
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+extern int errno;
+
+#include "mpg123.h"
+
+void writestring (int fd, char *string)
+{
+}
+
+void readstring (char *string, int maxlen, FILE *f)
+{
+}
+
+char *url2hostport (char *url, char **hname, unsigned long *hip, unsigned int *port)
+{
+}
+
+char *proxyurl = NULL;
+unsigned long proxyip = 0;
+unsigned int proxyport;
+
+#define ACCEPT_HEAD "Accept: audio/mpeg, audio/x-mpegurl, */*\r\n"
+
+FILE *http_open (char *url)
+{
+}
+#endif
+
 /* EOF */
+

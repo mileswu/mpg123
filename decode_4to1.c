@@ -80,7 +80,8 @@ int synth_4to1_mono(real *bandPtr,unsigned char *samples)
   ret = synth_4to1(bandPtr,0,(unsigned char *) samples_tmp);
 
   for(i=0;i<8;i++) {
-    *( (short *)samples)++ = *tmp1;
+    *( (short *)samples) = *tmp1;
+    samples += 2;
     tmp1 += 2;
   }
 

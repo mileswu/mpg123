@@ -118,6 +118,7 @@ void audio_flush(int outmode, struct audio_info_struct *ai)
   }
 }
 
+#ifndef WIN32
 void (*catchsignal(int signum, void(*handler)()))()
 {
   struct sigaction new_sa;
@@ -130,6 +131,7 @@ void (*catchsignal(int signum, void(*handler)()))()
     return ((void (*)()) -1);
   return (old_sa.sa_handler);
 }
+#endif
 
 static unsigned long oldhead = 0;
 static unsigned long firsthead=0;
@@ -264,7 +266,7 @@ init_resync:
 		/* I even saw RIFF headers at the beginning of MPEG streams ;( */
 
 		if(newhead == ('R'<<24)+('I'<<16)+('F'<<8)+'F') {
-			char buf[40];
+			char buf[68];
 			fprintf(stderr,"Skipped RIFF header\n");
 			fread(buf,1,68,filept);
 			goto read_again;
@@ -356,12 +358,16 @@ init_resync:
         fprintf(stderr,"Stream error\n");
         exit(1);
       }
-      if(fr->mpeg25)
-        fr->sampling_frequency = 6;
+      if(fr->mpeg25) {
+        fr->sampling_frequency = 6 + ((newhead>>10)&0x3);
+      }
       else
         fr->sampling_frequency = ((newhead>>10)&0x3) + (fr->lsf*3);
       fr->error_protection = ((newhead>>16)&0x1)^0x1;
     }
+
+    if(fr->mpeg25) /* allow Bitrate change for 2.5 ... */
+      fr->bitrate_index = ((newhead>>12)&0xf);
 
     fr->padding   = ((newhead>>9)&0x1);
     fr->extension = ((newhead>>8)&0x1);
@@ -510,12 +516,13 @@ void print_header_compact(struct frame *fr)
 		freqs[fr->sampling_frequency], modes[fr->mode]);
 }
 
+#if 0
+/* removed the strndup for better portability */
 /*
  *   Allocate space for a new string containing the first
  *   "num" characters of "src".  The resulting string is
  *   always zero-terminated.  Returns NULL if malloc fails.
  */
-
 char *strndup (const char *src, int num)
 {
 	char *dst;
@@ -525,6 +532,7 @@ char *strndup (const char *src, int num)
 	dst[num] = '\0';
 	return (strncpy(dst, src, num));
 }
+#endif
 
 /*
  *   Split "path" into directory and filename components.
@@ -544,7 +552,12 @@ int split_dir_file (const char *path, char **dname, char **fname)
 
 	if ((slashpos = strrchr(path, '/'))) {
 		*fname = slashpos + 1;
-		*dname = strndup(path, 1 + slashpos - path);
+		*dname = strdup(path); /* , 1 + slashpos - path); */
+		if(!(*dname)) {
+			perror("memory");
+			exit(1);
+		}
+		(*dname)[1 + slashpos - path] = 0;
 		if (lastdir && !strcmp(lastdir, *dname)) {
 			/***   same as previous directory   ***/
 			free (*dname);

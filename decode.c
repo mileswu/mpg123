@@ -77,7 +77,8 @@ int synth_1to1_mono(real *bandPtr,unsigned char *samples)
   ret = synth_1to1(bandPtr,0,(unsigned char *) samples_tmp);
 
   for(i=0;i<32;i++) {
-    *( (short *)samples)++ = *tmp1;
+    *( (short *)samples) = *tmp1;
+    samples += 2;
     tmp1 += 2;
   }
 

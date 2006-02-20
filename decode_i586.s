@@ -38,8 +38,8 @@ bo:
 	.long 0x0,0xc0e00000
 	.align 8
 .text
-.globl synth_1to1
-synth_1to1:
+.globl synth_1to1_pent
+synth_1to1_pent:
 	subl $12,%esp
 	pushl %ebp
 	pushl %edi

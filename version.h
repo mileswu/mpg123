@@ -1,3 +1,3 @@
-char *prgVersion = "0.59l";
-char *prgDate = "1997/08/02";
+char *prgVersion = "0.59m+";
+char *prgDate = "1997/10/07";
 char *prgName;

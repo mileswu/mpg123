@@ -21,6 +21,7 @@ nothing-specified:
 	@echo ""
 	@echo "make linux           Linux"
 	@echo "make linux-nas       Linux, output to Network Audio System"
+	@echo "make linux-alpha     make with minor changes for ALPHA-Linux"
 	@echo "make freebsd         FreeBSD"
 	@echo "make solaris         Solaris 2.x (tested: 2.5 and 2.5.1) using SparcWorks cc"
 	@echo "make solaris-gcc     Solaris 2.x using GNU cc (somewhat slower)"
@@ -31,6 +32,8 @@ nothing-specified:
 	@echo "make ultrix          DEC Ultrix (tested: 4.4)"
 	@echo "make aix             IBM AIX (tested: 4.2)"
 	@echo "make os2             IBM OS/2"
+	@echo "make netbsd          NetBSD"
+	@echo "make bsdos           BSDI BSD/OS"
 	@echo "make generic         try this one if your system isn't listed above"
 	@echo ""
 	@echo "Please read the file INSTALL for additional information."
@@ -55,9 +58,18 @@ linux-profile:
 linux:
 	$(MAKE) CC=gcc LDFLAGS= \
 		OBJECTS='decode_i386.o dct64_i386.o getbits.o decode_i586.o' \
-		CFLAGS='-DI386_ASSEM -DREAL_IS_FLOAT -DPENTIUM_OPT -DLINUX -Wall -O2 -m486 \
+		CFLAGS='-DI386_ASSEM -DREAL_IS_FLOAT -DPENTIUM_OPT -DLINUX \
+			-Wall -O2 -m486 \
 			-fomit-frame-pointer -funroll-all-loops \
 			-finline-functions -ffast-math' \
+		mpg123
+
+linux-alpha:
+	$(MAKE) CC=gcc LDFLAGS= OBJECTS='decode.o dct64.o' \
+		CFLAGS='-DLINUX -Wall -O2 \
+			-fomit-frame-pointer -funroll-all-loops \
+			-finline-functions -ffast-math \
+			-Wall -O6 -DUSE_MMAP' \
 		mpg123
 
 linux-sajber:
@@ -112,9 +124,10 @@ sunos:
 			-funroll-loops' \
 		mpg123
 
+#		CFLAGS='-DREAL_IS_FLOAT -Aa +O3 -D_HPUX_SOURCE -DHPUX'
 hpux:
 	$(MAKE) CC=cc LDFLAGS= OBJECTS='decode.o dct64.o' \
-		CFLAGS='-DREAL_IS_FLOAT -Aa +O3 -D_HPUX_SOURCE -DHPUX' \
+		CFLAGS='-DREAL_IS_FLOAT -Ae +O3 -D_HPUX_SOURCE -DHPUX' \
 		mpg123
 
 sgi:
@@ -145,9 +158,33 @@ os2:
 		LIBS='-los2me -lsocket' \
 		mpg123.exe
 
+netbsd:
+	$(MAKE) CC=cc LDFLAGS= \
+		OBJECTS='decode.o dct64.o' \
+		CFLAGS='-Wall -ansi -pedantic -O3 -fomit-frame-pointer \
+			-funroll-all-loops -ffast-math \
+			-DREAL_IS_FLOAT -DUSE_MMAP -DNETBSD' \
+		mpg123
+
+netbsd-i386:
+	$(MAKE) CC=cc LDFLAGS= \
+		OBJECTS='decode_i386.o dct64_i386.o getbits_.o' \
+		CFLAGS='-Wall -ansi -pedantic -O4 -m486 -fomit-frame-pointer \
+			-funroll-all-loops -ffast-math -DROT_I386 \
+			-DI386_ASSEM -DREAL_IS_FLOAT -DUSE_MMAP -DNETBSD' \
+		mpg123
+
+bsdos:
+	$(MAKE) CC=shlicc2 LDFLAGS= \
+		OBJECTS='decode_i386.o dct64_i386.o getbits_bsdos.o' \
+		CFLAGS='-Wall -O4 -m486 -fomit-frame-pointer \
+			-funroll-all-loops -ffast-math -DROT_I386 \
+			-DI386_ASSEM -DREAL_IS_FLOAT -DUSE_MMAP' \
+			mpg123
+
 generic:
 	$(MAKE) LDFLAGS= OBJECTS='decode.o dct64.o' \
-		CFLAGS='-O' \
+		CFLAGS='-O -DGENERIC' \
 		mpg123
 
 
@@ -193,6 +230,7 @@ audio.o:	mpg123.h
 buffer.o:	mpg123.h xfermem.h
 getbits.o:	mpg123.h
 getbits_.o:	mpg123.h
+getbits_bsdos.o: mpg123.h
 tabinit.o:	mpg123.h
 getlopt.o:	getlopt.h
 httpget.o:	mpg123.h

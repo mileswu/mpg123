@@ -82,7 +82,8 @@ int synth_1to1_mono(real *bandPtr,unsigned char *samples)
   ret = synth_1to1(bandPtr,0,(unsigned char *) samples_tmp);
 
   for(i=0;i<32;i++) {
-	*( (short *) samples)++ = *tmp1;
+	*( (short *) samples) = *tmp1;
+    samples += 2;
 	tmp1 += 2;
   }
   return ret;
@@ -99,9 +100,9 @@ int synth_1to1_mono2stereo(real *bandPtr,unsigned char *samples)
   return ret;
 }
 
-#ifndef PENTIUM_OPT
 int synth_1to1(real *bandPtr,int channel,unsigned char *out)
 {
+#ifndef PENTIUM_OPT
   static real buffs[2][2][0x110];
   static const int step = 2;
   static int bo = 1;
@@ -110,10 +111,12 @@ int synth_1to1(real *bandPtr,int channel,unsigned char *out)
   real *b0,(*buf)[0x110];
   int clip = 0; 
   int bo1;
+#endif
 
   if(flags.equalizer)
 	do_equalizer(bandPtr,channel);
 
+#ifndef PENTIUM_OPT
   if(!channel) {
     bo--;
     bo &= 0xf;
@@ -201,7 +204,8 @@ int synth_1to1(real *bandPtr,int channel,unsigned char *out)
     }
   }
   return clip;
-}
+#else
+  return synth_1to1_pent(bandPtr,channel,out);
 #endif
-
+}
 

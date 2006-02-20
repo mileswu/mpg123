@@ -1,10 +1,32 @@
+0.59m: (MH)
+------
+- Bug with RIFF header streams fixed.
+- HTTP auth option patch from Henrik P Johnson <king@one.se>
+- NetBSD patch(s) added from <mycroft@NetBSD.ORG> and <augustss@cs.chalmers.se>
+- Added advanced shuffle support from Steven Tiger Lang <tiger@tyger.org>
+- fixed bug with too large big_value field 
+- fixed (hopefully) the bug with the '-a' option 
+- work-around for some pedantic compilers in fr->synth init
+- some changes for the 'generic' version
+- applied NAS bug-fix patch
+- new (good) MPEG 2.5 tables (from Niklas Beisert)
+- added WIN32 support from Tony Million
+- added some bug fixes from Niklas Beisert
+- fixed another ugly bug in layer3 dequantize (wrote over the border
+  of the 'xr' field)
+- a minor HPUX clean up
+- added BSD patch from Kevin Brintnall <kbrint@visi.com>
+- added Makefile.win32
+- added NAS big endian fix
+
+
 0.59l: (MH)
 ------
 - simple equalizer support (to be continued)
 - added NAS patch from Martin Denn <mdenn@unix-ag.uni-kl.de>
 - real mono support
 - added pentium optimized decode_i586 from Stefan Bieschewski <stb@acm.org>
-- fixed a bug in MS dequantize function
+- fixed a bug in MS dequantize function 
 
 
 0.59k: (OF)

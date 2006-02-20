@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59l                                * 
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59m                                * 
 *                                                                    *
 * (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                      *
 * Layer-3 realtime only with a 'fast' machine                        *
@@ -27,13 +27,19 @@ Uses code (or at least ideas) from:
   Niclas Lindstrom <nil@wineasy.se>: OS2 port
   Stefan Bieschewski <stb@acm.org>: Pentium optimizations, decode_i586.s
   Martin Denn <mdenn@unix-ag.uni-kl.de>: NAS port
+  Niklas Beisert <nbeisert@physik.tu-muenchen.de> MPEG 2.5 tables
+  <mycroft@NetBSD.ORG> and <augustss@cs.chalmers.se>: NetBSD
+  Kevin Brintnall <kbrint@visi.com> BSD patch
+  Tony Million: win32 port
+  Steven Tiger Lang: advanced shuffle
+  Henrik P Johnson: HTTP auth patch
   and more ....
 
-current original distribution site is:
+current distribution site for new test versions is:
   http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html
 
 here's Oliver Fromme's mpg123 page:
-  http://www.heim3.tu-clausthal.de/~olli/mpg123/
+  http://mpg.123.org/
   (includes information about the mpg123 mailing list)
 
 and you can get the latest release from here:
@@ -112,7 +118,7 @@ have fun,
 
 Just for info:
     I'm also working (but not at the moment) on a DSP port for this package. 
-    A first testversion of the layer-2 part is finished and seems
+    A first testversion of the _LAYER-2_ part is finished and seems
     to work in realtime with my 20MHZ ADSP-2115 
 
 ----------------------------------------------------------------------------
@@ -124,6 +130,7 @@ See the packages 'maplay 1.2(+)' and 'mpegaudio' for their copy-policies.
 Copyrights (c) 1997 of the OS2 specific parts by Niclas Lindstrom
 
 known bugs:
+-----------
   layer 3 i-stereo not heavily tested
    btw: I'm looking for i-stereo teststreams .. maybe you could send me a few
   Layer 1 not heavily tested
@@ -132,6 +139,11 @@ known bugs:
   no clean audio interface
   MPEG 2.0, Layer1 and Layer2 not tested (and probably will not work)
   MPEG 2.0, Layer3 not heavily tested .. may has bugs.
+
+related information:
+--------------------
+  If you need an mp3 frame re(assembler) and stream debug tool you should
+  have a look at the mp3asm program on Olli's mpg123 page.(http://mpg.123.org)
 
 
 ******************************************************************************

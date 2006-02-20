@@ -34,5 +34,10 @@ Some additional remarks:
    on an HP-UX 9 account, but there were some problems with
    libraries on HP-UX 10.  I'm not an HP expert, but perhaps
    someone else can fix it.
+   [note: some people report NO problems also with HP-UX 10]
+
+ - IRIX: some people reported compile problems on IRIX 5.x (5.3)
+         but 6.x seems to compile without problems
+
 
 ***

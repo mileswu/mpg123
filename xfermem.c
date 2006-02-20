@@ -7,6 +7,8 @@
  *   See xfermem.h for documentation/description.
  */
 
+#if !defined(GENERIC) && !defined(WIN32)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -182,7 +184,11 @@ int xfermem_getcmd (int fd, int block)
 	for (;;) {
 		FD_ZERO (&selfds);
 		FD_SET (fd, &selfds);
+#ifdef HPUX
+		switch (select(FD_SETSIZE, (int *) &selfds, NULL, NULL, block ? NULL : &selto)) {
+#else
 		switch (select(FD_SETSIZE, &selfds, NULL, NULL, block ? NULL : &selto)) {
+#endif
 			case 0:
 				if (!block)
 					return (0);
@@ -238,4 +244,52 @@ int xfermem_block (int readwrite, txfermem *xf)
 	return ((result <= 0) ? -1 : result);
 }
 
-/* EOF */
+#elif defined(WIN32)
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <fcntl.h>
+
+#include "xfermem.h"
+
+extern int errno;
+
+void xfermem_init (txfermem **xf, int bufsize, int msize)
+{
+}
+void xfermem_done (txfermem *xf)
+{
+}
+void xfermem_init_writer (txfermem *xf)
+{
+}
+void xfermem_init_reader (txfermem *xf)
+{
+}
+int xfermem_get_freespace (txfermem *xf)
+{
+}
+int xfermem_get_usedspace (txfermem *xf)
+{
+}
+int xfermem_write (txfermem *xf, byte *data, int count)
+{
+}
+int xfermem_read (txfermem *xf, byte *data, int count)
+{
+}
+int xfermem_getcmd (int fd, int block)
+{
+}
+int xfermem_putcmd (int fd, byte cmd)
+{
+}
+int xfermem_block (int readwrite, txfermem *xf)
+{
+}
+#endif
+
+/* eof */
+

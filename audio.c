@@ -7,12 +7,20 @@
 
 #include <sys/types.h>
 #include <stdio.h>
+#ifndef WIN32
 #include <unistd.h>
+#endif
 #include <fcntl.h>
 
 #ifdef SOLARIS
 #include <stropts.h>
 #include <sys/conf.h>
+#endif
+
+#include <stdlib.h>
+
+#ifdef NETBSD
+#include <sys/ioctl.h>
 #endif
 
 #include "mpg123.h"
@@ -60,8 +68,8 @@ typedef struct
     AuDeviceAttributes  *da;
     int                 numDevices;
     char                *buf;
-    int                 buf_size;
-    int                 buf_cnt;
+    AuUint32            buf_size;
+    AuUint32            buf_cnt;
     AuBool              data_sent;
     AuBool              finished;
 } InfoRec, *InfoPtr;
@@ -72,8 +80,10 @@ typedef struct
 
 static InfoRec info;
 
+/* NAS specific routines */
+
 static void
-sendData(AuServer *aud, InfoPtr i, AuUint32 numBytes)
+nas_sendData(AuServer *aud, InfoPtr i, AuUint32 numBytes)
 {
     if (numBytes < i->buf_cnt) {
         AuWriteElement(aud, i->flow, 0, numBytes, i->buf, AuFalse, NULL);
@@ -89,7 +99,7 @@ sendData(AuServer *aud, InfoPtr i, AuUint32 numBytes)
 }
 
 static AuBool
-eventHandler(AuServer *aud, AuEvent *ev, AuEventHandlerRec *handler)
+nas_eventHandler(AuServer *aud, AuEvent *ev, AuEventHandlerRec *handler)
 {
     InfoPtr         i = (InfoPtr) handler->data;
 
@@ -105,14 +115,14 @@ eventHandler(AuServer *aud, AuEvent *ev, AuEventHandlerRec *handler)
                switch (event->kind)
                {
                    case AuElementNotifyKindLowWater:
-                       sendData(aud, i, event->num_bytes);
+                       nas_sendData(aud, i, event->num_bytes);
                        break;
                    case AuElementNotifyKindState:
                        switch (event->cur_state)
                        {
                            case AuStatePause:
                                if (event->reason != AuReasonUser)
-                                   sendData(aud, i, event->num_bytes);
+                                   nas_sendData(aud, i, event->num_bytes);
                                break;
                             case AuStateStop:
                                 i->finished = AuTrue;
@@ -124,60 +134,33 @@ eventHandler(AuServer *aud, AuEvent *ev, AuEventHandlerRec *handler)
     return AuTrue;
 }
 
-int audio_open(struct audio_info_struct *ai)
+void nas_createFlow(struct audio_info_struct *ai)
 {
     AuDeviceID      device = AuNone;
-    AuElement       elements[3];
+    AuElement       elements[2];
     unsigned char   format;
-    int             buf_samples;
-    int i, j, k;
-    int maxRate, minRate;
-    AuBool supportedFormats[NAS_MAX_FORMAT];
-    
-    if(!ai)
-        return -1;
+    AuUint32        buf_samples;
+    int             i;
+ 
 
-    if (!(info.aud = AuOpenServer(ai->device, 0, NULL, 0, NULL, NULL))) {
-        if (ai->device==NULL)
-            fprintf(stderr,"could not open default NAS server\n");
-        else
-            fprintf(stderr,"could not open NAS server %s\n",
-                    ai->device);
-        exit(1);
+    switch(ai->format) {
+    case AUDIO_FORMAT_SIGNED_16:
+    default:
+		if (((char) *(short *)"x")=='x') /* ugly, but painless */
+			format = AuFormatLinearSigned16LSB; /* little endian */
+		else
+		format = AuFormatLinearSigned16MSB; /* big endian */
+        break;
+    case AUDIO_FORMAT_UNSIGNED_8:
+        format = AuFormatLinearUnsigned8;
+        break;
+    case AUDIO_FORMAT_SIGNED_8:
+        format = AuFormatLinearSigned8;
+        break;
+    case AUDIO_FORMAT_ULAW_8:
+        format = AuFormatULAW8;
+        break;
     }
-
-    /* get server info */
-    maxRate =  AuServerMaxSampleRate(info.aud);
-    minRate =  AuServerMinSampleRate(info.aud);
-    for (i=0; i<NAS_MAX_FORMAT; i++)
-        supportedFormats[i]=AuFalse;
-    
-    j = AuServerNumFormats(info.aud);
-    for (i=0; i<j; i++) {
-        k=AuServerFormat(info.aud,i);
-        if ((k>=0) && (k<NAS_MAX_FORMAT))
-            supportedFormats[k] = AuTrue;
-    }
-    
-    /* adjust sample rate */
-    if (ai->rate == -1) ai->rate = maxRate;
-    if (ai->rate > maxRate) {
-        fprintf(stderr,"unable to set audio rate to %ld\n", ai->rate);
-        exit(1);
-    }
-    if (ai->rate < minRate) {
-        fprintf(stderr,"unable to set audio rate to %ld\n", ai->rate);
-        exit(1);
-    }
-    
-    buf_samples = ai->rate * NAS_SOUND_PORT_DURATION;
-    
-    format = AuFormatLinearSigned16LSB;
-    if (!supportedFormats[AuFormatLinearSigned16LSB]) {
-        fprintf(stderr,"LinearUnsigned16LSB not supported\n");
-        exit(1);
-    }
-
     /* look for an output device */
     for (i = 0; i < AuServerNumDevices(info.aud); i++)
        if (((AuDeviceKind(AuServerDevice(info.aud, i)) ==
@@ -194,6 +177,7 @@ int audio_open(struct audio_info_struct *ai)
         exit(1);
     }
 
+    /* set gain */
     if(ai->gain >= 0) {
         info.da = AuGetDeviceAttributes(info.aud, device, NULL);
         if ((info.da)!=NULL) {
@@ -204,22 +188,23 @@ int audio_open(struct audio_info_struct *ai)
         else
             fprintf(stderr,"audio/gain: setable Volume/PCM-Level not supported");
     }
-        
+    
     if (!(info.flow = AuCreateFlow(info.aud, NULL))) {
         fprintf(stderr, "Couldn't create flow\n");
         exit(1);
     }
 
+    buf_samples = ai->rate * NAS_SOUND_PORT_DURATION;
+
     AuMakeElementImportClient(&elements[0],        /* element */
                               (unsigned short) ai->rate,
                                                    /* rate */
                               format,              /* format */
-                             ai->channels,        /* channels */
-                             AuTrue,              /* ??? */
-                              (unsigned short) buf_samples,
-                                                   /* max samples */
-                              (unsigned short) (ai->rate *
-                                  NAS_SOUND_LOW_WATER_MARK / 100),
+                              ai->channels,        /* channels */
+                              AuTrue,              /* ??? */
+                              buf_samples,         /* max samples */
+                              (AuUint32) (buf_samples / 100
+                                  * NAS_SOUND_LOW_WATER_MARK),
                                                    /* low water mark */
                               0,                   /* num actions */
                               NULL);               /* actions */
@@ -228,7 +213,7 @@ int audio_open(struct audio_info_struct *ai)
                               device,              /* device */
                               (unsigned short) ai->rate,
                                                    /* rate */
-                             AuUnlimitedSamples,  /* num samples */
+                              AuUnlimitedSamples,  /* num samples */
                               0,                   /* num actions */
                               NULL);               /* actions */
     AuSetElements(info.aud,                        /* Au server */
@@ -242,13 +227,13 @@ int audio_open(struct audio_info_struct *ai)
                            AuEventHandlerIDMask,   /* value mask */
                            0,                      /* type */
                            info.flow,              /* id */
-                          eventHandler,           /* callback */
+                           nas_eventHandler,       /* callback */
                            (AuPointer) &info);     /* data */
 
     info.buf_size = buf_samples * ai->channels * AuSizeofFormat(format);
     info.buf = (char *) malloc(info.buf_size);
     if (info.buf == NULL) {
-        fprintf(stderr, "Unable to allocate input/output buffer of size %d\n",
+        fprintf(stderr, "Unable to allocate input/output buffer of size %ld\n",
              info.buf_size);
         exit(1);
     }
@@ -259,21 +244,8 @@ int audio_open(struct audio_info_struct *ai)
     AuStartFlow(info.aud,                          /* Au server */
                 info.flow,                         /* id */
                 NULL);                             /* status */
-
-    return 0;
-}
-    
-int audio_set_rate(struct audio_info_struct *ai)
-{
-    /* changing the sample rate is not supported */
-    return 0;
 }
 
-int audio_set_channels(struct audio_info_struct *ai)
-{
-    /* changing the channel number is not supported */
-    return 0;
-}
 
 void nas_flush()
 {
@@ -286,29 +258,125 @@ void nas_flush()
     info.data_sent = AuFalse;
 }
 
-int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
+/* required functions */
+
+int audio_open(struct audio_info_struct *ai)
+{
+    if(!ai)
+        return -1;
+
+    if (!(info.aud = AuOpenServer(ai->device, 0, NULL, 0, NULL, NULL))) {
+        if (ai->device==NULL)
+            fprintf(stderr,"could not open default NAS server\n");
+        else
+            fprintf(stderr,"could not open NAS server %s\n",
+                    ai->device);
+        exit(1);
+    }
+    info.buf_size = 0;
+        
+    return 0;
+}
+    
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+    int ret;
+
+    ret = audio_close(ai);
+    if (ret >= 0)
+        ret = audio_open(ai);
+    return ret;
+}
+
+extern int audio_rate_best_match(struct audio_info_struct *ai)
+{
+    int maxRate, minRate;
+
+    if(!ai || ai->rate < 0)
+        return -1;
+    maxRate =  AuServerMaxSampleRate(info.aud);
+    minRate =  AuServerMinSampleRate(info.aud);
+    if (ai->rate > maxRate) ai->rate = maxRate;
+    if (ai->rate < minRate) ai->rate = minRate;
+    return 0;
+}
+
+int audio_set_rate(struct audio_info_struct *ai)
+{
+    return 0;
+}
+
+int audio_set_channels(struct audio_info_struct *ai)
+{
+    return 0;
+}
+
+int audio_set_format(struct audio_info_struct *ai)
+{
+    return 0;
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+    int i, j, k, ret;
+
+    ret=0;
+    j = AuServerNumFormats(info.aud);
+    for (i=0; i<j; i++) {
+        k=AuServerFormat(info.aud,i);
+        switch (k)
+        {
+        case AuFormatULAW8:
+            ret |= AUDIO_FORMAT_ULAW_8;
+            break;
+        case AuFormatLinearUnsigned8:
+            ret |= AUDIO_FORMAT_UNSIGNED_8;
+            break;
+        case AuFormatLinearSigned8:
+            ret |= AUDIO_FORMAT_SIGNED_8;
+            break;
+        case AuFormatLinearSigned16LSB:
+            ret |= AUDIO_FORMAT_SIGNED_16;
+            break;
+        }
+    }
+    return ret;
+}
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
 {
     int buf_cnt = 0;
-    int len_bytes = len * 2;
 
-    while ((info.buf_cnt + (len_bytes - buf_cnt)) >  info.buf_size) {
+    if (info.buf_size == 0) nas_createFlow(ai);
+    
+    while ((info.buf_cnt + (len - buf_cnt)) >  info.buf_size) {
         memcpy(info.buf + info.buf_cnt,
-               ((char *) buf) + buf_cnt,
+               buf + buf_cnt,
                (info.buf_size - info.buf_cnt));
         buf_cnt += (info.buf_size - info.buf_cnt);
         info.buf_cnt += (info.buf_size - info.buf_cnt);
         nas_flush();
     }
     memcpy(info.buf + info.buf_cnt,
-           ((char *) buf) + buf_cnt,
-           (len_bytes - buf_cnt));
-    info.buf_cnt += (len_bytes - buf_cnt);
+           buf + buf_cnt,
+           (len - buf_cnt));
+    info.buf_cnt += (len - buf_cnt);
     
-    return len*2;
+    return len;
 }
 
 int audio_close(struct audio_info_struct *ai)
 {
+    if (info.aud == NULL) {
+        return 0;
+    }
+    
+    if (info.buf_size == 0) {
+        /* Au server opened, but not yet initialized */
+        AuCloseServer(info.aud);
+        return 0;
+    }
+        
     while (!info.finished) {
         nas_flush();
     }
@@ -322,6 +390,8 @@ int audio_close(struct audio_info_struct *ai)
 #include <sys/ioctl.h>
 #ifdef LINUX
 #include <linux/soundcard.h>
+#elif defined(__bsdi__)
+#include <sys/soundcard.h>
 #else
 #include <machine/soundcard.h>
 #endif
@@ -484,7 +554,7 @@ int audio_close(struct audio_info_struct *ai)
   return 0;
 }
 
-#elif defined(SOLARIS) || defined(SUNOS)
+#elif defined(SOLARIS) || defined(SUNOS) || defined(NETBSD)
 
 #include <sys/filio.h>
 #ifdef SUNOS
@@ -495,7 +565,9 @@ int audio_close(struct audio_info_struct *ai)
 
 int audio_open(struct audio_info_struct *ai)
 {
+#ifndef NETBSD
   audio_info_t ainfo;
+#endif
 
   ai->fn = open("/dev/audio",O_WRONLY);
   if(ai->fn < 0)
@@ -528,8 +600,8 @@ fprintf(stderr,"%s\n",ad.name);
     return -1;
   }
 
-  if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
-    return -1;
+#ifndef NETBSD
+  AUDIO_INITINFO(&ainfo);
 
   switch(ai->output)
   {
@@ -549,6 +621,7 @@ fprintf(stderr,"%s\n",ad.name);
 
   if(ioctl(ai->fn, AUDIO_SETINFO, &ainfo) == -1)
     return -1;
+#endif
 
   return ai->fn;
 }
@@ -575,8 +648,7 @@ int audio_set_rate(struct audio_info_struct *ai)
 
   if(ai->rate != -1)
   {
-    if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
-      return -1;
+    AUDIO_INITINFO(&ainfo);
     ainfo.play.sample_rate = ai->rate;
     if(ioctl(ai->fn, AUDIO_SETINFO, &ainfo) == -1)
       return -1;
@@ -589,8 +661,7 @@ int audio_set_channels(struct audio_info_struct *ai)
 {
   audio_info_t ainfo;
 
-  if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
-    return -1;
+  AUDIO_INITINFO(&ainfo);
   ainfo.play.channels = ai->channels;
   if(ioctl(ai->fn, AUDIO_SETINFO, &ainfo) == -1)
     return -1;
@@ -601,8 +672,7 @@ int audio_set_format(struct audio_info_struct *ai)
 {
   audio_info_t ainfo;
 
-  if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
-    return -1;
+  AUDIO_INITINFO(&ainfo);
 
   switch(ai->format) {
     case -1:
@@ -612,8 +682,13 @@ int audio_set_format(struct audio_info_struct *ai)
       ainfo.play.precision = 16;
       break;
     case AUDIO_FORMAT_UNSIGNED_8:
-#ifndef SUNOS
+#ifdef SOLARIS
       ainfo.play.encoding = AUDIO_ENCODING_LINEAR8;
+      ainfo.play.precision = 8;
+      break;
+#endif
+#ifdef NETBSD
+      ainfo.play.encoding = AUDIO_ENCODING_LINEAR;
       ainfo.play.precision = 8;
       break;
 #endif
@@ -656,6 +731,13 @@ int audio_close(struct audio_info_struct *ai)
 void audio_queueflush (struct audio_info_struct *ai)
 {
 	ioctl (ai->fn, I_FLUSH, FLUSHRW);
+}
+#endif
+
+#ifdef NETBSD
+void audio_queueflush (struct audio_info_struct *ai)
+{
+	ioctl (ai->fn, AUDIO_FLUSH, 0);
 }
 #endif
 
@@ -796,6 +878,227 @@ int audio_close(struct audio_info_struct *ai)
 {
   close (ai->fn);
   return 0;
+}
+
+#elif defined (_WIN32)
+
+#include <windows.h>
+
+static CRITICAL_SECTION        cs;
+
+static HWAVEOUT dev    = NULL;
+static int nBlocks             = 0;
+static int MAX_BLOCKS  = 6;
+
+static _inline void wait(void)
+{
+   while(nBlocks)
+       Sleep(77);
+}
+
+static void CALLBACK wave_callback(HWAVE hWave, UINT uMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
+{
+   WAVEHDR *wh;
+   HGLOBAL hg;
+
+   if(uMsg == WOM_DONE)
+   {
+       EnterCriticalSection( &cs );
+
+       wh = (WAVEHDR *)dwParam1;
+
+       waveOutUnprepareHeader(dev, wh, sizeof (WAVEHDR));
+
+       //Deallocate the buffer memory
+       hg = GlobalHandle(wh->lpData);
+       GlobalUnlock(hg);
+       GlobalFree(hg);
+
+       //Deallocate the header memory
+       hg = GlobalHandle(wh);
+       GlobalUnlock(hg);
+       GlobalFree(hg);
+
+       // decrease the number of USED blocks
+       nBlocks--;
+
+       LeaveCriticalSection( &cs );
+   }
+}
+
+int audio_open(struct audio_info_struct *ai)
+{
+   MMRESULT res;
+   WAVEFORMATEX outFormatex;
+
+   if(ai->rate == -1)
+       return(0);
+
+   if(!waveOutGetNumDevs())
+   {
+       MessageBox(NULL, "No audio devices present!", "Error...", MB_OK);
+       return -1;
+   }
+
+   outFormatex.wFormatTag      = WAVE_FORMAT_PCM;
+   outFormatex.wBitsPerSample  = 16;
+   outFormatex.nChannels       = 2;
+   outFormatex.nSamplesPerSec  = ai->rate;
+   outFormatex.nAvgBytesPerSec = outFormatex.nSamplesPerSec * outFormatex.nChannels * outFormatex.wBitsPerSample/8;
+   outFormatex.nBlockAlign     = outFormatex.nChannels * outFormatex.wBitsPerSample/8;
+
+   res = waveOutOpen(&dev, (UINT)ai->device, &outFormatex, (DWORD)wave_callback, 0, CALLBACK_FUNCTION);
+
+   if(res != MMSYSERR_NOERROR)
+   {
+       switch(res)
+       {
+           case MMSYSERR_ALLOCATED:
+               MessageBox(NULL, "Device Is Already Open", "Error...", MB_OK);
+               break;
+           case MMSYSERR_BADDEVICEID:
+               MessageBox(NULL, "The Specified Device Is out of range", "Error...", MB_OK);
+               break;
+           case MMSYSERR_NODRIVER:
+               MessageBox(NULL, "There is no audio driver in this system.", "Error...", MB_OK);
+               break;
+           case MMSYSERR_NOMEM:
+              MessageBox(NULL, "Unable to allocate sound memory.", "Error...", MB_OK);
+               break;
+           case WAVERR_BADFORMAT:
+               MessageBox(NULL, "This audio format is not supported.", "Error...", MB_OK);
+               break;
+           case WAVERR_SYNC:
+               MessageBox(NULL, "The device is synchronous.", "Error...", MB_OK);
+               break;
+           default:
+               MessageBox(NULL, "Unknown Media Error", "Error...", MB_OK);
+               break;
+       }
+       return -1;
+   }
+
+   waveOutReset(dev);
+   InitializeCriticalSection(&cs);
+
+   return 0;
+}
+
+int audio_reset_parameters(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
+int audio_rate_best_match(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
+int audio_set_rate(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
+int audio_set_channels(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
+int audio_set_format(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
+int audio_get_formats(struct audio_info_struct *ai)
+{
+  return AUDIO_FORMAT_SIGNED_16;
+}
+
+int audio_play_samples(struct audio_info_struct *ai,unsigned char *buf,int len)
+{
+   HGLOBAL hg, hg2;
+   LPWAVEHDR wh;
+   MMRESULT res;
+   void *b;
+
+   ///////////////////////////////////////////////////////
+   //  Wait for a few FREE blocks...
+   ///////////////////////////////////////////////////////
+   while(nBlocks > MAX_BLOCKS)
+       Sleep(77);
+
+   ////////////////////////////////////////////////////////
+   // FIRST allocate some memory for a copy of the buffer!
+   ////////////////////////////////////////////////////////
+   hg2 = GlobalAlloc(GMEM_MOVEABLE, len);
+   if(!hg2)
+   {
+       MessageBox(NULL, "GlobalAlloc failed!", "Error...",  MB_OK);
+       return(-1);
+   }
+   b = GlobalLock(hg2);
+
+
+   //////////////////////////////////////////////////////////
+   // Here we can call any modification output functions we want....
+   ///////////////////////////////////////////////////////////
+   CopyMemory(b, buf, len);
+
+   ///////////////////////////////////////////////////////////
+   // now make a header and WRITE IT!
+   ///////////////////////////////////////////////////////////
+   hg = GlobalAlloc (GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof (WAVEHDR));
+   if(!hg)
+   {
+       return -1;
+   }
+   wh = GlobalLock(hg);
+   wh->dwBufferLength = len;
+   wh->lpData = b;
+
+
+   EnterCriticalSection( &cs );
+
+   res = waveOutPrepareHeader(dev, wh, sizeof (WAVEHDR));
+   if(res)
+   {
+       GlobalUnlock(hg);
+       GlobalFree(hg);
+       LeaveCriticalSection( &cs );
+       return -1;
+   }
+
+   res = waveOutWrite(dev, wh, sizeof (WAVEHDR));
+   if(res)
+   {
+       GlobalUnlock(hg);
+       GlobalFree(hg);
+       LeaveCriticalSection( &cs );
+       return (-1);
+   }
+
+   nBlocks++;
+
+   LeaveCriticalSection( &cs );
+
+   return(len);
+}
+
+int audio_close(struct audio_info_struct *ai)
+{
+   if(dev)
+   {
+       wait();
+
+       waveOutReset(dev);      //reset the device
+       waveOutClose(dev);      //close the device
+       dev=NULL;
+   }
+
+   DeleteCriticalSection(&cs);
+
+   nBlocks = 0;
+   return(0);
 }
 
 #elif defined(SGI)

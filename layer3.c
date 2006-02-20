@@ -12,6 +12,7 @@
  *   mpeg1_iis package
  */ 
 
+#include <stdlib.h>
 #include "mpg123.h"
 #include "huffman.h"
 
@@ -40,10 +41,10 @@ struct bandInfoStruct {
   int shortDiff[13];
 };
 
-int longLimit[7][23];
-int shortLimit[7][14];
+int longLimit[9][23];
+int shortLimit[9][14];
 
-struct bandInfoStruct bandInfo[7] = { 
+struct bandInfoStruct bandInfo[9] = { 
 
 /* MPEG 1.0 */
  { {0,4,8,12,16,20,24,30,36,44,52,62,74, 90,110,134,162,196,238,288,342,418,576},
@@ -76,19 +77,26 @@ struct bandInfoStruct bandInfo[7] = {
    {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 },
    {0,4*3,8*3,12*3,18*3,26*3,36*3,48*3,62*3,80*3,104*3,134*3,174*3,192*3},
    {4,4,4,6,8,10,12,14,18,24,30,40,18 } } ,
-
-/* MPEG 2.5, wrong! table (it's just a copy of MPEG 2.0/44.1kHz) */
- { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576},
-   {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 } ,
-   {0,4*3,8*3,12*3,18*3,24*3,32*3,42*3,56*3,74*3,100*3,132*3,174*3,192*3} ,
-   {4,4,4,6,6,8,10,14,18,26,32,42,18 } } ,
+/* MPEG 2.5 */
+ { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576} ,
+   {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54},
+   {0,12,24,36,54,78,108,144,186,240,312,402,522,576},
+   {4,4,4,6,8,10,12,14,18,24,30,40,18} },
+ { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576} ,
+   {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54},
+   {0,12,24,36,54,78,108,144,186,240,312,402,522,576},
+   {4,4,4,6,8,10,12,14,18,24,30,40,18} },
+ { {0,12,24,36,48,60,72,88,108,132,160,192,232,280,336,400,476,566,568,570,572,574,576},
+   {12,12,12,12,12,12,16,20,24,28,32,40,48,56,64,76,90,2,2,2,2,2},
+   {0, 24, 48, 72,108,156,216,288,372,480,486,492,498,576},
+   {8,8,8,12,16,20,24,28,36,2,2,2,26} } ,
 };
 
-static int mapbuf0[7][152];
-static int mapbuf1[7][156];
-static int mapbuf2[7][44];
-static int *map[7][3];
-static int *mapend[7][3];
+static int mapbuf0[9][152];
+static int mapbuf1[9][156];
+static int mapbuf2[9][44];
+static int *map[9][3];
+static int *mapend[9][3];
 
 static unsigned int n_slen2[512]; /* MPEG 2.0 slen for 'normal' mode */
 static unsigned int i_slen2[256]; /* MPEG 2.0 slen for intensity stereo */
@@ -190,7 +198,7 @@ void init_layer3(int down_samp)
     }
   }
 
-  for(j=0;j<7;j++)
+  for(j=0;j<9;j++)
   {
    struct bandInfoStruct *bi = &bandInfo[j];
    int *mp;
@@ -242,7 +250,7 @@ void init_layer3(int down_samp)
 
   }
 
-  for(j=0;j<7;j++) {
+  for(j=0;j<9;j++) {
     for(i=0;i<23;i++) {
       longLimit[j][i] = (bandInfo[j].longIdx[i] - 1 + 8) / 18 + 1;
       if(longLimit[j][i] > (SBLIMIT >> down_samp) )
@@ -327,6 +335,10 @@ static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
 
        gr_info->part2_3_length = getbits(12);
        gr_info->big_values = getbits_fast(9);
+       if(gr_info->big_values > 288) {
+          fprintf(stderr,"big_values too large!\n");
+          gr_info->big_values = 288;
+       }
        gr_info->pow2gain = gainpow2+256 - getbits_fast(8) + powdiff;
        if(ms_stereo)
          gr_info->pow2gain += 2;
@@ -395,6 +407,10 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
 
        gr_info->part2_3_length = getbits(12);
        gr_info->big_values = getbits_fast(9);
+       if(gr_info->big_values > 288) {
+         fprintf(stderr,"big_values too large!\n");
+         gr_info->big_values = 288;
+       }
        gr_info->pow2gain = gainpow2+256 - getbits_fast(8) + powdiff;
        if(ms_stereo)
          gr_info->pow2gain += 2;
@@ -423,10 +439,10 @@ static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
 /* check this again! */
          if(gr_info->block_type == 2)
            gr_info->region1start = 36>>1;
-         else {
+         else
            gr_info->region1start = 54>>1;
-         }
          gr_info->region2start = 576>>1;
+/* check this for 2.5 and sfreq=8 */
        }
        else 
        {
@@ -935,7 +951,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
 	/* 
      * zero part
      */
-    for(i=(&xr[SBLIMIT][SSLIMIT]-xrpnt)>>1;i;i--) {
+    for(i=(&xr[SBLIMIT][0]-xrpnt)>>1;i;i--) {
       *xrpnt++ = 0.0;
       *xrpnt++ = 0.0;
     }
@@ -1345,7 +1361,7 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
           *xrpnt++ = *xr0pnt++;
       }
     }
-    for(i=(&xr[1][SBLIMIT][SSLIMIT]-xrpnt)>>1;i;i--) {
+    for(i=(&xr[1][SBLIMIT][0]-xrpnt)>>1;i;i--) {
       *xrpnt++ = *xr0pnt++;
       *xrpnt++ = *xr0pnt++;
     }

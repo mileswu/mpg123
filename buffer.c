@@ -5,6 +5,7 @@
  *   Mon Apr 14 03:53:18 MET DST 1997
  */
 
+#include <stdlib.h>
 #include "mpg123.h"
 
 int outburst = MAXOUTBURST;
@@ -22,7 +23,7 @@ static void catch_usr1 (void)
 	usr1flag = TRUE;
 }
 
-#ifndef OS2
+#if !defined(OS2) && !defined(GENERIC) && !defined(WIN32)
 
 void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 {
@@ -45,7 +46,7 @@ void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 	for (;;) {
 		if (intflag) {
 			intflag = FALSE;
-#ifdef SOLARIS
+#if defined(SOLARIS) || defined(__NetBSD__)
 			if (outmode == DECODE_AUDIO)
 				audio_queueflush (ai);
 #endif

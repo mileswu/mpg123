@@ -6,9 +6,13 @@
 #include        <stdio.h>
 #include        <string.h>
 #include        <signal.h>
-#include        <math.h>
 
+#ifndef WIN32
+#include        <sys/signal.h>
 #include        <unistd.h>
+#endif
+
+#include        <math.h>
 
 #ifdef OS2
 #include <float.h>
@@ -24,6 +28,22 @@
 #define FRONTEND_SAJBER 1
 #define FRONTEND_TK3PLAY 2
 
+#ifdef _WIN32	/* Win32 Additions By Tony Million */
+# undef WIN32
+# define WIN32
+
+# define M_PI       3.14159265358979323846
+# define M_SQRT2	1.41421356237309504880
+# define REAL_IS_FLOAT
+# define NEW_DCT9
+# define SKIP_JUNK
+
+# define random rand
+# define srandom srand
+
+# undef MPG123_REMOTE           /* Get rid of this stuff for Win32 */
+# undef SHUFFLESUPPORT
+#endif
 
 #ifdef SGI
 #include <audio.h>
@@ -50,7 +70,7 @@
 #endif
 
 #ifndef NAS
-#if defined(LINUX) || defined(__FreeBSD__)
+#if defined(LINUX) || defined(__FreeBSD__) || defined(__bsdi__)
 #define VOXWARE
 #endif
 #endif
@@ -123,7 +143,7 @@ extern int buffer_fd[2];
 extern txfermem *buffermem;
 extern char *prgName, *prgVersion;
 
-#ifndef OS2
+#if !defined(OS2) && !defined(WIN32)
 extern void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset);
 #endif
 
@@ -132,6 +152,7 @@ extern void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset);
 extern char *proxyurl;
 extern unsigned long proxyip;
 extern FILE *http_open (char *url);
+extern char *httpauth;
 
 /* ------ Declarations from "common.c" ------ */
 
@@ -159,12 +180,7 @@ extern int varmode;
 extern int playlimit;
 #endif
 
-struct III_sideinfo
-{
-  unsigned main_data_begin;
-  unsigned private_bits;
-  struct {
-    struct gr_info_s {
+struct gr_info_s {
       int scfsi;
       unsigned part2_3_length;
       unsigned big_values;
@@ -183,7 +199,14 @@ struct III_sideinfo
       unsigned count1table_select;
       real *full_gain[3];
       real *pow2gain;
-    } gr[2];
+};
+
+struct III_sideinfo
+{
+  unsigned main_data_begin;
+  unsigned private_bits;
+  struct {
+    struct gr_info_s gr[2];
   } ch[2];
 };
 
@@ -199,6 +222,9 @@ extern int do_layer2(struct frame *fr,int,struct audio_info_struct *);
 extern int do_layer1(struct frame *fr,int,struct audio_info_struct *);
 extern void do_equalizer(real *bandPtr,int channel);
 extern int synth_1to1 (real *,int,unsigned char *);
+#ifdef PENTIUM_OPT
+extern int synth_1to1_pent (real *,int,unsigned char *);
+#endif
 extern int synth_1to1_8bit (real *,int,unsigned char *);
 extern int synth_2to1 (real *,int,unsigned char *);
 extern int synth_2to1_8bit (real *,int,unsigned char *);

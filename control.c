@@ -5,14 +5,20 @@
 
 #include <stdio.h>
 
+#ifndef WIN32
 #include <sys/time.h>
-#include <sys/types.h>
 #include <unistd.h>
+#endif
+#include <sys/types.h>
 
+#ifndef WIN32
 #include <linux/socket.h>
+#endif
 /* <sys/socket.h> */
 
+#ifndef WIN32
 #include "jukebox/controldata.h"
+#endif
 #include "mpg123.h"
 
 #define MODE_STOPPED 0
@@ -21,6 +27,8 @@
 
 extern FILE *filept;
 extern int tabsel_123[2][3][16];
+
+#ifndef WIN32
 
 int sajber_sendmsg(int type,int data)
 {
@@ -216,5 +224,8 @@ void control_tk3play(struct frame *fr)
 {
 
 }
+
+#endif
+
 
 
