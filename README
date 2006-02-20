@@ -1,5 +1,5 @@
 **********************************************************************
-* MPEG 1.0 _AUDIO_ PLAYER, V0.54                                     * 
+* MPEG 1.0 _AUDIO_ PLAYER, V0.55                                     * 
 * (full?) MPEG 1.0, Layer 1,2 and 3 support                          *
 * Layer-3 realtime only with a 'fast' machine (e.g Sparc10)          *
 * Since 29.3.96 128kbit j-stereo on an amd 5x86-P75 (133Mhz), too ;) *
@@ -7,13 +7,8 @@
 * possible in realtime on a i486dx4-100                              *
 **********************************************************************
 
-You may use the program for private and reasearch purposes.
-You may copy and distribute copies of the program's ORIGINAL
-source code including ALL files. (e.g. README,etc)
-You may add a compiled binary of this program to the original 
-source code package. You may NOT charge a fee for this copy.
-If you wanna use the code outside these rules ask me (Michael Hipp).
- 
+Please read first the important information in the COPYING file.
+
 written/modfied by:
    Michael Hipp (email: Michael.Hipp@student.uni-tuebingen.de)
    Philipp Knirsch (email: phil@mpik-tueb.mpg.de)
@@ -27,29 +22,32 @@ Uses code (or at least ideas) from:
   Philipp Knirsch (DCT36/manual unroll)
   Thomas Woerner (SGI Audio)
   Oliver Fromme <oliver.fromme@heim3.tu-clausthal.de> 
-    (several enhancements, man pages ...)
+    (several enhancements, man pages, Makefile, FreeBSD port,License )
 
-V0.54 plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
-with about 77% CPU load.
+current original distribution site is:
+  http://www.sfs.nphil.uni-tuebingen.de/~hipp/mpg123.html
+
+V0.55 plays a layer3,112Kbit/s,J-Stereo stream on my AMD 5x86/133Mhz
+with about 73% CPU load.
 If your machine isn't fast enough you may wanna try one of 
-the 'special' versions. (replace the decode.c/decode_i386.c by decoce_lp.c
+the 'special' versions. (replace the decode.c/decode_i386.c by decoce_2to1.c
 or decode_int.c for this). Both version have a significant lower quality. 
 Playing in 'singlemix' (stero reduced to mono) also saves some
 CPU cycles, though the whole code is optimized for 'full' stereo playing. 
 
-'Benchmarks': (+/- 5%)
+'Benchmarks': (+/- 2%)
 ----------------------
 (AMD 5x86/133MHZ,ASUS SP3G,256KB cache,DIRTY-TAG installed,(BusLogic SCSI))
 (Layer3, 112Kbit/s, J-Stereo stream)
 (Compiled with: -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486
    -fomit-frame-pointer -funroll-all-loops -finline-functions -ffast-math)
 
-  decode_i386.o: (stero)     77%
-                 (singlemix) 45% (-> should work on 486DX66)
-  decode_int.o:  (stereo)    70%
-                 (singlemix) 45%
-  decode_lp.o:   (stereo)    61%
-                 (singlemix) 38% (-> should work on 486DX50)
+  decode_i386.o: (stero)     73%
+                 (singlemix) 43% (-> should work on 486DX66)
+  decode_int.o:  (stereo)    69%
+                 (singlemix) 41%
+  decode_2to1.o: (stereo)    60%
+                 (singlemix) 36% (-> should work on 486DX50)
 
 ---------------------------------------------------------------------
 Description:
@@ -77,7 +75,7 @@ under GPL ..
 The output is always 'two channel interleaved'. If the input is a
 a mono-stream or single-channel is enabled, the player duplicates
 the channel. Currently, only (very simple) audiosupport for
-Linux,HP7xx,SGI and Sparc10 systems.
+Linux,HP7xx,SGI and SunOS/Solaris,FreeBSD systems.
 I have tested the program with a lot of teststreams, but it's very 
 likely, that there are still a few bugs.
 

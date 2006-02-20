@@ -2,7 +2,8 @@
  * Mpeg Layer-1,2,3 audio decoder 
  * ------------------------------
  * copyright (c) 1995 by Michael Hipp, All rights reserved. See also 'README'
- * slighlty optimized for machines without autoincrement/decrement
+ * version for slower machines .. decodes only every second sample 
+ * sounds like 24000,22050 or 16000 kHz .. (depending on original sample freq.)
  *
  */
 
@@ -173,26 +174,27 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
 
     b0 = buf + 15;
     b1 = buf + 15;
-    for (j=16;j;j--,b0++,b1--,window+=32,samples+=step)
+    for (j=8;j;j--,b0+=2,b1-=2,window+=48)
     {
-      sum  = window[0] * b0[0x000];
-      sum -= window[1] * b1[0x020];
-      sum += window[2] * b0[0x040];
-      sum -= window[3] * b1[0x060];
-      sum += window[4] * b0[0x080];
-      sum -= window[5] * b1[0x0a0];
-      sum += window[6] * b0[0x0c0];
-      sum -= window[7] * b1[0x0e0];
-      sum += window[8] * b0[0x100];
-      sum -= window[9] * b1[0x120];
-      sum += window[10] * b0[0x140];
-      sum -= window[11] * b1[0x160];
-      sum += window[12] * b0[0x180];
-      sum -= window[13] * b1[0x1a0];
-      sum += window[14] * b0[0x1c0];
-      sum -= window[15] * b1[0x1e0];
+      sum  = *window++ * b0[0x000];
+      sum -= *window++ * b1[0x020];
+      sum += *window++ * b0[0x040];
+      sum -= *window++ * b1[0x060];
+      sum += *window++ * b0[0x080];
+      sum -= *window++ * b1[0x0a0];
+      sum += *window++ * b0[0x0c0];
+      sum -= *window++ * b1[0x0e0];
+      sum += *window++ * b0[0x100];
+      sum -= *window++ * b1[0x120];
+      sum += *window++ * b0[0x140];
+      sum -= *window++ * b1[0x160];
+      sum += *window++ * b0[0x180];
+      sum -= *window++ * b1[0x1a0];
+      sum += *window++ * b0[0x1c0];
+      sum -= *window++ * b1[0x1e0];
 
-      clip += wrt_sample(samples,sum);
+      clip += wrt_sample(samples,sum); samples += step;
+      clip += wrt_sample(samples,sum); samples += step;
     }
 
     {
@@ -204,30 +206,32 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
       sum += window[10] * b0[0x140];
       sum += window[12] * b0[0x180];
       sum += window[14] * b0[0x1c0];
-      clip += wrt_sample(samples,sum);
-      b0--,b1++,window+=32,samples+=step;
+      clip += wrt_sample(samples,sum); samples += step;
+      clip += wrt_sample(samples,sum); samples += step;
+      b0-=2,b1+=2,window+=64;
     }
 
-    for (j=15;j;j--,b0--,b1++,window+=32,samples+=step)
+    for (j=7;j;j--,b0-=2,b1+=2,window+=48)
     {
-      sum  = window[0] * b0[0x000];
-      sum += window[1] * b1[0x020];
-      sum += window[2] * b0[0x040];
-      sum += window[3] * b1[0x060];
-      sum += window[4] * b0[0x080];
-      sum += window[5] * b1[0x0a0];
-      sum += window[6] * b0[0x0c0];
-      sum += window[7] * b1[0x0e0];
-      sum += window[8] * b0[0x100];
-      sum += window[9] * b1[0x120];
-      sum += window[10] * b0[0x140];
-      sum += window[11] * b1[0x160];
-      sum += window[12] * b0[0x180];
-      sum += window[13] * b1[0x1a0];
-      sum += window[14] * b0[0x1c0];
-      sum += window[15] * b1[0x1e0];
+      sum  = *window++ * b0[0x000];
+      sum += *window++ * b1[0x020];
+      sum += *window++ * b0[0x040];
+      sum += *window++ * b1[0x060];
+      sum += *window++ * b0[0x080];
+      sum += *window++ * b1[0x0a0];
+      sum += *window++ * b0[0x0c0];
+      sum += *window++ * b1[0x0e0];
+      sum += *window++ * b0[0x100];
+      sum += *window++ * b1[0x120];
+      sum += *window++ * b0[0x140];
+      sum += *window++ * b1[0x160];
+      sum += *window++ * b0[0x180];
+      sum += *window++ * b1[0x1a0];
+      sum += *window++ * b0[0x1c0];
+      sum += *window++ * b1[0x1e0];
 
-      clip += wrt_sample(samples,sum);
+      clip += wrt_sample(samples,sum); samples += step;
+      clip += wrt_sample(samples,sum); samples += step;
     }
   }
   else {
@@ -237,26 +241,27 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
 
     b0 = buf + 15;
     b1 = buf + 15;
-    for (j=16;j;j--,b0--,b1++,window+=32,samples+=step) 
+    for (j=8;j;j--,b0-=2,b1+=2,window+=48) 
     {
-      sum = -window[0] * b0[0x000];
-      sum += window[1] * b1[0x020];
-      sum -= window[2] * b0[0x040];
-      sum += window[3] * b1[0x060];
-      sum -= window[4] * b0[0x080];
-      sum += window[5] * b1[0x0a0];
-      sum -= window[6] * b0[0x0c0];
-      sum += window[7] * b1[0x0e0];
-      sum -= window[8] * b0[0x100];
-      sum += window[9] * b1[0x120];
-      sum -= window[10] * b0[0x140];
-      sum += window[11] * b1[0x160];
-      sum -= window[12] * b0[0x180];
-      sum += window[13] * b1[0x1a0];
-      sum -= window[14] * b0[0x1c0];
-      sum += window[15] * b1[0x1e0];
+      sum = -*window++ * b0[0x000];
+      sum += *window++ * b1[0x020];
+      sum -= *window++ * b0[0x040];
+      sum += *window++ * b1[0x060];
+      sum -= *window++ * b0[0x080];
+      sum += *window++ * b1[0x0a0];
+      sum -= *window++ * b0[0x0c0];
+      sum += *window++ * b1[0x0e0];
+      sum -= *window++ * b0[0x100];
+      sum += *window++ * b1[0x120];
+      sum -= *window++ * b0[0x140];
+      sum += *window++ * b1[0x160];
+      sum -= *window++ * b0[0x180];
+      sum += *window++ * b1[0x1a0];
+      sum -= *window++ * b0[0x1c0];
+      sum += *window++ * b1[0x1e0];
 
-      clip += wrt_sample(samples,sum);
+      clip += wrt_sample(samples,sum); samples += step;
+      clip += wrt_sample(samples,sum); samples += step;
     }
     {
       sum  = window[1] * b1[0x020];
@@ -267,29 +272,31 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
       sum += window[11] * b1[0x160];
       sum += window[13] * b1[0x1a0];
       sum += window[15] * b1[0x1e0];
-      clip += wrt_sample(samples,sum);
-      b0++,b1--,window+=32,samples+=step;
+      clip += wrt_sample(samples,sum); samples += step;
+      clip += wrt_sample(samples,sum); samples += step;
+      b0+=2,b1-=2,window+=64;
     }
-    for (j=15;j;j--,b0++,b1--,window+=32,samples+=step)
+    for (j=7;j;j--,b0+=2,b1-=2,window+=48)
     {
-      sum  = window[0] * b0[0x000];
-      sum += window[1] * b1[0x020];
-      sum += window[2] * b0[0x040];
-      sum += window[3] * b1[0x060];
-      sum += window[4] * b0[0x080];
-      sum += window[5] * b1[0x0a0];
-      sum += window[6] * b0[0x0c0];
-      sum += window[7] * b1[0x0e0];
-      sum += window[8] * b0[0x100];
-      sum += window[9] * b1[0x120];
-      sum += window[10] * b0[0x140];
-      sum += window[11] * b1[0x160];
-      sum += window[12] * b0[0x180];
-      sum += window[13] * b1[0x1a0];
-      sum += window[14] * b0[0x1c0];
-      sum += window[15] * b1[0x1e0];
+      sum  = *window++ * b0[0x000];
+      sum += *window++ * b1[0x020];
+      sum += *window++ * b0[0x040];
+      sum += *window++ * b1[0x060];
+      sum += *window++ * b0[0x080];
+      sum += *window++ * b1[0x0a0];
+      sum += *window++ * b0[0x0c0];
+      sum += *window++ * b1[0x0e0];
+      sum += *window++ * b0[0x100];
+      sum += *window++ * b1[0x120];
+      sum += *window++ * b0[0x140];
+      sum += *window++ * b1[0x160];
+      sum += *window++ * b0[0x180];
+      sum += *window++ * b1[0x1a0];
+      sum += *window++ * b0[0x1c0];
+      sum += *window++ * b1[0x1e0];
 
-      clip += wrt_sample(samples,sum);
+      clip += wrt_sample(samples,sum); samples += step;
+      clip += wrt_sample(samples,sum); samples += step;
     }
   }
 
@@ -304,6 +311,12 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
 static void tr(real *here,real *samples)
 {
   real bufs[64];
+
+  {
+    int i;
+    for(i=16;i<32;i++)
+      samples[i] = 0.0;
+  }
 
  {
   register int i,j;
@@ -413,7 +426,6 @@ static void tr(real *here,real *samples)
     b1[13] += b1[11];
     b1[11] += b1[15];
   }
-#if 0
   {
     b1 = bufs+16;
     b1[0]  += b1[8];
@@ -432,27 +444,32 @@ static void tr(real *here,real *samples)
     b1[11] += b1[7];
     b1[7]  += b1[15];
   }
-#endif
  }
 
-  here[31] = bufs[0]; here[15] = bufs[1]; here[23] = bufs[2]; here[ 7] = bufs[3];
-  here[27] = bufs[4]; here[11] = bufs[5]; here[19] = bufs[6]; here[ 3] = bufs[7];
-  here[29] = bufs[8]; here[13] = bufs[9]; here[21] = bufs[10]; here[ 5] = bufs[11];
-  here[25] = bufs[12]; here[ 9] = bufs[13]; here[17] = bufs[14]; here[ 1] = bufs[15];
-#if 0
-  here[30] = bufs[16]; here[14] = bufs[17]; here[22] = bufs[18]; here[ 6] = bufs[19];
-  here[26] = bufs[20]; here[10] = bufs[21]; here[18] = bufs[22]; here[ 2] = bufs[23];
-  here[28] = bufs[24]; here[12] = bufs[25]; here[20] = bufs[26]; here[ 4] = bufs[27];
-  here[24] = bufs[28]; here[ 8] = bufs[29]; here[16] = bufs[30]; here[ 0] = bufs[31];
+#if 1
+ {
+  register real *a1=bufs;
+  here[31] = *a1++; here[15] = *a1++; here[23] = *a1++; here[ 7] = *a1++;
+  here[27] = *a1++; here[11] = *a1++; here[19] = *a1++; here[ 3] = *a1++;
+  here[29] = *a1++; here[13] = *a1++; here[21] = *a1++; here[ 5] = *a1++;
+  here[25] = *a1++; here[ 9] = *a1++; here[17] = *a1++; here[ 1] = *a1++;
+  here[30] = *a1++; here[14] = *a1++; here[22] = *a1++; here[ 6] = *a1++;
+  here[26] = *a1++; here[10] = *a1++; here[18] = *a1++; here[ 2] = *a1++;
+  here[28] = *a1++; here[12] = *a1++; here[20] = *a1++; here[ 4] = *a1++;
+  here[24] = *a1++; here[ 8] = *a1++; here[16] = *a1++; here[ 0] = *a1;
+ }
 #else
-  here[30] = bufs[16+0]+bufs[16+8];  here[14] = bufs[16+1]+bufs[16+9];
-  here[22] = bufs[16+2]+bufs[16+10]; here[ 6] = bufs[16+3]+bufs[16+11];
-  here[26] = bufs[16+4]+bufs[16+12]; here[10] = bufs[16+5]+bufs[16+13];
-  here[18] = bufs[16+6]+bufs[16+14]; here[ 2] = bufs[16+7]+bufs[16+15];
-  here[28] = bufs[16+8]+bufs[16+4];  here[12] = bufs[16+9]+bufs[16+5];
-  here[20] = bufs[16+10]+bufs[16+6]; here[ 4] = bufs[16+11]+bufs[16+7];
-  here[24] = bufs[16+12]+bufs[16+2]; here[ 8] = bufs[16+13]+bufs[16+3];
-  here[16] = bufs[16+14]+bufs[16+1]; here[ 0] = bufs[16+15];
+  {
+    static int pos[32] = {
+      31,15,23,7 , 27,11,19,3 , 29,13,21,5 , 25,9,17,1 ,
+      30,14,22,6 , 26,10,18,2 , 28,12,20,4 , 24,8,16,0 };
+    register int i,*p = pos;
+    register real *a1;
+
+    a1 = bufs;
+    for(i=31;i>=0;i--)
+      here[*p++] = *a1++;
+  }
 #endif
 
 }

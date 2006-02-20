@@ -150,6 +150,7 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
   static real buf1[0x200],buf0[0x200];
   static int boc[2]={1,1};
   static real *buffs[2] = { buf0,buf1 };
+  static const int step = 2;
 
   int bo;
   int clip = 0; 
@@ -171,7 +172,7 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
 
     b0 = buf + 15;
     b1 = buf + 15;
-    for (j=16;j;j--,b0++,b1--,window+=16,samples+=2)
+    for (j=16;j;j--,b0++,b1--,window+=16,samples+=step)
     {
       sum  = *window++ * b0[0x000];
       sum -= *window++ * b1[0x020];
@@ -203,10 +204,10 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
       sum += window[12] * b0[0x180];
       sum += window[14] * b0[0x1c0];
       clip += wrt_sample(samples,sum);
-      b0--,b1++,window+=32,samples+=2;
+      b0--,b1++,window+=32,samples+=step;
     }
 
-    for (j=15;j;j--,b0--,b1++,window+=16,samples+=2)
+    for (j=15;j;j--,b0--,b1++,window+=16,samples+=step)
     {
       sum  = *window++ * b0[0x000];
       sum += *window++ * b1[0x020];
@@ -235,7 +236,7 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
 
     b0 = buf + 15;
     b1 = buf + 15;
-    for (j=16;j;j--,b0--,b1++,window+=16,samples+=2) 
+    for (j=16;j;j--,b0--,b1++,window+=16,samples+=step) 
     {
       sum = -*window++ * b0[0x000];
       sum += *window++ * b1[0x020];
@@ -266,9 +267,9 @@ int SubBandSynthesis (real *bandPtr,int channel,short *samples)
       sum += window[13] * b1[0x1a0];
       sum += window[15] * b1[0x1e0];
       clip += wrt_sample(samples,sum);
-      b0++,b1--,window+=32,samples+=2;
+      b0++,b1--,window+=32,samples+=step;
     }
-    for (j=15;j;j--,b0++,b1--,window+=16,samples+=2)
+    for (j=15;j;j--,b0++,b1--,window+=16,samples+=step)
     {
       sum  = *window++ * b0[0x000];
       sum += *window++ * b1[0x020];

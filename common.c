@@ -84,10 +84,10 @@ static void get_II_stuff(struct frame *fr)
   sblim = sblims[table];
 
   fr->alloc = tables[table];
-  fr->sblimit = sblim;
+  fr->II_sblimit = sblim;
 }
 
-void finish_output (int outmode, struct audio_info_struct *ai)
+void audio_flush(int outmode, struct audio_info_struct *ai)
 {
   if (pcm_point) {
     switch (outmode) {
@@ -101,6 +101,26 @@ void finish_output (int outmode, struct audio_info_struct *ai)
     pcm_point = 0;
   }
 }
+
+int simple_resync(unsigned char *hbuf,long oldhead)
+{
+  int i;
+  long newhead,mask = 0xfff00000 | 0x00600000 | 0x0000f000 | 0x00000c00;
+
+  while(1) {
+    newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
+            ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
+
+    if( (newhead & mask) == (oldhead & mask) )
+      return 1;
+    for(i=0;i<3;i++)
+      hbuf[i] = hbuf[i+1];
+    if(fread(hbuf+3,1,1,filept) != 1)
+      break;
+  }
+  return 0;
+}
+
 
 int read_frame(struct frame *fr)
 {
@@ -130,6 +150,7 @@ int read_frame(struct frame *fr)
     if(fread(hbuf,1,4,filept) != 4)
       return 0;
 
+try_again:
   newhead = ((unsigned long) hbuf[0] << 24) | ((unsigned long) hbuf[1] << 16) |
             ((unsigned long) hbuf[2] << 8) | (unsigned long) hbuf[3];
 
@@ -139,16 +160,32 @@ int read_frame(struct frame *fr)
     fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
 #endif
 
-    oldhead = newhead;
 
     if( (newhead & 0xfff80000) != 0xfff80000)
     {
-      if((newhead & 0xfff80000) == 0xfff00000)
+      if((newhead & 0xfff80000) == 0xfff00000) {
         fprintf(stderr,"MPEG 2.0 Audio not supported!\n");
-      else
-        fprintf(stderr,"Illegal Audio-MPEG-Header.\n");
-      exit(1);
+        exit(1);
+      }
+      else if((newhead & 0xfff80000) == 0xffe00000) {
+        fprintf(stderr,"MPEG '2.5' Audio not supported!\n");
+        exit(1);
+      }
+      else {
+        fprintf(stderr,"Illegal Audio-MPEG-Header,unsupported format or error.\n");
+        if(oldhead != 0) {
+          fprintf(stderr,"Try to resync ... ");
+          if(simple_resync(hbuf,oldhead)) {
+            fprintf(stderr,"OK\n");
+            goto try_again;
+          }
+          fprintf(stderr,"Failed!\n");
+          exit(1);
+        }
+      }
     }
+
+    oldhead = newhead;
 
     fr->version = 1;
     fr->lay = 4-((newhead>>17)&3);
@@ -180,7 +217,6 @@ int read_frame(struct frame *fr)
           exit(1);
         }
 #endif
-        fr->sblimit = 32;
         fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ? 
                          (fr->mode_ext<<2)+4 : 32;
         framesize  = (long) tabsel_123[0][fr->bitrate_index] * 12000;
@@ -196,7 +232,7 @@ int read_frame(struct frame *fr)
 #endif
         get_II_stuff(fr);
         fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ?
-                         (fr->mode_ext<<2)+4 : fr->sblimit;
+                         (fr->mode_ext<<2)+4 : fr->II_sblimit;
         framesize = fs[fr->sampling_frequency][fr->bitrate_index]-4;
         framesize += fr->padding;
         break;
@@ -216,7 +252,6 @@ int read_frame(struct frame *fr)
 #ifdef VARMODESUPPORT
         }
 #endif
-        fr->sblimit = 32;
         break; 
       default:
         fprintf(stderr,"Sorry, unknow layer type.\n"); 
@@ -239,7 +274,7 @@ int read_frame(struct frame *fr)
   }
 
   bitindex = tellcnt = 0;
-  wordpointer = (char *) bsbuf;
+  wordpointer = (unsigned char *) bsbuf;
 
   return 1;
 }

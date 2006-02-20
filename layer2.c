@@ -7,19 +7,12 @@
 
 #include "mpg123.h"
 
-extern real muls[27][64];
-extern int grp_3tab[32 * 3]; /* filled to 27 */
-extern int grp_5tab[128 * 3]; /* filled to 125 */
-extern int grp_9tab[1024 * 3]; /* filled to 729 */
-
-extern int  SubBandSynthesis(real *,int,short *);
-
 void II_step_one(unsigned int *bit_alloc,int *scale,struct frame *fr)
 {
     int stereo = fr->stereo-1;
-    int sblimit = fr->sblimit;
+    int sblimit = fr->II_sblimit;
     int jsbound = fr->jsbound;
-    int sblimit2 = fr->sblimit<<stereo;
+    int sblimit2 = fr->II_sblimit<<stereo;
     struct al_table *alloc1 = fr->alloc;
     int i;
     static unsigned int scfsi_buf[64];
@@ -91,7 +84,7 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
 {
     int i,j,k,ba;
     int stereo = fr->stereo;
-    int sblimit = fr->sblimit;
+    int sblimit = fr->II_sblimit;
     int jsbound = fr->jsbound;
     struct al_table *alloc2,*alloc1 = fr->alloc;
     unsigned int *bita=bit_alloc;
@@ -114,7 +107,7 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
           }        
           else 
           {
-            static int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
+            static unsigned int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
             unsigned int idx,*tab,m=scale[x1];
             idx = (unsigned int) getbits(k);
             tab = table[d1] + idx + idx + idx;
@@ -148,7 +141,7 @@ void II_step_two(unsigned int *bit_alloc,real fraction[2][4][SBLIMIT],int *scale
         }
         else
         {
-          static int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
+          static unsigned int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
           unsigned int idx,*tab,m1,m2;
           m1 = scale[x1]; m2 = scale[x1+3];
           idx = (unsigned int) getbits(k);
@@ -201,30 +194,20 @@ int do_layer2(struct frame *fr,int outmode,struct audio_info_struct *ai)
     {
       if(single >= 0)
       {
-        int k;
-        clip += SubBandSynthesis (fraction[single][j],0,pcm_sample+pcm_point);
-        for(k=0;k<64;k+=2)
-          pcm_sample[pcm_point+k+1] = pcm_sample[pcm_point+k];
+        int i;
+        short *pcm = pcm_sample+pcm_point;
+        clip += SubBandSynthesis (fraction[single][j],0,pcm);
+        for(i=0;i<32;i++,pcm+=2)
+          pcm[1] = pcm[0];
       }
       else {
           clip += SubBandSynthesis (fraction[0][j],0,pcm_sample+pcm_point);
           clip += SubBandSynthesis (fraction[1][j],1,pcm_sample+pcm_point);
       }
-
       pcm_point += 64;
+
       if(pcm_point == audiobufsize)
-      {
-        switch(outmode)
-	{
-	  case DECODE_STDOUT:
-            write(1,pcm_sample,audiobufsize*2);
-	    break;
-          case DECODE_AUDIO:
-            audio_play_samples(ai,pcm_sample,audiobufsize);
-            break;
-	}
-        pcm_point = 0;
-      }
+        audio_flush(outmode,ai);
     }
   }
 

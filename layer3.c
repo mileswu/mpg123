@@ -5,7 +5,7 @@
  * All rights reserved. See also 'README'
  *
  * - I'm currently working on that .. needs a few more optimizations,
- *   though the code is now fast enough to run in realtime on a Sparc10
+ *   though the code is now fast enough to run in realtime on a 133Mhz 486
  * - a few personal notes are in german .. 
  *
  * used source: 
@@ -14,39 +14,70 @@
 
 #include "mpg123.h"
 
-extern void rewindNbits(int bits);
+#define MAP
 
-extern int  hsstell(void);
-extern void set_pointer(long);
-extern int  SubBandSynthesis(real *,int,short *);
-
-extern void huffman_decoder(int ,int *);
-extern void huffman_count1(int,int *);
-
-static real ispow[8250];
-static real scalepow1[19];
-static real scalepow2[19];
+static real ispow[8207];
 static real aa_ca[8],aa_cs[8];
-#if 0
-static real COS[36][18];
-#endif
 static real COS1[12][6];
 static real win[4][36];
 static real win1[4][36];
-static real gainpow[256];
-#if 0
-static real COS18[72];
-#endif
+static real gainpow2[256+118];
 static real COS9[9];
 static real tfcos36[9];
+
+static int slen[2][16] = {
+  {0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4},
+  {0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 3}
+};
+
+struct bandInfoStruct {
+  int longIdx[23];
+  int longDiff[22];
+  int shortIdx[14];
+  int shortDiff[13];
+};
+
+struct bandInfoStruct bandInfo[3] = { 
+ { {0,4,8,12,16,20,24,30,36,44,52,62,74, 90,110,134,162,196,238,288,342,418,576},
+   {4,4,4,4,4,4,6,6,8, 8,10,12,16,20,24,28,34,42,50,54, 76,158},
+   {0,4*3,8*3,12*3,16*3,22*3,30*3,40*3,52*3,66*3, 84*3,106*3,136*3,192*3},
+   {4,4,4,4,6,8,10,12,14,18,22,30,56} } ,
+ { {0,4,8,12,16,20,24,30,36,42,50,60,72, 88,106,128,156,190,230,276,330,384,576},
+   {4,4,4,4,4,4,6,6,6, 8,10,12,16,18,22,28,34,40,46,54, 54,192},
+   {0,4*3,8*3,12*3,16*3,22*3,28*3,38*3,50*3,64*3, 80*3,100*3,126*3,192*3},
+   {4,4,4,4,6,6,10,12,14,16,20,26,66} } ,
+ { {0,4,8,12,16,20,24,30,36,44,54,66,82,102,126,156,194,240,296,364,448,550,576} ,
+   {4,4,4,4,4,4,6,6,8,10,12,16,20,24,30,38,46,56,68,84,102, 26} ,
+   {0,4*3,8*3,12*3,16*3,22*3,30*3,42*3,58*3,78*3,104*3,138*3,180*3,192*3} ,
+   {4,4,4,4,6,8,12,16,20,26,34,42,12} } 
+};
+
+#ifdef MAP
+#if 0
+struct mapping {
+  int pos;
+  int win;   /* 0: 3 = l, 0-2 = window */
+  int cb;    /* cb for max-win calc */
+  int scale; /* pos of scale value */
+};
+#endif
+
+int map[3][3][405]; /* 402,405,310 */
+int *mapend[3][3];
+struct newhuff
+{
+  unsigned int linbits;
+  short *table;
+};
+extern struct newhuff ht[];
+extern struct newhuff htc[];
+#endif
  
 static real tan1_1[16],tan2_1[16],tan1_2[16],tan2_2[16];
-static real *tan1,*tan2;
 
 /* 
  * init tables for layer-3 
  */
-
 void init_layer3(void)
 {
   int i,j,m;
@@ -58,17 +89,11 @@ void init_layer3(void)
     return;
   init = 1;
 
-  for(i=0;i<256;i++)
-    gainpow[i] = pow(2.0,0.25 * ( (double) i - 210.0));
+  for(i=-256;i<118;i++)
+    gainpow2[i+256] = pow((double)2.0,(double) 0.25 * ( (double) - i - 210.0 ));
 
-  for(i=0;i<8250;i++)
+  for(i=0;i<8207;i++)
     ispow[i] = pow((double)i,(double)4.0/3.0);
-
-  for(i=0;i<19;i++)
-  {
-    scalepow1[i] = pow(2.0, -0.5 * (double) i);
-    scalepow2[i] = pow(2.0, -1.0 * (double) i);
-  }
 
   for (i=0;i<8;i++)
   {
@@ -102,15 +127,6 @@ void init_layer3(void)
 
    }
 
-#if 0
-  {
-   int k;
-   for(k=0,i=0;i<9;i++)
-     for(j=1;j<9;j++)
-        COS18[k++] = cos( M_PI / 18.0 * (2*i+1) * j );
-  }
-#endif
-
   for(i=0;i<9;i++)
     COS9[i] = cos( M_PI / 18.0 * i);
 
@@ -132,98 +148,162 @@ void init_layer3(void)
       win1[j][i] = - win[j][i];
   }
 
-
-#if 0
-  for(p=0;p<36;p++)
-    for(m=0;m<18;m++)
-      COS[p][m] = cos( M_PI/72.0*(2.0*(double)p+19.0)*(2.0*(double)m+1.0) );
-#endif
-
   for(i=0;i<15;i++)
   {
-    double t = tan((real) i * (M_PI / 12.0));
+    double t = tan((double) i * (M_PI / 12.0));
     tan1_1[i] = t / (1.0+t);
     tan2_1[i] = 1.0 / (1.0 + t);
-    tan1_2[i] = t / (1.0+t) / M_SQRT1_2;
-    tan2_2[i] = 1.0 / (1.0 + t) / M_SQRT1_2;
+    tan1_2[i] = M_SQRT2 * t / (1.0+t);
+    tan2_2[i] = M_SQRT2 / (1.0 + t);
   }
+
+#ifdef MAP
+  for(m=0;m<3;m++)
+  {
+   struct bandInfoStruct *bi = &bandInfo[m];
+   int *mp;
+   int cb,win,scf;
+   int *bdf;
+   int oldscale;
+
+   mp = map[m][0];
+   bdf = bi->longDiff;
+   i = 0; oldscale = -1; scf = 0;
+   for(cb = 0; cb < 8 ; cb++,scf++) {
+     for(j=*bdf++;j;j-=2,i+=2) { 
+       if(oldscale != scf) {
+         *mp++ = 1;
+         *mp++ = i;
+         *mp++ = 3;
+         *mp++ = cb;
+         oldscale = scf;
+       }
+       else 
+         *mp++ = 0;
+     }   
+   }
+   bdf = bi->shortDiff+3;
+   for(cb=3;cb<13;cb++) {
+     int l = *bdf++;
+     for(win=0;win<3;win++,scf++) {
+       for(j=0;j<l;j+=2) {
+         if(oldscale != scf) {
+           *mp++ = 1;
+           *mp++ = i + j*3 + win;
+           *mp++ = win;
+           *mp++ = cb;
+           oldscale = scf;
+         }
+         else
+           *mp++ = 0;
+       }
+     }
+     i += 3*l;
+   }
+   mapend[m][0] = mp;
+
+   i = 0; oldscale = -1; scf=0;
+   mp = map[m][1];
+   bdf = bi->shortDiff+0;
+   for(cb=0;cb<13;cb++) {
+     int l = *bdf++;
+     for(win=0;win<3;win++,scf++) {
+       for(j=0;j<l;j+=2) {
+         if(oldscale != scf) {
+           *mp++ = 1;
+           *mp++ = i + j*3 + win;
+           *mp++ = win;
+           *mp++ = cb;
+           oldscale = scf;
+         }
+         else
+           *mp++ = 0;
+       }
+     }
+     i += 3*l;
+   }
+   mapend[m][1] = mp;
+
+   mp = map[m][2];
+   bdf = bi->longDiff;
+   i = 0; oldscale = -1; scf = 0;
+   for(cb = 0; cb < 22 ; cb++,scf++) {
+     for(j=*bdf++;j;j-=2,i+=2) { 
+       if(oldscale != scf) {
+         *mp++ = 1;
+         *mp++ = cb;
+         oldscale = scf;
+       } 
+       else 
+         *mp++ = 0;
+     }   
+   }
+   mapend[m][2] = mp;
+
+  }  
+#endif
 }
 
 /*
- * read additional frame-informations
+ * read additional side information
  */
-
-void III_get_side_info(III_side_info_t *si,struct frame *fr)
+static void III_get_side_info(struct III_sideinfo *si,int stereo,int ms_stereo,long sfreq)
 {
-   int ch, gr, i;
-   int stereo = fr->stereo;
-   int ms_stereo = (fr->mode == MPG_MD_JOINT_STEREO) &&
-              (fr->mode_ext & 0x2);
+   int ch, gr;
 
    init_layer3();   
 
-   if(ms_stereo) {
-     tan1 = tan1_2; tan2 = tan2_2;
-   } 
-   else {
-     tan1 = tan1_1; tan2 = tan2_1;
-   }
- 
    si->main_data_begin = getbits(9);
    if (stereo == 1)
      si->private_bits = getbits_fast(5);
    else 
      si->private_bits = getbits_fast(3);
 
-   for (ch=0; ch<stereo; ch++)
-       si->ch[ch].scfsi = getbits_fast(4);
+   for (ch=0; ch<stereo; ch++) {
+       si->ch[ch].gr[0].scfsi = -1;
+       si->ch[ch].gr[1].scfsi = getbits_fast(4);
+   }
 
    for (gr=0; gr<2; gr++) 
    {
      for (ch=0; ch<stereo; ch++) 
      {
-       struct gr_info_s *gr_info = &(si->ch[ch].gr[gr]);
+       register struct gr_info_s *gr_info = &(si->ch[ch].gr[gr]);
 
        gr_info->part2_3_length = getbits(12);
        gr_info->big_values = getbits_fast(9);
-       gr_info->global_gain = getbits_fast(8);
-       if(ms_stereo) {
-         gr_info->pow2gain = M_SQRT1_2 * gainpow[gr_info->global_gain];
-       }
-       else {
-         gr_info->pow2gain = gainpow[gr_info->global_gain];
-       }
+       gr_info->pow2gain = gainpow2+256 - getbits_fast(8);
+       if(ms_stereo)
+         gr_info->pow2gain += 2;
        gr_info->scalefac_compress = getbits_fast(4);
-       gr_info->window_switching_flag = get1bit();
-       if(gr_info->window_switching_flag) 
+/* window-switching flag == 1 for block_Type != 0 .. and block-type == 0 -> win-sw-flag = 0 */
+       if(get1bit()) 
        {
+         int i;
          gr_info->block_type = getbits_fast(2);
          gr_info->mixed_block_flag = get1bit();
-         for (i=0; i<2; i++)
-           gr_info->table_select[i] = getbits_fast(5);
-           /* gr_info->table_select[2] not needed because there is no region2 */
-         for (i=0; i<3; i++)
-           gr_info->full_gain[i] = gr_info->pow2gain * scalepow2[getbits_fast(3)<<1];
-               
-   /* Set region_count parameters since they are implicit in this case. */       
-         if(gr_info->block_type == 0)
-         {
-           printf("Side info bad: block_type == 0 in split block.\n");
-           exit(0);
+         gr_info->table_select[0] = getbits_fast(5);
+         gr_info->table_select[1] = getbits_fast(5); /* table_select[2] not needed, because there is no region2 */
+         for(i=0;i<3;i++)
+           gr_info->full_gain[i] = gr_info->pow2gain + (getbits_fast(3)<<3);
+
+         if(gr_info->block_type == 0) {
+           fprintf(stderr,"Blocktype == 0 and window-switching == 1 not allowed.\n");
+           exit(1);
          }
-         else if (gr_info->block_type == 2 && gr_info->mixed_block_flag == 0)
-           gr_info->region0_count = 8; /* MI 9; */
-         else 
-           gr_info->region0_count = 7; /* MI 8; */
-         gr_info->region1_count = 20 - gr_info->region0_count;
-          /* no region2 */
+         /* region_count/start parameters are implicit in this case. */       
+         gr_info->region1start = 36>>1;
+         gr_info->region2start = 576>>1;
        }
        else 
        {
+         int i,r0c,r1c;
          for (i=0; i<3; i++)
            gr_info->table_select[i] = getbits_fast(5);
-         gr_info->region0_count = getbits_fast(4);
-         gr_info->region1_count = getbits_fast(3);
+         r0c = getbits_fast(4);
+         r1c = getbits_fast(3);
+         gr_info->region1start = bandInfo[sfreq].longIdx[r0c+1] >> 1 ;
+         gr_info->region2start = bandInfo[sfreq].longIdx[r0c+1+r1c+1] >> 1;
          gr_info->block_type = 0;
          gr_info->mixed_block_flag = 0;
        }
@@ -234,226 +314,815 @@ void III_get_side_info(III_side_info_t *si,struct frame *fr)
    }
 }
 
-                         
-static int slen[2][16] = {{0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4},
-                   {0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 3}};
-static struct sfBI_struct
-{
-   int l[23];
-   int s[14];
-} sfBandIndex[3] = 
-{
-   {{0,4,8,12,16,20,24,30,36,44,52,62,74,90,110,134,162,196,238,288,342,418,576},
-    {0,4,8,12,16,22,30,40,52,66,84,106,136,192}},
-   {{0,4,8,12,16,20,24,30,36,42,50,60,72,88,106,128,156,190,230,276,330,384,576},
-    {0,4,8,12,16,22,28,38,50,64,80,100,126,192}},
-   {{0,4,8,12,16,20,24,30,36,44,54,66,82,102,126,156,194,240,296,364,448,550,576},
-    {0,4,8,12,16,22,30,42,58,78,104,138,180,192}}
-};
-
-/* moegliche optimierung: scalefactors am Stueck in ein Feld laden
-   unabhaengig von 'l' und 's' .. i-stereo muss beachtet werden */
-
 /*
  * read scalefactors
  */
-
-void III_get_scale_factors(III_scalefac_t *scalefac,III_side_info_t *si,
-                           int gr,int ch,struct frame *fr)
+static void III_get_scale_factors(int *scf,struct gr_info_s *gr_info)
 {
-  int i;
-  struct gr_info_s *gr_info = &(si->ch[ch].gr[gr]);
-
     if (gr_info->block_type == 2) 
     {
-      int *scf,num;
+      int i=18;
+      int num = slen[0][gr_info->scalefac_compress];
 
-      if (gr_info->mixed_block_flag) 
-      { /* MIXED */ /* NEW - ag 11/25 */
-         scf=(*scalefac)[ch].l;
-         num = slen[0][gr_info->scalefac_compress];
+      if (gr_info->mixed_block_flag) {
          for (i=8;i;i--)
-           *scf++ = getbits(num);
-         scf=(*scalefac)[ch].s[3];
+           *scf++ = getbits_fast(num);
          i = 9;
       }
-      else
-      {
-        i = 18;
-        scf=(*scalefac)[ch].s[0];
-      }
 
-      num = slen[0][gr_info->scalefac_compress];
       for (;i;i--)
-        *scf++ = getbits(num);
+        *scf++ = getbits_fast(num);
       num = slen[1][gr_info->scalefac_compress];
       for (i = 18; i; i--)
-        *scf++ = getbits(num);
-      *scf++ = 0; *scf++ = 0; *scf++ = 0; 
+        *scf++ = getbits_fast(num);
+      *scf++ = 0; *scf++ = 0; *scf++ = 0; /* short[13][0..2] = 0 */
     }
     else 
     {
-      int *scf=(*scalefac)[ch].l;
-      int num=slen[0][gr_info->scalefac_compress];
+      int i,num=slen[0][gr_info->scalefac_compress];
+      int scfsi = gr_info->scfsi;
 
-      if(!gr) {
+      if(scfsi < 0) { /* scfsi < 0 => granule == 0 */
          for(i=11;i;i--)
-           *scf++ = getbits(num);
+           *scf++ = getbits_fast(num);
          num=slen[1][gr_info->scalefac_compress];
          for(i=10;i;i--)
-           *scf++ = getbits(num);
+           *scf++ = getbits_fast(num);
       }
       else {
-        int scfsi = si->ch[ch].scfsi;
         if(!(scfsi & 0x8))
           for (i=6;i;i--)
-            *scf++ = getbits(num);
-        else
-          scf+=6; /* set them to zero ???????  */
+            *scf++ = getbits_fast(num);
+        else {
+          *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
+          *scf++ = 0; *scf++ = 0; *scf++ = 0;
+        }
 
         if(!(scfsi & 0x4))
           for (i=5;i;i--)
-            *scf++ = getbits(num);
-        else
-          scf+=5; /* set them to zero ??????? */
+            *scf++ = getbits_fast(num);
+        else {
+          *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
+          *scf++ = 0; *scf++ = 0;
+        }
 
         num=slen[1][gr_info->scalefac_compress];
         if(!(scfsi & 0x2))
           for(i=5;i;i--)
-            *scf++ = getbits(num);
-        else
-          scf+=5; /* set them to zero ??????? */
+            *scf++ = getbits_fast(num);
+        else {
+          *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
+          *scf++ = 0; *scf++ = 0;
+        }
 
         if(!(scfsi & 0x1))
           for (i=5;i;i--)
-            *scf++ = getbits(num);
-        else
-          scf+=5; /* set them to zero ??????? */
+            *scf++ = getbits_fast(num);
+        else {
+          *scf++ = 0; *scf++ = 0; *scf++ = 0;  /* set to ZERO necessary? */
+          *scf++ = 0; *scf++ = 0;
+        }
       }
 
       *scf++ = 0;  /* no l[21] in original sources */
-      *scf++ = 0; 
     }
 }
 
+#ifndef MAP
 /*
  * l1,l2,l3 vorab berechnen und dann Huffman decode in
  * das dequantize integrieren .. 
  */
-void III_hufman_decode(int is[SBLIMIT][SSLIMIT],III_side_info_t *si,
-                       int ch,int gr,int part2_start,struct frame *fr)
+static void III_hufman_decode(int is[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info,int part2_start)
 {
-   struct gr_info_s *gr_info = &(si->ch[ch].gr[gr]);
-   int h,l1,l2,l3;
+   int h,l1,l2,l3,l4;
    int *is1 = (int *) is;
-   int region1Start,region2Start;
-   int bv=gr_info->big_values,remain;
-   int part2end = part2_start + si->ch[ch].gr[gr].part2_3_length;
+   int bv       = gr_info->big_values;
+   int part2end = gr_info->part2_3_length + part2_start;
+   int region1  = gr_info->region1start;
+   int region2  = gr_info->region2start;
 
-   if (gr_info->block_type == 2)
-   {
-      region1Start = 36  >>1;  /* sfb[9/3]*3=36 */
-      region2Start = 576 >>1; /* No Region2 for short block case. */
-   }
-   else 
-   {
-      region1Start = sfBandIndex[fr->sampling_frequency]
-                           .l[gr_info->region0_count + 1] >> 1 ; /* MI */
-      region2Start = sfBandIndex[fr->sampling_frequency]
-                              .l[gr_info->region0_count +
-                              gr_info->region1_count + 2] >> 1 ; /* MI */
-   }
-
-   if(bv <= region1Start)
-   {
+   l4 = ((576>>1)-bv);
+   if(bv <= region1) {
      l1 = bv; l2 = 0; l3 = 0;
    }
-   else
-   {
-     l1 = region1Start;
-     if(bv <= region2Start)
-     {
+   else {
+     l1 = region1;
+     if(bv <= region2) {
        l2 = bv - l1;  l3 = 0;
      }
-     else
-     {
-       l2 = region2Start - l1; l3 = bv - region2Start;
+     else {
+       l2 = region2 - l1; l3 = bv - region2;
      }
    }
 
    h = gr_info->table_select[0];
-   for(;l1;l1--,is1+=2)
+   for(;l1>0;l1--,is1+=2)
      huffman_decoder(h, is1);
    h = gr_info->table_select[1];
-   for(;l2;l2--,is1+=2)
+   for(;l2>0;l2--,is1+=2)
      huffman_decoder(h, is1);
    h = gr_info->table_select[2];
-   for(;l3;l3--,is1+=2)
+   for(;l3>0;l3--,is1+=2)
      huffman_decoder(h, is1);
 
-   remain = ((SSLIMIT*SBLIMIT)>>1) - bv;
+   l4 >>= 1;
+
+/* 
+ * we may loss the 'odd' bit here ..
+ * we just clear the two corresponding fields 
+ * check this policy later ..
+ * we omit a buffer overrun 
+ */
+
    h = gr_info->count1table_select;
-   while( ( hsstell() < part2end ) && remain > 0 ) 
-   {
-/* maybe we should check borders here .. (remain,part2end) */
-/* for odd 'remain' values it could happen that we write
-   two more values than wanted */
-      huffman_count1(h,is1);
-      is1 += 4; remain -= 2;
-   }
+   for(;l4 > 0 && hsstell() < part2end;l4--,is1+=4) 
+     huffman_count1(h,is1);
 
    if( (h = (part2end-hsstell()) ) )
    {  /* Dismiss stuffing Bits (or rewind) */
      while ( h > 16 ) {
-        getbits( 16 );
+        getbits(16);
         h -= 16;
      }
-     if(h > 0 )
-        getbits( h );
+     if(h >= 0 )
+        getbits(h);
      else
      {  
-        remain += 2;
-        is1 -= 4;
-        fprintf(stderr,"l3/huffman: shouldn't happen?? ... diff: %d\n",h-part2end);
+        fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-h);
+#if 0
+        l4 += 2; is1 -= 4;
         rewindNbits( -h );
+#else
+        exit(1);
+#endif
      }
    }
 
-   if(remain > 0)
-     memset(is1,0,remain*2*sizeof(int));
+   memset(is1,0,(sizeof(int)*576) - ((char *)is1-(char *)is) );
 }
-
+#endif
 
 static int pretab1[22] = {0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0};
 static int pretab2[22] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-/* hier ist bereits das reorder integriert, Achtung III_stereo veraendert sich
-   bei i_stereo-mode dadurch erheblich sonst bisher keine Probleme entdeckt;
-   der nachfolgende code sollte sich dadurch weiter vereinfachen */
-
-void III_dequantize_sample(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT],
-                           III_scalefac_t *scalefac,struct gr_info_s *gr_info,
-                           int ch,struct frame *fr)
+#ifdef MAP
+/*
+ * don't forget to apply the same changes to III_dequantize_sample_ms() !!! 
+ * (note: maxband stuff would only be necessary for second channel and I-stero)
+ */
+static void III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
+   struct gr_info_s *gr_info,int sfreq,int part2_start)
 {
-   int cb,sfreq=fr->sampling_frequency;
+  int shift = 1 + gr_info->scalefac_scale;
+  real *xrpnt = (real *) xr;
+  int l[3],l3;
+  int bv       = gr_info->big_values;
+  int part2end = gr_info->part2_3_length + part2_start;
+  int region1  = gr_info->region1start;
+  int region2  = gr_info->region2start;
+  int *me;
+
+  l3 = ((576>>1)-bv)>>1;   
+/*
+ * we may lose the 'odd' bit here !! 
+ * check this later gain 
+ */
+  if(bv <= region1) {
+    l[0] = bv; l[1] = 0; l[2] = 0;
+  }
+  else {
+    l[0] = region1;
+    if(bv <= region2) {
+      l[1] = bv - l[0];  l[2] = 0;
+    }
+    else {
+      l[1] = region2 - l[0]; l[2] = bv - region2;
+    }
+  }
+ 
+  if(gr_info->block_type == 2) {
+    int i,max[4];
+    int step=0,win=0,cb=0;
+    register real v = 0.0;
+    register int *m;
+
+    if(gr_info->mixed_block_flag) {
+      max[3] = -1;
+      max[0] = max[1] = max[2] = 2;
+      m = map[sfreq][0];
+      me = mapend[sfreq][0];
+    }
+    else {
+      max[0] = max[1] = max[2] = -1;
+      m = map[sfreq][1];
+      me = mapend[sfreq][1];
+    }
+
+    for(i=0;i<2;i++) {
+      int lp = l[i];
+      struct newhuff *h = ht+gr_info->table_select[i];
+      for(;lp;lp--) {
+        register int x,y;
+        if( (*m++) ) {
+          xrpnt = ((real *) xr) + (*m++);
+          win = *m++;
+          cb = *m++;
+          if(win == 3) {
+            v = gr_info->pow2gain[(*scf++) << shift];
+            step = 1;
+          }
+          else {
+            v = gr_info->full_gain[win][(*scf++) << shift];
+            step = 3;
+          }
+        }
+        {
+          register short *val = h->table;
+          while((y=*val++)<0)
+            if (get1bit())
+              val -= y;
+          x = y >> 4;
+          y &= 0xf;
+        }
+        if(x == 15) {
+          max[win] = cb;
+          x += getbits(h->linbits);
+          if(get1bit())
+            *xrpnt = -ispow[x] * v;
+          else
+            *xrpnt =  ispow[x] * v;
+        }
+        else if(x) {
+          max[win] = cb;
+          if(get1bit())
+            *xrpnt = -ispow[x] * v;
+          else
+            *xrpnt =  ispow[x] * v;
+        }
+        else
+          *xrpnt = 0.0;
+        xrpnt += step;
+        if(y == 15) {
+          max[win] = cb;
+          y += getbits(h->linbits);
+          if(get1bit())
+            *xrpnt = -ispow[y] * v;
+          else
+            *xrpnt =  ispow[y] * v;
+        }
+        else if(y) {
+          max[win] = cb;
+          if(get1bit())
+            *xrpnt = -ispow[y] * v;
+          else
+            *xrpnt =  ispow[y] * v;
+        }
+        else
+          *xrpnt = 0.0;
+        xrpnt += step;
+      }
+    }
+
+    for(;l3 && hsstell() < part2end;l3--) {
+      struct newhuff *h = htc+gr_info->count1table_select;
+      register short *val = h->table,a;
+
+      while((a=*val++)<0)
+        if (get1bit())
+          val -= a;
+
+      for(i=0;i<4;i++) {
+        if(!(i & 1) && (*m++) ) {
+          xrpnt = ((real *) xr) + (*m++);
+          win = *m++;
+          cb = *m++;
+          if(win == 3) {
+            v = gr_info->pow2gain[(*scf++) << shift];
+            step = 1;
+          }
+          else {
+            v = gr_info->full_gain[win][(*scf++) << shift];
+            step = 3;
+          }
+        }
+        if( (a & (0x8>>i)) ) {
+          max[win] = cb;
+          if(get1bit()) 
+            *xrpnt = -v;
+          else
+            *xrpnt = v;
+        }
+        else
+          *xrpnt = 0.0;
+        xrpnt += step;
+      }
+    }
+ 
+    while( m < me ) {
+      if(*m++) {
+        xrpnt = ((real *) xr) + *m++;
+        if( (*m++) == 3)
+          step = 1;
+        else
+          step = 3;
+        m++; /* cb */
+      }
+      *xrpnt = 0.0;
+      xrpnt += step;
+      *xrpnt = 0.0;
+      xrpnt += step;
+    }
+
+    gr_info->maxband[0] = max[0]+1;
+    gr_info->maxband[1] = max[1]+1;
+    gr_info->maxband[2] = max[2]+1;
+    gr_info->maxbandl = max[3]+1;
+  }
+  else {
+    int *pretab = gr_info->preflag ? pretab1 : pretab2;
+    int i,max = -1;
+    int cb = 0;
+    int *m = map[sfreq][2];
+    register real v = 0.0;
+    me = mapend[sfreq][2];
+
+    for(i=0;i<3;i++) {
+      int lp = l[i];
+      struct newhuff *h = ht+gr_info->table_select[i];
+
+      for(;lp;lp--) {
+        int x,y;
+        if( (*m++) ) {
+          v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+          cb = *m++;
+        }
+        {
+          register short *val = h->table;
+          while((y=*val++)<0)
+            if (get1bit())
+              val -= y;
+          x = y >> 4;
+          y &= 0xf;
+        }
+        if (x == 15) {
+          max = cb;
+          x += getbits(h->linbits);
+          if(get1bit())
+            *xrpnt++ = -ispow[x] * v;
+          else
+            *xrpnt++ =  ispow[x] * v;
+        }
+        else if(x) {
+          max = cb;
+          if(get1bit())
+            *xrpnt++ = -ispow[x] * v;
+          else
+            *xrpnt++ =  ispow[x] * v;
+        }
+        else
+          *xrpnt++ = 0.0;
+
+        if (y == 15) {
+          max = cb;
+          y += getbits(h->linbits);
+          if(get1bit())
+            *xrpnt++ = -ispow[y] * v;
+          else
+            *xrpnt++ =  ispow[y] * v;
+        }
+        else if(y) {
+          max = cb;
+          if(get1bit())
+            *xrpnt++ = -ispow[y] * v;
+          else
+            *xrpnt++ =  ispow[y] * v;
+        }
+        else
+          *xrpnt++ = 0.0;
+      }
+    }
+    for(;l3 && hsstell() < part2end;l3--) {
+      struct newhuff *h = htc+gr_info->count1table_select;
+      register short *val = h->table,a;
+
+      while((a=*val++)<0)
+        if (get1bit())
+          val -= a;
+
+      for(i=0;i<4;i++) {
+        if(!(i & 1) && (*m++) ) {
+          v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+          cb = *m++;
+        }
+        if ( (a & (0x8>>i)) ) {
+          max = cb;
+          if(get1bit())
+            *xrpnt++ = -v;
+          else
+            *xrpnt++ = v;
+        }
+        else
+          *xrpnt++ = 0.0;
+      }
+    }
+    for(i=(&xr[SBLIMIT][SSLIMIT]-xrpnt)>>1;i;i--) {
+      *xrpnt++ = 0.0;
+      *xrpnt++ = 0.0;
+    }
+
+    gr_info->maxbandl = max+1;
+  }
+
+  {
+    int h;
+    if( (h = (part2end-hsstell()) ) ) {
+      while ( h > 16 ) {
+         getbits(16); /* Dismiss stuffing Bits */
+         h -= 16;
+      }
+      if(h >= 0 )
+         getbits(h);
+      else {
+         fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-h);
+         exit(1);
+      }
+    }
+  }
+}
+
+static void III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
+   struct gr_info_s *gr_info,int sfreq,int part2_start)
+{
+  int shift = 1 + gr_info->scalefac_scale;
+  real *xrpnt = (real *) xr[1];
+  real *xr0pnt = (real *) xr[0];
+  int l[3],l3;
+  int bv       = gr_info->big_values;
+  int part2end = gr_info->part2_3_length + part2_start;
+  int region1  = gr_info->region1start;
+  int region2  = gr_info->region2start;
+  int *me;
+
+  l3 = ((576>>1)-bv)>>1;   
+/*
+ * we may lose the 'odd' bit here !! 
+ * check this later gain 
+ */
+  if(bv <= region1) {
+    l[0] = bv; l[1] = 0; l[2] = 0;
+  }
+  else {
+    l[0] = region1;
+    if(bv <= region2) {
+      l[1] = bv - l[0];  l[2] = 0;
+    }
+    else {
+      l[1] = region2 - l[0]; l[2] = bv - region2;
+    }
+  }
+ 
+  if(gr_info->block_type == 2) {
+    int i,max[4];
+    int step=0,win=0,cb=0;
+    register real v = 0.0;
+    int *m;
+
+    if(gr_info->mixed_block_flag) {
+      max[3] = -1;
+      max[0] = max[1] = max[2] = 2;
+      m = map[sfreq][0];
+      me = mapend[sfreq][0];
+    }
+    else {
+      max[0] = max[1] = max[2] = -1;
+      m = map[sfreq][1];
+      me = mapend[sfreq][1];
+    }
+
+    for(i=0;i<2;i++) {
+      int lp = l[i];
+      struct newhuff *h = ht+gr_info->table_select[i];
+      for(;lp;lp--) {
+        int x,y;
+        if(*m++) {
+          xrpnt = ((real *) xr[1]) + *m;
+          xr0pnt = ((real *) xr[0]) + *m++;
+          win = *m++;
+          cb = *m++;
+          if(win == 3) {
+            v = gr_info->pow2gain[(*scf++) << shift];
+            step = 1;
+          }
+          else {
+            v = gr_info->full_gain[win][(*scf++) << shift];
+            step = 3;
+          }
+        }
+        {
+          register short *val = h->table;
+          while((y=*val++)<0)
+            if (get1bit())
+              val -= y;
+          x = y >> 4;
+          y &= 0xf;
+        }
+        if(x == 15) {
+          max[win] = cb;
+          x += getbits(h->linbits);
+          if(get1bit()) {
+            real a = ispow[x] * v;
+            *xrpnt = *xr0pnt + a;
+            *xr0pnt -= a;
+          }
+          else {
+            real a = ispow[x] * v;
+            *xrpnt = *xr0pnt - a;
+            *xr0pnt += a;
+          }
+        }
+        else if(x) {
+          max[win] = cb;
+          if(get1bit()) {
+            real a = ispow[x] * v;
+            *xrpnt = *xr0pnt + a;
+            *xr0pnt -= a;
+          }
+          else {
+            real a = ispow[x] * v;
+            *xrpnt = *xr0pnt - a;
+            *xr0pnt += a;
+          }
+        }
+        else
+          *xrpnt = *xr0pnt;
+        xrpnt += step;
+        xr0pnt += step;
+
+        if(y == 15) {
+          max[win] = cb;
+          y += getbits(h->linbits);
+          if(get1bit()) {
+            real a = ispow[y] * v;
+            *xrpnt = *xr0pnt + a;
+            *xr0pnt -= a;
+          }
+          else {
+            real a = ispow[y] * v;
+            *xrpnt = *xr0pnt - a;
+            *xr0pnt += a;
+          }
+        }
+        else if(y) {
+          max[win] = cb;
+          if(get1bit()) {
+            real a = ispow[y] * v;
+            *xrpnt = *xr0pnt + a;
+            *xr0pnt -= a;
+          }
+          else {
+            real a = ispow[y] * v;
+            *xrpnt = *xr0pnt - a;
+            *xr0pnt += a;
+          }
+        }
+        else
+          *xrpnt = *xr0pnt;
+        xrpnt += step;
+        xr0pnt += step;
+      }
+    }
+
+    for(;l3 && hsstell() < part2end;l3--) {
+      struct newhuff *h = htc+gr_info->count1table_select;
+      register short *val = h->table,a;
+
+      while((a=*val++)<0)
+        if (get1bit())
+          val -= a;
+
+      for(i=0;i<4;i++) {
+        if(!(i & 1) && (*m++) ) {
+          xrpnt = ((real *) xr[1]) + *m;
+          xr0pnt = ((real *) xr[0]) + *m++;
+          win = *m++;
+          cb = *m++;
+          if(win == 3) {
+            v = gr_info->pow2gain[(*scf++) << shift];
+            step = 1;
+          }
+          else {
+            v = gr_info->full_gain[win][(*scf++) << shift];
+            step = 3;
+          }
+        }
+        if( (a & (0x8>>i)) ) {
+          max[win] = cb;
+          if(get1bit()) {
+            *xrpnt = *xr0pnt + v;
+            *xr0pnt -= v;
+          }
+          else {
+            *xrpnt = *xr0pnt - v;
+            *xr0pnt += v;
+          }
+        }
+        else
+          *xrpnt = *xr0pnt;
+        xrpnt += step;
+        xr0pnt += step;
+      }
+    }
+ 
+    while( m < me ) {
+      if(*m++) {
+        xrpnt = ((real *) xr) + *m;
+        xr0pnt = ((real *) xr) + *m++;
+        if(*m++ == 3)
+          step = 1;
+        else
+          step = 3;
+        m++; /* cb */
+      }
+      *xrpnt = *xr0pnt;
+      xrpnt += step;
+      xr0pnt += step;
+      *xrpnt = *xr0pnt;
+      xrpnt += step;
+      xr0pnt += step;
+    }
+
+    gr_info->maxband[0] = max[0]+1;
+    gr_info->maxband[1] = max[1]+1;
+    gr_info->maxband[2] = max[2]+1;
+    gr_info->maxbandl = max[3]+1;
+  }
+  else {
+    int *pretab = gr_info->preflag ? pretab1 : pretab2;
+    int i,max = -1;
+    int cb = 0;
+    register int *m = map[sfreq][2];
+    register real v = 0.0;
+    me = mapend[sfreq][2];
+
+    for(i=0;i<3;i++) {
+      int lp = l[i];
+      struct newhuff *h = ht+gr_info->table_select[i];
+
+      for(;lp;lp--) {
+        int x,y;
+        if(*m++) {
+          v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+          cb = *m++;
+        }
+        {
+          register short *val = h->table;
+          while((y=*val++)<0)
+            if (get1bit())
+              val -= y;
+          x = y >> 4;
+          y &= 0xf;
+        }
+        if (x == 15) {
+          max = cb;
+          x += getbits(h->linbits);
+          if(get1bit()) {
+            real a = ispow[x] * v;
+            *xrpnt++ = *xr0pnt + a;
+            *xr0pnt++ -= a;
+          }
+          else {
+            real a = ispow[x] * v;
+            *xrpnt++ = *xr0pnt - a;
+            *xr0pnt++ += a;
+          }
+        }
+        else if(x) {
+          max = cb;
+          if(get1bit()) {
+            real a = ispow[x] * v;
+            *xrpnt++ = *xr0pnt + a;
+            *xr0pnt++ -= a;
+          }
+          else {
+            real a = ispow[x] * v;
+            *xrpnt++ = *xr0pnt - a;
+            *xr0pnt++ += a;
+          }
+        }
+        else
+          *xrpnt++ = *xr0pnt++;
+
+        if (y == 15) {
+          max = cb;
+          y += getbits(h->linbits);
+          if(get1bit()) {
+            real a = ispow[y] * v;
+            *xrpnt++ = *xr0pnt + a;
+            *xr0pnt++ -= a;
+          }
+          else {
+            real a = ispow[y] * v;
+            *xrpnt++ = *xr0pnt - a;
+            *xr0pnt++ += a;
+          }
+        }
+        else if(y) {
+          max = cb;
+          if(get1bit()) {
+            real a = ispow[y] * v;
+            *xrpnt++ = *xr0pnt + a;
+            *xr0pnt++ -= a;
+          }
+          else {
+            real a = ispow[y] * v;
+            *xrpnt++ = *xr0pnt - a;
+            *xr0pnt++ += a;
+          }
+        }
+        else
+          *xrpnt++ = *xr0pnt++;
+      }
+    }
+    for(;l3 && hsstell() < part2end;l3--) {
+      struct newhuff *h = htc+gr_info->count1table_select;
+      register short *val = h->table,a;
+
+      while((a=*val++)<0)
+        if (get1bit())
+          val -= a;
+
+      for(i=0;i<4;i++) {
+        if(!(i & 1) && *m++) {
+          v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+          cb = *m++;
+        }
+        if ( (a & (0x8>>i)) ) {
+          max = cb;
+          if(get1bit()) {
+            *xrpnt++ = *xr0pnt + v;
+            *xr0pnt++ -= v;
+          }
+          else {
+            *xrpnt++ = *xr0pnt - v;
+            *xr0pnt++ += v;
+          }
+        }
+        else
+          *xrpnt++ = *xr0pnt++;
+      }
+    }
+    for(i=(&xr[1][SBLIMIT][SSLIMIT]-xrpnt)>>1;i;i--) {
+      *xrpnt++ = *xr0pnt++;
+      *xrpnt++ = *xr0pnt++;
+    }
+
+    gr_info->maxbandl = max+1;
+  }
+
+  {
+    int h;
+    if( (h = (part2end-hsstell()) ) ) {
+      while ( h > 16 ) {
+         getbits(16); /* Dismiss stuffing Bits */
+         h -= 16;
+      }
+      if(h >= 0 )
+         getbits(h);
+      else {
+         fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-h);
+         exit(1);
+      }
+    }
+  }
+}
+
+
+#else
+static void III_dequantize_sample(int is[SBLIMIT][SSLIMIT],
+   real xr[SBLIMIT][SSLIMIT],int *scf,struct gr_info_s *gr_info,int sfreq)
+{
+   int cb;
    real *xrpnt = (real *) xr;
    int *ispnt = (int *) is;
-   real *scalepow = gr_info->scalefac_scale ? scalepow2 : scalepow1;
-   int *scf,*scBI;
+   int shift = 1 + gr_info->scalefac_scale;
+   int *bdf;
+   struct bandInfoStruct *bi = &bandInfo[sfreq];
 
    if (gr_info->block_type == 2)
    {
-     int maxband[3] = { -1,-1,-1 };
+     int maxband[3];
      if (gr_info->mixed_block_flag)
      {
        int maxbandl=-1;
-       scf  = (*scalefac)[ch].l;
-       scBI = sfBandIndex[sfreq].l;
+
+       bdf = bi->longDiff;
        for(cb = 0; cb < 8 ; cb++)
        {
          int j;
-         real v = gr_info->pow2gain * scalepow[*scf++];
-         for(j=*scBI++,j=*scBI-j;j;j--)
+         real v = gr_info->pow2gain[(*scf++) << shift];
+
+         for(j=*bdf++;j;j--)
          {
            int val;
            if ( !(val = *ispnt++) )
@@ -474,19 +1143,20 @@ void III_dequantize_sample(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT],
      else
        cb = 0;
 
-     scf  = (*scalefac)[ch].s[cb];
-     scBI = &sfBandIndex[sfreq].s[cb];
+     maxband[0] = maxband[1] = maxband[2] = cb-1;
+
+     bdf = bi->shortDiff+cb;
      for(;cb < 13;cb++)
      {
-       int sfb_start,sfb_lines,freq,window;
+       int sfb_lines=*bdf++,window;
        real *xrpnts = xrpnt;
-       sfb_start=*scBI++;
-       sfb_lines=*scBI - sfb_start;
        for(window=0; window<3; window++,xrpnts++)
        {
-         real v = gr_info->full_gain[window] * scalepow[*scf++];
+         int j;
+         real v = gr_info->full_gain[window][(*scf++) << shift];
+
          xrpnt = xrpnts;
-         for(freq=0;freq<sfb_lines;freq++,xrpnt+=3) 
+         for(j=sfb_lines;j;j--,xrpnt+=3) 
          {
            int val;
            if (!(val=*ispnt++) )
@@ -507,16 +1177,18 @@ void III_dequantize_sample(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT],
      gr_info->maxband[1] = maxband[1]+1;
      gr_info->maxband[2] = maxband[2]+1;
    }
-   else
+   else /* (gr_info->block_type != 2) */
    {
-     int j,maxbandl=-1;
+     int maxbandl=-1;
      int *pretab = gr_info->preflag ? pretab1 : pretab2;
-     scf  = (*scalefac)[ch].l;
-     scBI = sfBandIndex[sfreq].l;
+
+     bdf = bi->longDiff;
      for(cb=0;cb<22;cb++)
      {
-       real v = gr_info->pow2gain * scalepow[(*scf++) + (*pretab++)];
-       for(j=*scBI++,j=*scBI-j;j;j--)
+       int j;
+       real v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+
+       for(j=*bdf++;j;j--)
        {
          int val;
          if ( !(val = *ispnt++) )
@@ -535,36 +1207,44 @@ void III_dequantize_sample(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT],
    }
 }
 
-
 /*
- * dequantize sample for channel 2 and MS stereo mode and do
- * the MS stuff at once
+ * dequantize sample for channel 2 and do the MS stuff at once
  */
-void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT],
-	real xr0[SBLIMIT][SSLIMIT],
-	III_scalefac_t *scalefac,struct gr_info_s *gr_info,
-	int ch,struct frame *fr)
+static void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],
+  real xr[2][SBLIMIT][SSLIMIT],int *scf,struct gr_info_s *gr_info,int sfreq)
 {
-   int cb,sfreq=fr->sampling_frequency;
-   real *xrpnt = (real *) xr;
-   real *xr0pnt = (real *) xr0;
+   real *xrpnt = (real *) xr[1];
+   real *xr0pnt = (real *) xr[0];
+#if 0
+   int i;
+   III_dequantize_sample(is,xr[1],scf,gr_info,sfreq);
+   for(i=0;i<576;i++) {
+     register real a = *xrpnt;
+     *xrpnt++ = *xr0pnt - a;
+     *xr0pnt++ += a;
+   }
+#else
+
+   int cb;
    int *ispnt = (int *) is;
-   real *scalepow = gr_info->scalefac_scale ? scalepow2 : scalepow1;
-   int *scf,*scBI;
+   int shift = gr_info->scalefac_scale + 1;
+   int *bdf;
+   struct bandInfoStruct *bi = &bandInfo[sfreq];
 
    if (gr_info->block_type == 2)
    {
-     int maxband[3] = { -1,-1,-1 };
+     int maxband[3];
      if (gr_info->mixed_block_flag)
      {
        int maxbandl=-1;
-       scf  = (*scalefac)[ch].l;
-       scBI = sfBandIndex[sfreq].l;
+
+       bdf = bi->longDiff;
        for(cb = 0; cb < 8 ; cb++)
        {
          int j;
-         real v = gr_info->pow2gain * scalepow[*scf++];
-         for(j=*scBI++,j=*scBI-j;j;j--)
+         real v = gr_info->pow2gain[(*scf++) << shift];
+
+         for(j=*bdf++;j;j--)
          {
            int val;
            if ( !(val = *ispnt++) )
@@ -573,9 +1253,9 @@ void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT]
            {
              maxbandl = cb;
              if ( val < 0 ) {
-               real a = -ispow[-val] * v;
-               *xrpnt++ = *xr0pnt - a;
-               *xr0pnt++ += a;
+               real a = ispow[-val] * v;
+               *xrpnt++ = *xr0pnt + a;
+               *xr0pnt++ -= a;
              }
              else {
                real a = ispow[val] * v;
@@ -591,20 +1271,21 @@ void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT]
      else
        cb = 0;
 
-     scf  = (*scalefac)[ch].s[cb];
-     scBI = &sfBandIndex[sfreq].s[cb];
+     maxband[0] = maxband[1] = maxband[2] = cb-1;
+
+     bdf = bi->shortDiff+cb;
      for(;cb < 13;cb++)
      {
-       int sfb_start,sfb_lines,freq,window;
+       int sfb_lines=*bdf++,window;
        real *xrpnts = xrpnt;
        real *xr0pnts = xr0pnt;
-       sfb_start=*scBI++;
-       sfb_lines=*scBI - sfb_start;
        for(window=0; window<3; window++,xrpnts++,xr0pnts++)
        {
-         real v = gr_info->full_gain[window] * scalepow[*scf++];
+         int j;
+         real v = gr_info->full_gain[window][(*scf++) << shift];
+
          xrpnt = xrpnts; xr0pnt = xr0pnts; 
-         for(freq=0;freq<sfb_lines;freq++,xrpnt+=3,xr0pnt+=3) 
+         for(j=sfb_lines;j;j--,xrpnt+=3,xr0pnt+=3) 
          {
            int val;
            if (!(val=*ispnt++) )
@@ -613,9 +1294,9 @@ void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT]
            {
              maxband[window] = cb;
              if ( val < 0 ) {
-               real a = -ispow[-val] * v;
-               *xrpnt = *xr0pnt - a;
-               *xr0pnt += a;
+               real a = ispow[-val] * v;
+               *xrpnt = *xr0pnt + a;
+               *xr0pnt -= a;
              }
              else {
                real a = ispow[ val] * v;
@@ -635,12 +1316,13 @@ void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT]
    {
      int j,maxbandl=-1;
      int *pretab = gr_info->preflag ? pretab1 : pretab2;
-     scf  = (*scalefac)[ch].l;
-     scBI = sfBandIndex[sfreq].l;
+
+     bdf = bi->longDiff;
      for(cb=0;cb<22;cb++)
      {
-       real v = gr_info->pow2gain * scalepow[(*scf++) + (*pretab++)];
-       for(j=*scBI++,j=*scBI-j;j;j--)
+       real v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+
+       for(j=*bdf++;j;j--)
        {
          int val;
          if ( !(val = *ispnt++) )
@@ -649,9 +1331,9 @@ void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT]
          {
            maxbandl = cb;
            if ( val < 0 ) {
-             real a = - ispow[-val] * v;
-             *xrpnt++ = *xr0pnt - a;
-             *xr0pnt++ += a;
+             real a = ispow[-val] * v;
+             *xrpnt++ = *xr0pnt + a;
+             *xr0pnt++ -= a;
            }
            else {
              real a = ispow[val] * v;
@@ -663,98 +1345,80 @@ void III_dequantize_sample_ms(int is[SBLIMIT][SSLIMIT],real xr[SBLIMIT][SSLIMIT]
      }
      gr_info->maxbandl = maxbandl+1;
    }
+#endif
 }
+#endif
 
-
-/* eventuell das joint-stereo-zeug in die dequantize prozedur integrieren; 
-   ms_stereo sollte keine probleme machen */
-/* precalculate the 3*scalefac and scalefac[sfb+1]-scalefac[sfb] stuff */
-/* M_SQRT1_2 bei ms_stereo auch fuer i_stereo einbauen ..benoetigt dann
-   2 * 2 tan-tables -> done?*/
 /* 
- * III_stereo: calculate real channel values according to the stereo model
+ * III_stereo: calculate real channel values for Joint-I-Stereo-mode
  */
-void III_stereo(real xr[2][SBLIMIT][SSLIMIT],III_scalefac_t *scalefac,struct gr_info_s *gr_info,struct frame *fr)
+static void III_stereo(real xr_buf[2][SBLIMIT][SSLIMIT],int *scalefac,
+   struct gr_info_s *gr_info,int sfreq,int ms_stereo)
 {
-   struct sfBI_struct *sfBI = sfBandIndex + fr->sampling_frequency;
-   int j;
+      real (*xr)[SBLIMIT*SSLIMIT] = (real (*)[SBLIMIT*SSLIMIT] ) xr_buf;
+      struct bandInfoStruct *bi = &bandInfo[sfreq];
+      real *tan1,*tan2;
 
-   real *xr0 = (real *) xr[0];
-   real *xr1 = (real *) xr[1];
-
-   if(fr->mode != MPG_MD_JOINT_STEREO) 
-     return;
-
-   if(fr->mode_ext & 0x1)	/* i_stereo */
-   {
-     int sb,is_p,do_l;
-     char is_pos[576];
-
-     memset(is_pos,0,576);
+      if(ms_stereo) {
+        tan1 = tan1_2; tan2 = tan2_2;
+      }
+      else {
+        tan1 = tan1_1; tan2 = tan2_1;
+      }
 
       if (gr_info->block_type == 2)
-      {  
-         int sfbcnt;
-
+      {
+         int win,do_l = 0;
          if( gr_info->mixed_block_flag )
-         {
-           sfbcnt=2;
            do_l = 1;
-         }
-         else
-         {
-           sfbcnt=-1;
-           do_l = 0;
-         }
 
-         for ( j=0; j<3; j++ ) /* process each window */
-         {                      
+         for (win=0;win<3;win++) /* process each window */
+         {
              /* get first band with zero values */
-           int i,sfb = gr_info->maxband[j];
+           int is_p,sb,idx,sfb = gr_info->maxband[win];  /* sfb is minimal 3 for mixed mode */
            if(sfb > 3)
              do_l = 0;
 
            for(;sfb<12;sfb++)
            {
-             is_p = (*scalefac)[1].s[sfb][j]; /* scale: 0-15 */ 
+             is_p = scalefac[sfb*3+win-gr_info->mixed_block_flag]; /* scale: 0-15 */ 
              if(is_p != 7) {
                real t1,t2;
-               sb = sfBI->s[sfb+1]-sfBI->s[sfb];
-               i = 3*(sfBI->s[sfb]) + j;
+               sb = bi->shortDiff[sfb];
+               idx = bi->shortIdx[sfb] + win;
                t1 = tan1[is_p]; t2 = tan2[is_p];
-               for (; sb > 0; sb--,i+=3)
+               for (; sb > 0; sb--,idx+=3)
                {
-                 real v = xr0[i];
-                 is_pos[i] = !0;
-                 xr0[i] = v * t1;
-                 xr1[i] = v * t2;
+                 real v = xr[0][idx];
+                 xr[0][idx] = v * t1;
+                 xr[1][idx] = v * t2;
                }
              }
            }
 
 #if 1
-/* in the original: copy 10 to 11 , here: copy 11 to 12 */
-           is_p = (*scalefac)[1].s[11][j]; /* scale: 0-15 */
-           sb = sfBI->s[13]-sfBI->s[12];
-           i = 3*(sfBI->s[12]) + j;
+/* in the original: copy 10 to 11 , here: copy 11 to 12 
+maybe still wrong??? (copy 12 to 13?) */
+           is_p = scalefac[11*3+win-gr_info->mixed_block_flag]; /* scale: 0-15 */
+           sb = bi->shortDiff[12];
+           idx = bi->shortIdx[12] + win;
 #else
-           is_p = (*scalefac)[1].s[10][j]; /* scale: 0-15 */
-           sb = sfBI->s[12]-sfBI->s[11];
-           i = 3*(sfBI->s[11]) + j;
+           is_p = scalefac[10*3+win-gr_info->mixed_block_flag]; /* scale: 0-15 */
+           sb = bi->shortDiff[11];
+           idx = bi->shortIdx[11] + win;
 #endif
            if(is_p != 7)
            {
              real t1,t2;
              t1 = tan1[is_p]; t2 = tan2[is_p];
-             for ( ; sb > 0; sb--,i+=3 )
+             for ( ; sb > 0; sb--,idx+=3 )
              {  
-               real v = xr0[i];
-               is_pos[i] = !0;
-               xr0[i] = v * t1;
-               xr1[i] = v * t2;
+               real v = xr[0][idx];
+               xr[0][idx] = v * t1;
+               xr[1][idx] = v * t2;
              }
            }
-         } /* end for( j ; .. ; . ) */
+         } /* end for(win; .. ; . ) */
 
          if (do_l)
          {
@@ -762,68 +1426,66 @@ void III_stereo(real xr[2][SBLIMIT][SSLIMIT],III_scalefac_t *scalefac,struct gr_
  * and mode = mixed_mode 
  */
            int sfb = gr_info->maxbandl;
-           int i = sfBI->l[sfb];
+           int idx = bi->longIdx[sfb];
 
            for ( ; sfb<8; sfb++ )
            {
-             is_p = (*scalefac)[1].l[sfb]; /* scale: 0-15 */
-             sb = sfBI->l[sfb+1]-sfBI->l[sfb];
+             int sb = bi->longDiff[sfb];
+             int is_p = scalefac[sfb]; /* scale: 0-15 */
              if(is_p != 7) {
                real t1,t2;
                t1 = tan1[is_p]; t2 = tan2[is_p];
-               for ( ; sb > 0; sb--,i++)
+               for ( ; sb > 0; sb--,idx++)
                {
-                 real v = xr0[i];
-                 is_pos[i] = !0;
-                 xr0[i] = v * t1;
-                 xr1[i] = v * t2;
+                 real v = xr[0][idx];
+                 xr[0][idx] = v * t1;
+                 xr[1][idx] = v * t2;
                }
              }
              else 
-               i += sb;
+               idx += sb;
            }
          }     
       } 
       else /* ((gr_info->block_type != 2)) */
       {
         int sfb = gr_info->maxbandl;
-        int i = sfBI->l[sfb];
+        int is_p,idx = bi->longIdx[sfb];
         for ( ; sfb<21; sfb++)
         {
-          is_p = (*scalefac)[1].l[sfb]; /* scale: 0-15 */
-          sb = sfBI->l[sfb+1]-sfBI->l[sfb];
+          int sb = bi->longDiff[sfb];
+          is_p = scalefac[sfb]; /* scale: 0-15 */
           if(is_p != 7) {
             real t1,t2;
             t1 = tan1[is_p]; t2 = tan2[is_p];
-            for ( ; sb > 0; sb--,i++)
+            for ( ; sb > 0; sb--,idx++)
             {
-               real v = xr0[i];
-               is_pos[i] = !0;
-               xr0[i] = v * t1;
-               xr1[i] = v * t2;
+               real v = xr[0][idx];
+               xr[0][idx] = v * t1;
+               xr[1][idx] = v * t2;
             }
           }
           else
-            i += sb;
+            idx += sb;
         }
 
-        is_p = is_pos[ sfBI->l[20] ]; /* copy l-band 20 to l-band 21 */
+        is_p = scalefac[20]; /* copy l-band 20 to l-band 21 */
         if(is_p != 7)
         {
+          int sb;
           real t1 = tan1[is_p],t2 = tan2[is_p]; 
-          for ( sb = 576 - sfBI->l[21]; sb > 0; sb--,i++ )
+
+          for ( sb = bi->longDiff[21]; sb > 0; sb--,idx++ )
           {
-            real v = xr0[i];
-            is_pos[i] = !0;
-            xr0[i] = v * t1;
-            xr1[i] = v * t2;
+            real v = xr[0][idx];
+            xr[0][idx] = v * t1;
+            xr[1][idx] = v * t2;
           }
         }
       } /* ... */
-   }
 }
 
-void III_antialias(real xr[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info,struct frame *fr)
+static void III_antialias(real xr[SBLIMIT][SSLIMIT],struct gr_info_s *gr_info)
 {
    int sblim;
 
@@ -879,10 +1541,6 @@ know how to do that, because 9 is not an even number. - Jeff.*/
 
 static void mdct36(real *inbuf,real *o1,real *o2,int block_type,real wintab[4][36],real *tsbuf)
 {
-#if 0
-    real tmpbuf[9];
-#endif
-
 	{
 		register real *in = inbuf;
 
@@ -896,81 +1554,6 @@ static void mdct36(real *inbuf,real *o1,real *o2,int block_type,real wintab[4][3
 		in[17]+=in[15]; in[15]+=in[13]; in[13]+=in[11]; in[11]+=in[9];
 		in[9] +=in[7];  in[7] +=in[5];  in[5] +=in[3];  in[3] +=in[1];
 
-#if 0
-{
-		int i;
-		register real *cp = COS18;
-		register real *tmp = tmpbuf;
-		register real *out2 = o2+9;
-
-		for(i=0; i<9; i++,cp+=8) {
-			register real sum0 = in[0];
-			register real sum1 = in[1];
-			sum0 += in[2]  * cp[0]; sum1 += in[3]  * cp[0];
-			sum0 += in[4]  * cp[1]; sum1 += in[5]  * cp[1];
-			sum0 += in[6]  * cp[2]; sum1 += in[7]  * cp[2];
-			sum0 += in[8]  * cp[3]; sum1 += in[9]  * cp[3];
-			sum0 += in[10] * cp[4]; sum1 += in[11] * cp[4];
-			sum0 += in[12] * cp[5]; sum1 += in[13] * cp[5];
-			sum0 += in[14] * cp[6]; sum1 += in[15] * cp[6];
-			sum0 += in[16] * cp[7]; sum1 += in[17] * cp[7];
-
-			sum1 *= tfcos36[i]; 
-			*out2++ = sum0 + sum1;
-			*tmp++  = sum0 - sum1;
-		}
-}
-    {
-        register real *w = wintab[block_type];
-        register real *out1 = o1;
-        register real *ts = tsbuf;
-        register real *tmp = tmpbuf;
-
-        ts[SBLIMIT*0] = out1[0] + tmp[8] * w[0];
-        ts[SBLIMIT*1] = out1[1] + tmp[7] * w[1];
-        ts[SBLIMIT*2] = out1[2] + tmp[6] * w[2];
-        ts[SBLIMIT*3] = out1[3] + tmp[5] * w[3];
-        ts[SBLIMIT*4] = out1[4] + tmp[4] * w[4];
-        ts[SBLIMIT*5] = out1[5] + tmp[3] * w[5];
-        ts[SBLIMIT*6] = out1[6] + tmp[2] * w[6];
-        ts[SBLIMIT*7] = out1[7] + tmp[1] * w[7];
-        ts[SBLIMIT*8] = out1[8] + tmp[0] * w[8];
-
-        ts[SBLIMIT* 9] = out1[9]  + tmp[0] * w[9];
-        ts[SBLIMIT*10] = out1[10] + tmp[1] * w[10];
-        ts[SBLIMIT*11] = out1[11] + tmp[2] * w[11];
-        ts[SBLIMIT*12] = out1[12] + tmp[3] * w[12];
-        ts[SBLIMIT*13] = out1[13] + tmp[4] * w[13];
-        ts[SBLIMIT*14] = out1[14] + tmp[5] * w[14];
-        ts[SBLIMIT*15] = out1[15] + tmp[6] * w[15];
-        ts[SBLIMIT*16] = out1[16] + tmp[7] * w[16];
-        ts[SBLIMIT*17] = out1[17] + tmp[8] * w[17];
-    }
-    {
-        register real *w = wintab[block_type];
-        register real *out2 = o2;
-
-        out2[0] = out2[17] * w[18];
-        out2[1] = out2[16] * w[19];
-        out2[2] = out2[15] * w[20];
-        out2[3] = out2[14] * w[21];
-        out2[4] = out2[13] * w[22];
-        out2[5] = out2[12] * w[23];
-        out2[6] = out2[11] * w[24];
-        out2[7] = out2[10] * w[25];
-        out2[8] = out2[ 9] * w[26];
-
-        out2[ 9] *= w[27];
-        out2[10] *= w[28];
-        out2[11] *= w[29];
-        out2[12] *= w[30];
-        out2[13] *= w[31];
-        out2[14] *= w[32];
-        out2[15] *= w[33];
-        out2[16] *= w[34];
-        out2[17] *= w[35];
-   }
-#else
 {
 
 #define MACRO0(v) \
@@ -1046,14 +1629,13 @@ static void mdct36(real *inbuf,real *o1,real *o2,int block_type,real wintab[4][3
 		MACRO0(4);
 	}
 }
-#endif
 	}
 }
 
 /* 
  * maybe we should do some optimization in mdct12()
  */
-static INLINE void mdct12(real *in,real *rawout1,real *rawout2,int sb,real *ts)
+static void mdct12(real *in,real *rawout1,real *rawout2,int sb,real *ts)
 {
 #define DCTLINE \
     { \
@@ -1188,16 +1770,16 @@ static INLINE void mdct12(real *in,real *rawout1,real *rawout2,int sb,real *ts)
  *   we still need a faster DCT for the mdct36 and mdct12 functions
  *   (though at least the current mdct36 is fairly fast)
  */
-void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
-                int ch,struct gr_info_s *gr_info,struct frame *fr)
+static void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
+   int ch,struct gr_info_s *gr_info)
 {
    real *tspnt = (real *) tsOut;
-   static real block[2][2][SBLIMIT*18] = { { { 0, } } };
+   static real block[2][2][SBLIMIT*SSLIMIT] = { { { 0, } } };
    static int blc[2]={0,0};
    real *rawout1,*rawout2;
    int bt1,bt2;
 
-   bt1 = (gr_info->window_switching_flag && gr_info->mixed_block_flag) ? 0 : gr_info->block_type;
+   bt1 = gr_info->mixed_block_flag ? 0 : gr_info->block_type;
    bt2 = gr_info->block_type;
 
    {
@@ -1215,99 +1797,118 @@ void III_hybrid(real fsIn[SBLIMIT][SSLIMIT],real tsOut[SSLIMIT][SBLIMIT],
          mdct12(fsIn[sb],rawout1,rawout2,(sb & 1),tspnt);
        else
          mdct36(fsIn[sb],rawout1,rawout2,0,(sb & 1) ? win1 : win,tspnt);
-    }
-  }
-  else {
+     }
+   }
+   else {
      int sb;
      for (sb=0; sb<SBLIMIT; sb++,tspnt++,rawout1+=18,rawout2+=18) {
        mdct36(fsIn[sb],rawout1,rawout2,(sb < 2) ? bt1 : bt2,(sb & 1) ? win1 : win,tspnt);
-    }
+     }
   }
 }
 
 int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
 {
   int gr, ch, ss,clip=0;
-  III_scalefac_t III_scalefac;
-  III_side_info_t III_side_info;
+  int scalefacs[2][39];	/* max 39 for short[13][3] mode, mixed: 38, long: 22 */
+  struct III_sideinfo sideinfo;
   int stereo = fr->stereo;
-  int sgn=0,single = fr->single;
-  int stereo0=0,stereo1=fr->stereo;
-  int ms_stereo;
+  int single = fr->single;
+  int ms_stereo,i_stereo;
+  int sfreq = fr->sampling_frequency;
+  int stereo1;
 
-  if(single >= 0 && stereo == 2) {
-    if(single == 3) {
-      stereo1 = 1;
-      stereo0 = 0;
-      sgn = 0;
-    }
-    else 
-      stereo1 = (sgn = stereo0 = single) + 1;
+  if(stereo == 1) {
+    stereo1 = 1;
+    single = 0; 
   }
-  else if(stereo == 1)
-    sgn = single = 0;
+  else if(single >= 0)
+    stereo1 = 1;
+  else
+    stereo1 = 2;
 
-  III_get_side_info(&III_side_info, fr);
-  set_pointer(III_side_info.main_data_begin);
   ms_stereo = (fr->mode == MPG_MD_JOINT_STEREO) && (fr->mode_ext & 0x2);
+  i_stereo = (fr->mode == MPG_MD_JOINT_STEREO) && (fr->mode_ext & 0x1);
+
+  III_get_side_info(&sideinfo,stereo,ms_stereo,sfreq);
+  set_pointer(sideinfo.main_data_begin);
 
   for (gr=0;gr<2;gr++) 
   {
     static real hybridIn[2][SBLIMIT][SSLIMIT];
     static real hybridOut[2][SSLIMIT][SBLIMIT];
+#ifndef MAP
+    static int is[SBLIMIT][SSLIMIT];
+#endif
 
-    for (ch=0; ch<stereo; ch++) 
     {
-/*
- * SBLIMIT+1 = slightly oversize because of bug???? in hufman_decode?? 
- * at least it currently may happen, that the hufman decoder writes more then SBLIMIT*SSLIMIT values
- */
-      static int is[SBLIMIT+1][SSLIMIT];
-      int part2_start = hsstell();
-      III_get_scale_factors(&III_scalefac,&III_side_info,gr,ch,fr);
-      III_hufman_decode(is, &III_side_info, ch, gr, part2_start,fr);
-      if(!ch || !ms_stereo) {
-        III_dequantize_sample(is, hybridIn[ch], &III_scalefac,&(III_side_info.ch[ch].gr[gr]), ch, fr);
-      }
-      else {
-        III_dequantize_sample_ms(is, hybridIn[1], hybridIn[0], &III_scalefac,&(III_side_info.ch[ch].gr[gr]), ch, fr);
-      }
-    }
-
-    III_stereo(hybridIn,&III_scalefac,&(III_side_info.ch[1].gr[gr]), fr);
-    if(single == 3) {
-      int i;
-      for(ss=0;ss<SSLIMIT;ss++)
-        for(i=0;i<SBLIMIT;i++)
-#if 0
-          hybridOut[0][ss][i] = (hybridOut[0][ss][i] + hybridOut[1][ss][i]) * 0.5;
+      struct gr_info_s *gr_info = &(sideinfo.ch[0].gr[gr]);
+      long part2_start = hsstell();
+      III_get_scale_factors(scalefacs[0],gr_info);
+#ifdef MAP
+      III_dequantize_sample(hybridIn[0], scalefacs[0],gr_info,sfreq,part2_start);
 #else
-          hybridIn[0][ss][i] = (hybridIn[0][ss][i] + hybridIn[1][ss][i]) * 0.5;
+      III_hufman_decode(is,gr_info,part2_start);
+      III_dequantize_sample(is, hybridIn[0], scalefacs[0],gr_info,sfreq);
 #endif
     }
+    if(stereo == 2) {
+      struct gr_info_s *gr_info = &(sideinfo.ch[1].gr[gr]);
+      long part2_start = hsstell();
+      III_get_scale_factors(scalefacs[1],gr_info);
+#ifdef MAP
+      if(ms_stereo)
+        III_dequantize_sample_ms(hybridIn,scalefacs[1],gr_info,sfreq,part2_start); 
+      else
+        III_dequantize_sample(hybridIn[1],scalefacs[1],gr_info,sfreq,part2_start); 
+#else
+      III_hufman_decode(is,gr_info, part2_start);
+      if(ms_stereo)
+        III_dequantize_sample_ms(is,hybridIn,scalefacs[1],gr_info,sfreq);
+      else
+        III_dequantize_sample(is,hybridIn[1],scalefacs[1],gr_info,sfreq);
+#endif
 
-    for (ch=stereo0; ch<stereo1; ch++) 
-    {
-      III_antialias(hybridIn[ch],&(III_side_info.ch[ch].gr[gr]), fr);
-      III_hybrid(hybridIn[ch], hybridOut[ch], ch,&(III_side_info.ch[ch].gr[gr]), fr);
+      if(i_stereo)
+        III_stereo(hybridIn,scalefacs[1],gr_info,sfreq,ms_stereo);
+
+      if(single >= 0) {
+        if(single == 3) {
+          register int i;
+          register real *in0 = (real *) hybridIn[0],*in1 = (real *) hybridIn[1];
+          for(i=0;i<SSLIMIT*SBLIMIT;i++,in0++)
+              *in0 = (*in0 + *in1++) * 0.5;
+        }
+        if(single == 1) {
+          register int i;
+          register real *in0 = (real *) hybridIn[0],*in1 = (real *) hybridIn[1];
+          for(i=0;i<SSLIMIT*SBLIMIT;i++)
+            *in0++ = *in1++;
+        }
+      }
     }
 
-    for (ss=0;ss<18;ss++)
+    for(ch=0;ch<stereo1;ch++) {
+      struct gr_info_s *gr_info = &(sideinfo.ch[ch].gr[gr]);
+      III_antialias(hybridIn[ch],gr_info);
+      III_hybrid(hybridIn[ch], hybridOut[ch], ch,gr_info);
+    }
+
+    for(ss=0;ss<SSLIMIT;ss++)
     {
       if(single >= 0)
       {
         int i;
-        clip += SubBandSynthesis (hybridOut[sgn][ss],0,pcm_sample+pcm_point);
-        for(i=0;i<32;i++) {
-          pcm_sample[pcm_point+1] = pcm_sample[pcm_point];
-          pcm_point+=2;
-        }
+        short *pcm = pcm_sample+pcm_point;
+        clip += SubBandSynthesis (hybridOut[0][ss],0,pcm);
+        for(i=0;i<32;i++,pcm+=2)
+          pcm[1] = pcm[0];
       }
       else {
           clip += SubBandSynthesis (hybridOut[0][ss],0,pcm_sample+pcm_point);
           clip += SubBandSynthesis (hybridOut[1][ss],1,pcm_sample+pcm_point);
-          pcm_point += 64;
       }
+      pcm_point += 64;
 
 #ifdef VARMODESUPPORT
       if (playlimit < 128) {
@@ -1318,19 +1919,8 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
         playlimit -= 128;
 #endif
 
-      if(pcm_point == audiobufsize)
-      {
-        switch(outmode)
-	    {
-          case DECODE_STDOUT:
-            write(1,pcm_sample,audiobufsize*2);
-            break;
-          case DECODE_AUDIO:
-            audio_play_samples(ai,pcm_sample,audiobufsize);
-            break;
-        }
-        pcm_point = 0;
-      }
+      if(pcm_point >= audiobufsize)
+        audio_flush(outmode,ai);
     }
   }
   

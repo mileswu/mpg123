@@ -8,11 +8,7 @@
 
 struct newhuff 
 {
-#if 0
-  unsigned int xlen;    /*max. x-index+                         */ 
-  unsigned int ylen;    /*max. y-index+                         */
-#endif
-  unsigned int linbits; /*number of linbits                     */
+  unsigned int linbits;
   short *table;
 };
 

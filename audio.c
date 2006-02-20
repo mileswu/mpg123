@@ -24,11 +24,13 @@ int audio_open(struct audio_info_struct *ai)
 {
   int fmts = AFMT_S16_LE;
   int dsp_samplesize = 16;
-  int dsp_stereo = 1;
+  int dsp_stereo;
   int dsp_speed;
 
   if(!ai)
     return -1;
+
+  dsp_stereo = ai->channels - 1;
 
   if(ai->rate == -1)
     dsp_speed = 44100;
@@ -86,6 +88,12 @@ int audio_set_rate(struct audio_info_struct *ai)
   return 0;
 }
 
+int audio_set_channels(struct audio_info_struct *ai)
+{
+  int chan = ai->channels - 1;
+  return ioctl(ai->fn, SNDCTL_DSP_STEREO, &chan);
+}
+
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 {
   return write(ai->fn,buf,len*2);
@@ -140,7 +148,7 @@ fprintf(stderr,"%s\n",ad.name);
 
   if(ai->rate != -1)
     ainfo.play.sample_rate = ai->rate;
-  ainfo.play.channels = 2;
+  ainfo.play.channels = ai->channels;
   ainfo.play.encoding = AUDIO_ENCODING_LINEAR;
   ainfo.play.precision = 16;
 
@@ -181,6 +189,19 @@ int audio_set_rate(struct audio_info_struct *ai)
   }
   return -1;
 }
+
+int audio_set_channels(struct audio_info_struct *ai)
+{
+  audio_info_t ainfo;
+
+  if(ioctl(ai->fn, AUDIO_GETINFO, &ainfo) == -1)
+    return -1;
+  ainfo.play.channels = ai->channels;
+  if(ioctl(ai->fn, AUDIO_SETINFO, &ainfo) == -1)
+    return -1;
+  return 0;
+}
+
 
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 {
@@ -233,8 +254,7 @@ int audio_open(struct audio_info_struct *ai)
     ioctl(ai->fn,AUDIO_SET_OUTPUT,AUDIO_OUT_LINE);
 
   ioctl(ai->fn,AUDIO_SET_DATA_FORMAT,AUDIO_FORMAT_LINEAR16BIT);
-  ioctl(ai->fn,AUDIO_SET_CHANNELS,2);
-
+  ioctl(ai->fn,AUDIO_SET_CHANNELS,ai->channels);
 
   for(i=0;i<ades.nrates;i++)
   {
@@ -254,7 +274,13 @@ int audio_open(struct audio_info_struct *ai)
 int audio_set_rate(struct audio_info_struct *ai)
 {
   if(ai->rate >= 0)
-    ioctl(ai->fn,AUDIO_SET_SAMPLE_RATE,ai->rate);  
+    return ioctl(ai->fn,AUDIO_SET_SAMPLE_RATE,ai->rate);
+  return 0;
+}
+
+int audio_set_channels(struct audio_info_struct *ai)
+{
+  return ioctl(ai->fn,AUDIO_SET_CHANNELS,ai->channels);
 }
 
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
@@ -274,7 +300,10 @@ int audio_open(struct audio_info_struct *ai)
 {
     ai->config = ALnewconfig();
 
-    ALsetchannels(ai->config, AL_STEREO);
+    if(ai->channels == 2)
+      ALsetchannels(ai->config, AL_STEREO);
+    else
+      ALsetchannels(ai->config, AL_MONO);
     ALsetwidth(ai->config, AL_SAMPLE_16);
     ALsetqueuesize(ai->config, 131069);
     
@@ -295,6 +324,15 @@ int audio_set_rate(struct audio_info_struct *ai)
     ALsetparams(AL_DEFAULT_DEVICE, params, 2);    
 }
 
+int audio_set_channels(struct audio_info_struct *ai)
+{
+    if(ai->channels == 2)
+      ALsetchannels(ai->config, AL_STEREO);
+    else
+      ALsetchannels(ai->config, AL_MONO);
+    return 0;
+}
+
 int audio_play_samples(struct audio_info_struct *ai,short *buf,int len)
 {
     return ALwritesamps(ai->port, buf, len);
@@ -311,10 +349,16 @@ int audio_close(struct audio_info_struct *ai)
 #else
 int audio_open(struct audio_info_struct *ai)
 {
+  fprintf(stderr,"No audio support compiled into this binary.\n");
   return -1;
 }
 
 int audio_set_rate(struct audio_info_struct *ai)
+{
+  return 0;
+}
+
+int audio_set_channels(struct audio_info_struct *ai)
 {
   return 0;
 }

@@ -1,3 +1,19 @@
+0.55: 
+-----
+removed some obsolete code from layer3.c (MH)
+changed scalefac stoing in layer3 (MH)
+decode_4to1.c added again. Renamed decode_lp.c to decode_2to1.c (MH)
+(both not optimized .. still expterimental)
+Minor cleanups and optimizations in layer3. (MH)
+Removed some (probable) minor bugs. (MH)
+Changed 2**(...) scaling (and omitted a few muls) (MH)
+Changed Makefile (OF)
+Changed dequantize to reorder with a mapping table 
+   (you can disable this by undefining MAP in layer3.c) (MH)
+removed the 'dummy' scale step for mixed mode (MH)
+Changed copy policy (MH)
+
+
 0.54: (MH)
 -----
 Minor changes in the documents .. 

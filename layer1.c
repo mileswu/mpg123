@@ -10,9 +10,6 @@
 
 #include "mpg123.h"
 
-extern int  SubBandSynthesis(real *,int,short *);
-extern real muls[27][64];
-
 void I_step_one(unsigned int balloc[], unsigned int scale_index[2][SBLIMIT],struct frame *fr)
 {
   unsigned int *ba=balloc;
@@ -134,30 +131,20 @@ int do_layer1(struct frame *fr,int outmode,struct audio_info_struct *ai)
 
     if(single >= 0)
     {
-      int k;
-      clip += SubBandSynthesis ( (real *) fraction[single],0,pcm_sample+pcm_point);
-      for(k=0;k<64;k+=2)
-        pcm_sample[pcm_point+k+1] = pcm_sample[pcm_point+k];
+      int i;
+      short *pcm = pcm_sample+pcm_point;
+      clip += SubBandSynthesis ( (real *) fraction[single],0,pcm);
+      for(i=0;i<32;i++,pcm+=2)
+        pcm[1] = pcm[0];
     }
     else {
         clip += SubBandSynthesis ( (real *) fraction[0],0,pcm_sample+pcm_point);
         clip += SubBandSynthesis ( (real *) fraction[1],1,pcm_sample+pcm_point);
     }
-
     pcm_point+=64;
+
     if(pcm_point == audiobufsize)
-    {
-      switch(outmode)
-      {
-	case DECODE_STDOUT:
-          write(1,pcm_sample,audiobufsize*2);
-          break;
-        case DECODE_AUDIO:
-          audio_play_samples(ai,pcm_sample,audiobufsize);
-          break;
-      }
-      pcm_point = 0;
-    }
+      audio_flush(outmode,ai);
   }
 
   return clip;

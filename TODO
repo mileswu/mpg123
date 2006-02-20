@@ -10,14 +10,19 @@ in layer2.c:
 	process first channel 0 than channel 1
 	copy channel 0 to channel 1 for: i >= jsbound
 
-- "low performance" version , which decodes only 22050 or 11025 Khz ... (done: decode_lp.c)
 - MAYBE it's possible to save half of the muls in SubBandSynth .. because
   they are duplicated. In this case we need a big tmp table
-  (about 256 * 512 'real' values)
+  (about 256 * 512 'real' values) (I check this .. doesn't seem to be possible!)
+
 - better frame reader .. especially for layer 3 
 
 - check again layer1 !!
 
 - integrate sign-check into huftables ... at least for hufman_count1 ...
 - Put the huffman decoding into the dequantize part 
+
+- put decode_4to1, decode_2to1 and normal decode together to
+  make it selectable on the command line. Write a special 'single channel'
+  decode.
+
 

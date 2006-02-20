@@ -1,5 +1,5 @@
 /* 
- * Mpeg Layer audio decoder V0.54
+ * Mpeg Layer audio decoder V0.55
  * -------------------------------
  * copyright (c) 1995,1996 by Michael Hipp, All rights reserved.
  * See also 'README' !
@@ -32,12 +32,6 @@ int quiet      = FALSE;
 long numframes = -1;
 long startFrame = 0;
 
-extern void make_decode_tables(long scale);
-extern int audio_open(struct audio_info_struct *);
-extern int audio_set_rate(struct audio_info_struct *);
-extern int audio_write_sample(struct audio_info_struct *,short *,int);
-extern int audio_close(struct audio_info_struct *);
-
 #ifndef MAXNAMLEN
 #define MAXNAMLEN	256
 #endif
@@ -61,6 +55,8 @@ int main(int argc,char *argv[])
 
     ai.gain = ai.rate = ai.output = -1;
     ai.device = NULL;
+    ai.channels = 2;
+
     prgName = (char *) argv[0];
 
     if(argc == 1)
@@ -83,15 +79,15 @@ int main(int argc,char *argv[])
         outmode = DECODE_STDOUT;
       else if(!strcmp(argv[i],"-c"))
         checkrange = TRUE;
-      else if(!strcmp(argv[i],"-v"))
+      else if(!strcmp(argv[i],"-v") || !strcmp(argv[i],"-verbose"))
         verbose = TRUE;
-      else if(!strcmp(argv[i],"-single0"))
+      else if(!strcmp(argv[i],"-single0") || !strcmp(argv[i],"-left"))
         fr.single = 0;
-      else if(!strcmp(argv[i],"-single1"))
+      else if(!strcmp(argv[i],"-single1") || !strcmp(argv[i],"-right"))
         fr.single = 1;
-      else if(!strcmp(argv[i],"-singlemix"))
+      else if(!strcmp(argv[i],"-singlemix") || !strcmp(argv[i],"-mix"))
         fr.single = 3;
-      else if(!strcmp(argv[i],"-g"))
+      else if(!strcmp(argv[i],"-g") || !strcmp(argv[i],"-gain"))
       {
         i++;
         ai.gain = atoi(argv[i]);
@@ -143,7 +139,7 @@ int main(int argc,char *argv[])
 
     if(outmode==DECODE_AUDIO) {
       if(audio_open(&ai) < 0) {
-	perror("audio");
+        perror("audio");
         exit(1);
       }
     }
@@ -164,11 +160,10 @@ int main(int argc,char *argv[])
        {
          if (!quiet)
            print_header(&fr);
-	 if(ai.rate == -1)
-	 {
-	   ai.rate = freqs[fr.sampling_frequency];
+         if(ai.rate == -1) {
+           ai.rate = freqs[fr.sampling_frequency];
            audio_set_rate(&ai);
-	 }
+         }
        }
        if(frameNum < startFrame) {
          if(fr.lay == 3) {
@@ -198,7 +193,7 @@ int main(int argc,char *argv[])
        if(clip > 0 && checkrange)
          fprintf(stderr,"%d samples clipped\n", clip);
     }
-    finish_output (outmode, &ai);
+    audio_flush(outmode, &ai);
 
     close_stream();
 
@@ -212,7 +207,7 @@ int main(int argc,char *argv[])
 static void print_title()
 {
     fprintf(stderr,"High Performance MPEG 1.0 Audio Player for Layer 1,2 and 3. ..\n");
-    fprintf(stderr,"Version 0.54 (97/03/27). Written and copyrights by Michael Hipp.\n");
+    fprintf(stderr,"Version 0.55 (97/04/02). Written and copyrights by Michael Hipp.\n");
     fprintf(stderr,"Uses code from various people. See 'README' for more!\n");
 }
 
