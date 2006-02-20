@@ -1,0 +1,13 @@
+
+(1)  Read the README file.
+
+(2)  Edit the Makefile and uncomment the section corresponding
+     to your hardware and operating system.
+
+(3)  Type "make".
+
+(4)  If compilation was successful, type "make install" to
+     install the binary and the manual page in /usr/local.
+
+Have fun!
+

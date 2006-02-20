@@ -1,0 +1,115 @@
+0.54: (MH)
+-----
+Minor changes in the documents .. 
+huffman.c: x->len,y->len removed .. always '15' for the important cases
+audio.c: some additions to the SOLARIS audio code
+
+0.53b: (OF)
+------
+
+Oliver Fromme  <oliver.fromme@heim3.tu-clausthal.de>
+Tue Mar 25 05:13:47 MET 1997
+
+This file describes some of my patches to mpg123 v0.53a.
+Patches whose purpose is obvious and which don't require any
+additional notes are not mentioned here.
+
+Makefile:
+
+    Renamed SPARC10 to SUNOS (which is more appropriate).
+        Tested with SunOS 4.1.4 on a SPARCstation SLC, 20 MHz
+        (322% CPU, so no realtime decoding).
+    Added SOLARIS.  Tested with Solaris 2.5.1 on an Ultra 1,
+        167 MHz (14% CPU), a SPARCstation 5, 110 MHz (47% CPU),
+        and a SPARCstation 10, 33 MHz (68% CPU).
+    Added FreeBSD.  Tested with 2.1.7 on a Pentium-90 (38% CPU)
+        and 2.2 on a Pentium-166 (20% CPU).
+    Added Digital Unix.  Tested with DU 3.2 on a DEC 3000/500
+        (Alpha AXP 150 MHz, 33% CPU).  Does not support DEC's
+        audio interface ("AudioFile"), decodes to stdout only.
+    Improved "clean" target to remove core files and editor
+        backup files.
+    Added "install" target.
+    Added "dist" target to create a .tar.gz file of the source
+        directory.
+    
+    In the distributed Makefile, all system sections are
+    commented out.  When you type "make" without uncommenting
+    one of the sections, an appropriate error message will
+    be displayed.
+
+audio.c
+
+    Fixed problem when opening /dev/audio on Solaris:
+        I had to remove O_NDELAY, because writing to /dev/audio
+        didn't block until the requested number of samples
+        could be written, but instead it wrote only as much
+        samples as it was able too.  Sounded funny.  Removing
+        O_NDELAY fixed the problem.  I don't think that it
+        hurts SunOS either, so I didn't make another #ifdef.
+
+common.c
+
+    Fixed bug by adding function finish_output():
+        The decoder writes the audio samples into a buffer, and
+        each time the buffer is full, it is written to the
+        audio device (or to stdout).  But when the decoding is
+        done, there are some samples left in the buffer which
+        aren't written yet -- they were just discarded.
+        This additional function fixes the problem by writing
+        the remaining samples from the buffer.  It is called
+        immediately after the main frame loop in mpg123.c.
+
+decode*.c
+
+    Fixed compiler warning on symbol "div":
+        Some compilers issue warnings because the symbol div is
+        already used for something else (see "man div"), so I
+        changed it to "divv".
+
+layer*.c
+
+    Functions do_layer*:
+        Moved the declaration for audio_play_samples into
+        mpg123.h.  Makes the code cleaner.
+
+        I moved the variables pcm_samples and pcm_point to
+        common.c, so they are shared between all modules.  This
+        was necessary because the finish_output() function
+        (see common.c above) needs to access them.
+
+        Renamed loop variables "i" and "j" to "k" in order to
+        fix compiler warnings for duplicate/hidden symbols
+        (similar to "div" in decode*.c, see above).
+
+        Changed the preprocessor symbol AUDIOBUFSIZE into a
+        global variable "audiobufsize".  This makes it possible
+        to change it by a command line option.
+
+layer1.c
+
+    Fixed error in function I_step_one, second parameter:
+        unsigned int scale_index[2][]  -->  ...[2][SBLIMIT]
+        This caused an error with the DU compiler (which is ok,
+        because [2][] is incorrect according to ANSI).  I don't
+        know whether [2][SBLIMIT] actually works correctly (I
+        have no layer-1 streams to test it), but at least it
+        compiles without error, and it appears to be correct
+        (looking at the rest of the source).  Heaven knows why
+        gcc doesn't issue an error, and what it actually makes
+        from it.
+
+mpg123.1
+
+    A simple manual page.  Type "nroff -man mpg123.1 | more"
+    to view it, or install it in /usr/local/man/man1 (this is
+    done automatically by "make install").
+
+mpg123.c
+
+    New boolean variable "quiet":
+        If this variable is set to TRUE (command line option
+        -q), no messages are printed.
+
+***
+

@@ -1,0 +1,23 @@
+Layer-1 support not heavily tested .. 
+i-stereo in Level-3 seems to work now, but I have to optimize it.
+l3: exchange the DCT in III_Hybrid by a faster version.
+general optimizations in Level-3 code.
+add a few more audio-systems.
+add CRC check.
+no 'free format stream' support.
+in layer2.c:
+	step_two: fraction as pointer .. 
+	process first channel 0 than channel 1
+	copy channel 0 to channel 1 for: i >= jsbound
+
+- "low performance" version , which decodes only 22050 or 11025 Khz ... (done: decode_lp.c)
+- MAYBE it's possible to save half of the muls in SubBandSynth .. because
+  they are duplicated. In this case we need a big tmp table
+  (about 256 * 512 'real' values)
+- better frame reader .. especially for layer 3 
+
+- check again layer1 !!
+
+- integrate sign-check into huftables ... at least for hufman_count1 ...
+- Put the huffman decoding into the dequantize part 
+
