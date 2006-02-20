@@ -69,7 +69,7 @@ struct frame {
     int jsbound;
     int single;
     int II_sblimit;
-    int version;
+    int lsf;
     int lay;
     int error_protection;
     int bitrate_index;
@@ -193,7 +193,7 @@ extern int audio_set_channels(struct audio_info_struct *);
 extern int audio_write_sample(struct audio_info_struct *,short *,int);
 extern int audio_close(struct audio_info_struct *);
 
-extern long freqs[4];
+extern long freqs[6];
 extern real muls[27][64];
 extern real decwin[512+32];
 extern real *pnts[5];

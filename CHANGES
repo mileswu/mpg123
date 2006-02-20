@@ -1,3 +1,7 @@
+0.59e:
+------
+added Audio MPEG 2.0 support (but near untested) (MH)
+
 0.59d: (MH)
 ------
 minor modifications to dct64_i386.c

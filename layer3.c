@@ -33,7 +33,7 @@ struct bandInfoStruct {
   int shortDiff[13];
 };
 
-struct bandInfoStruct bandInfo[3] = { 
+struct bandInfoStruct bandInfo[6] = { 
  { {0,4,8,12,16,20,24,30,36,44,52,62,74, 90,110,134,162,196,238,288,342,418,576},
    {4,4,4,4,4,4,6,6,8, 8,10,12,16,20,24,28,34,42,50,54, 76,158},
    {0,4*3,8*3,12*3,16*3,22*3,30*3,40*3,52*3,66*3, 84*3,106*3,136*3,192*3},
@@ -45,23 +45,41 @@ struct bandInfoStruct bandInfo[3] = {
  { {0,4,8,12,16,20,24,30,36,44,54,66,82,102,126,156,194,240,296,364,448,550,576} ,
    {4,4,4,4,4,4,6,6,8,10,12,16,20,24,30,38,46,56,68,84,102, 26} ,
    {0,4*3,8*3,12*3,16*3,22*3,30*3,42*3,58*3,78*3,104*3,138*3,180*3,192*3} ,
-   {4,4,4,4,6,8,12,16,20,26,34,42,12} } 
+   {4,4,4,4,6,8,12,16,20,26,34,42,12} }  ,
+
+ { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576},
+   {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 } ,
+   {0,4*3,8*3,12*3,18*3,24*3,32*3,42*3,56*3,74*3,100*3,132*3,174*3,192*3} ,
+   {4,4,4,6,6,8,10,14,18,26,32,42,18 } } ,
+ { {0,6,12,18,24,30,36,44,54,66,80,96,114,136,162,194,232,278,330,394,464,540,576},
+   {6,6,6,6,6,6,8,10,12,14,16,18,22,26,32,38,46,52,64,70,76,36 } ,
+   {0,4*3,8*3,12*3,18*3,26*3,36*3,48*3,62*3,80*3,104*3,136*3,180*3,192*3} ,
+   {4,4,4,6,8,10,12,14,18,24,32,44,12 } } ,
+ { {0,6,12,18,24,30,36,44,54,66,80,96,116,140,168,200,238,284,336,396,464,522,576},
+   {6,6,6,6,6,6,8,10,12,14,16,20,24,28,32,38,46,52,60,68,58,54 },
+   {0,4*3,8*3,12*3,16*3,22*3,30*3,42*3,58*3,78*3,104*3,138*3,180*3,192*3} ,
+   {4,4,4,4,6,8,12,16,20,26,34,42,12 } }
 };
 
-static int mapbuf0[3][152];
-static int mapbuf1[3][156];
-static int mapbuf2[3][44];
-static int *map[3][3];
-static int *mapend[3][3];
- 
+
+static int mapbuf0[6][152];
+static int mapbuf1[6][156];
+static int mapbuf2[6][44];
+static int *map[6][3];
+static int *mapend[6][3];
+
+static unsigned int n_slen2[512]; /* MPEG 2.0 slen for 'normal' mode */
+static unsigned int i_slen2[256]; /* MPEG 2.0 slen for intensity stereo */
+
 static real tan1_1[16],tan2_1[16],tan1_2[16],tan2_2[16];
+static real pow1_1[2][16],pow2_1[2][16],pow1_2[2][16],pow2_2[2][16];
 
 /* 
  * init tables for layer-3 
  */
 void init_layer3(void)
 {
-  int i,j;
+  int i,j,k,l;
 
   for(i=-256;i<118;i++)
     gainpow2[i+256] = pow((double)2.0,-0.25 * (double) (i+210) );
@@ -117,16 +135,31 @@ void init_layer3(void)
       win1[j][i] = - win[j][i];
   }
 
-  for(i=0;i<15;i++)
+  for(i=0;i<16;i++)
   {
     double t = tan( (double) i * M_PI / 12.0 );
     tan1_1[i] = t / (1.0+t);
     tan2_1[i] = 1.0 / (1.0 + t);
     tan1_2[i] = M_SQRT2 * t / (1.0+t);
     tan2_2[i] = M_SQRT2 / (1.0 + t);
+
+    for(j=0;j<2;j++) {
+      double base = pow(2.0,-0.25*(j+1.0));
+      double p1=1.0,p2=1.0;
+      if(i > 0) {
+        if( i & 1 )
+          p1 = pow(base,(i+1.0)*0.5);
+        else
+          p2 = pow(base,i*0.5);
+      }
+      pow1_1[j][i] = p1;
+      pow2_1[j][i] = p2;
+      pow1_2[j][i] = M_SQRT2 * p1;
+      pow2_2[j][i] = M_SQRT2 * p2;
+    }
   }
 
-  for(j=0;j<3;j++)
+  for(j=0;j<6;j++)
   {
    struct bandInfoStruct *bi = &bandInfo[j];
    int *mp;
@@ -176,13 +209,62 @@ void init_layer3(void)
    }
    mapend[j][2] = mp;
 
-  }  
+  }
+
+  for(i=0;i<5;i++) {
+    for(j=0;j<6;j++) {
+      for(k=0;k<6;k++) {
+        int n = k + j * 6 + i * 36;
+        i_slen2[n] = i|(j<<3)|(k<<6)|(3<<12);
+      }
+    }
+  }
+  for(i=0;i<4;i++) {
+    for(j=0;j<4;j++) {
+      for(k=0;k<4;k++) {
+        int n = k + j * 4 + i * 16;
+        i_slen2[n+180] = i|(j<<3)|(k<<6)|(4<<12);
+      }
+    }
+  }
+  for(i=0;i<4;i++) {
+    for(j=0;j<3;j++) {
+      int n = j + i * 3;
+      i_slen2[n+244] = i|(j<<3)|(5<<12);
+    }
+  }
+
+  for(i=0;i<5;i++) {
+    for(j=0;j<5;j++) {
+      for(k=0;k<4;k++) {
+        for(l=0;l<4;l++) {
+          int n = l + k * 4 + j * 16 + i * 80;
+          n_slen2[n] = i|(j<<3)|(k<<6)|(l<<9)|(0<<12);
+        }
+      }
+    }
+  }
+  for(i=0;i<5;i++) {
+    for(j=0;j<5;j++) {
+      for(k=0;k<4;k++) {
+        int n = k + j * 4 + i * 20;
+        n_slen2[n+400] = i|(j<<3)|(k<<6)|(1<<12);
+      }
+    }
+  }
+  for(i=0;i<4;i++) {
+    for(j=0;j<3;j++) {
+      int n = j + i * 3;
+      n_slen2[n+500] = i|(j<<3)|(2<<12)|(1<<15);
+    }
+  }
 }
 
 /*
  * read additional side information
  */
-static void III_get_side_info(struct III_sideinfo *si,int stereo,int ms_stereo,long sfreq)
+static void III_get_side_info_1(struct III_sideinfo *si,int stereo,
+ int ms_stereo,long sfreq)
 {
    int ch, gr;
 
@@ -253,9 +335,81 @@ static void III_get_side_info(struct III_sideinfo *si,int stereo,int ms_stereo,l
 }
 
 /*
+ * Side Info for MPEG 2.0 / LSF
+ */
+static void III_get_side_info_2(struct III_sideinfo *si,int stereo,
+ int ms_stereo,long sfreq)
+{
+   int ch, gr;
+
+   si->main_data_begin = getbits(8);
+   if (stereo == 1)
+     si->private_bits = get1bit();
+   else 
+     si->private_bits = getbits_fast(2);
+
+   for (gr=0; gr<1; gr++) 
+   {
+     for (ch=0; ch<stereo; ch++) 
+     {
+       register struct gr_info_s *gr_info = &(si->ch[ch].gr[gr]);
+
+       gr_info->part2_3_length = getbits(12);
+       gr_info->big_values = getbits_fast(9);
+       gr_info->pow2gain = gainpow2+256 - getbits_fast(8);
+       if(ms_stereo)
+         gr_info->pow2gain += 2;
+       gr_info->scalefac_compress = getbits(9);
+/* window-switching flag == 1 for block_Type != 0 .. and block-type == 0 -> win-sw-flag = 0 */
+       if(get1bit()) 
+       {
+         int i;
+         gr_info->block_type = getbits_fast(2);
+         gr_info->mixed_block_flag = get1bit();
+         gr_info->table_select[0] = getbits_fast(5);
+         gr_info->table_select[1] = getbits_fast(5);
+         /*
+          * table_select[2] not needed, because there is no region2,
+          * but to satisfy some verifications tools we set it either.
+          */
+         gr_info->table_select[2] = 0;
+         for(i=0;i<3;i++)
+           gr_info->full_gain[i] = gr_info->pow2gain + (getbits_fast(3)<<3);
+
+         if(gr_info->block_type == 0) {
+           fprintf(stderr,"Blocktype == 0 and window-switching == 1 not allowed.\n");
+           exit(1);
+         }
+         /* region_count/start parameters are implicit in this case. */       
+/* check this again! */
+         if(gr_info->block_type == 2)
+           gr_info->region1start = 36>>1;
+         else
+           gr_info->region1start = 54>>1;
+         gr_info->region2start = 576>>1;
+       }
+       else 
+       {
+         int i,r0c,r1c;
+         for (i=0; i<3; i++)
+           gr_info->table_select[i] = getbits_fast(5);
+         r0c = getbits_fast(4);
+         r1c = getbits_fast(3);
+         gr_info->region1start = bandInfo[sfreq].longIdx[r0c+1] >> 1 ;
+         gr_info->region2start = bandInfo[sfreq].longIdx[r0c+1+r1c+1] >> 1;
+         gr_info->block_type = 0;
+         gr_info->mixed_block_flag = 0;
+       }
+       gr_info->scalefac_scale = get1bit();
+       gr_info->count1table_select = get1bit();
+     }
+   }
+}
+
+/*
  * read scalefactors
  */
-static int III_get_scale_factors(int *scf,struct gr_info_s *gr_info)
+static int III_get_scale_factors_1(int *scf,struct gr_info_s *gr_info)
 {
    static unsigned char slen[2][16] = {
      {0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4},
@@ -341,6 +495,67 @@ static int III_get_scale_factors(int *scf,struct gr_info_s *gr_info)
       *scf++ = 0;  /* no l[21] in original sources */
     }
     return numbits;
+}
+
+static int III_get_scale_factors_2(int *scf,struct gr_info_s *gr_info,int i_stereo)
+{
+  unsigned char *pnt;
+  int i,j;
+  unsigned int slen;
+  int nnul;
+  int numbits = 0;
+
+  int sv;
+
+  static unsigned char stab[3][6][4] = {
+   { { 6, 5, 5,5 } , { 6, 5, 7,3 } , { 11,10,0,0} ,
+     { 7, 7, 7,0 } , { 6, 6, 6,3 } , {  8, 8,5,0} } ,
+   { { 9, 9, 9,9 } , { 9, 9,12,6 } , { 18,18,0,0} ,
+     {12,12,12,0 } , {12, 9, 9,6 } , { 15,12,9,0} } ,
+   { { 6, 9, 9,9 } , { 6, 9,12,6 } , { 15,18,0,0} ,
+     { 6,15,12,0 } , { 6,12, 9,6 } , {  6,18,9,0} } }; 
+
+  if(i_stereo) /* i_stereo AND second channel -> do_layer3() checks this */
+    slen = i_slen2[gr_info->scalefac_compress>>1];
+  else
+    slen = n_slen2[gr_info->scalefac_compress];
+
+  gr_info->preflag = (slen>>15) & 0x1;
+ 
+  if( gr_info->block_type == 2 ) {
+    if(gr_info->mixed_block_flag) {
+      nnul = 5;
+      pnt = stab[2][(slen>>12)&0x7];
+    }
+    else {
+      nnul = 3;
+      pnt = stab[1][(slen>>12)&0x7];
+    }
+  }
+  else {
+    nnul = 1;
+    pnt = stab[0][(slen>>12)&0x7];
+  }
+
+sv = (slen>>12)&0x7;
+
+  for(i=0;i<4;i++) {
+    int num = slen & 0x7;
+    slen >>= 3;
+    if(num) {
+      for(j=0;j<pnt[i];j++)
+        *scf++ = getbits(num);
+      numbits += pnt[i] * num;
+    }
+    else {
+      for(j=0;j<pnt[i];j++)
+        *scf++ = 0;
+    }
+  }
+  for(i=0;i<nnul;i++)
+    *scf++ = 0;
+
+  return numbits;
 }
 
 static int pretab1[22] = {0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0};
@@ -474,7 +689,6 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
         xrpnt += step;
       }
     }
-
     for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
@@ -554,6 +768,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
 
       for(;lp;lp--,mc--) {
         int x,y;
+
         if(!mc) {
           mc = *m++;
           v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
@@ -610,6 +825,7 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
           *xrpnt++ = 0.0;
       }
     }
+
     for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
@@ -657,7 +873,11 @@ static int III_dequantize_sample(real xr[SBLIMIT][SSLIMIT],int *scf,
     getbits(part2remain);
   else if(part2remain < 0) {
     fprintf(stderr,"mpg123: Can't rewind stream by %d bits!\n",-part2remain);
+#if 0
     return 1; /* -> error */
+#else
+    return 0; /* test */
+#endif
   }
   return 0;
 }
@@ -720,6 +940,7 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
       struct newhuff *h = ht+gr_info->table_select[i];
       for(;lp;lp--,mc--) {
         int x,y;
+
         if(!mc) {
           mc = *m++;
           xrpnt = ((real *) xr[1]) + *m;
@@ -982,6 +1203,7 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
           *xrpnt++ = *xr0pnt++;
       }
     }
+
     for(;l3 && (part2remain > 0);l3--) {
       struct newhuff *h = htc+gr_info->count1table_select;
       register short *val = h->table,a;
@@ -1041,18 +1263,29 @@ static int III_dequantize_sample_ms(real xr[2][SBLIMIT][SSLIMIT],int *scf,
 /* 
  * III_stereo: calculate real channel values for Joint-I-Stereo-mode
  */
-static void III_stereo(real xr_buf[2][SBLIMIT][SSLIMIT],int *scalefac,
-   struct gr_info_s *gr_info,int sfreq,int ms_stereo)
+static void III_i_stereo(real xr_buf[2][SBLIMIT][SSLIMIT],int *scalefac,
+   struct gr_info_s *gr_info,int sfreq,int ms_stereo,int lsf)
 {
       real (*xr)[SBLIMIT*SSLIMIT] = (real (*)[SBLIMIT*SSLIMIT] ) xr_buf;
       struct bandInfoStruct *bi = &bandInfo[sfreq];
-      real *tan1,*tan2;
+      real *tab1,*tab2;
 
-      if(ms_stereo) {
-        tan1 = tan1_2; tan2 = tan2_2;
+      if(lsf) {
+        int p = gr_info->scalefac_compress & 0x1;
+	    if(ms_stereo) {
+          tab1 = pow1_2[p]; tab2 = pow2_2[p];
+        }
+        else {
+          tab1 = pow1_1[p]; tab2 = pow2_1[p];
+        }
       }
       else {
-        tan1 = tan1_1; tan2 = tan2_1;
+        if(ms_stereo) {
+          tab1 = tan1_2; tab2 = tan2_2;
+        }
+        else {
+          tab1 = tan1_1; tab2 = tan2_1;
+        }
       }
 
       if (gr_info->block_type == 2)
@@ -1075,7 +1308,7 @@ static void III_stereo(real xr_buf[2][SBLIMIT][SSLIMIT],int *scalefac,
                real t1,t2;
                sb = bi->shortDiff[sfb];
                idx = bi->shortIdx[sfb] + lwin;
-               t1 = tan1[is_p]; t2 = tan2[is_p];
+               t1 = tab1[is_p]; t2 = tab2[is_p];
                for (; sb > 0; sb--,idx+=3)
                {
                  real v = xr[0][idx];
@@ -1099,7 +1332,7 @@ maybe still wrong??? (copy 12 to 13?) */
            if(is_p != 7)
            {
              real t1,t2;
-             t1 = tan1[is_p]; t2 = tan2[is_p];
+             t1 = tab1[is_p]; t2 = tab2[is_p];
              for ( ; sb > 0; sb--,idx+=3 )
              {  
                real v = xr[0][idx];
@@ -1123,7 +1356,7 @@ maybe still wrong??? (copy 12 to 13?) */
              int is_p = scalefac[sfb]; /* scale: 0-15 */
              if(is_p != 7) {
                real t1,t2;
-               t1 = tan1[is_p]; t2 = tan2[is_p];
+               t1 = tab1[is_p]; t2 = tab2[is_p];
                for ( ; sb > 0; sb--,idx++)
                {
                  real v = xr[0][idx];
@@ -1146,7 +1379,7 @@ maybe still wrong??? (copy 12 to 13?) */
           is_p = scalefac[sfb]; /* scale: 0-15 */
           if(is_p != 7) {
             real t1,t2;
-            t1 = tan1[is_p]; t2 = tan2[is_p];
+            t1 = tab1[is_p]; t2 = tab2[is_p];
             for ( ; sb > 0; sb--,idx++)
             {
                real v = xr[0][idx];
@@ -1162,7 +1395,7 @@ maybe still wrong??? (copy 12 to 13?) */
         if(is_p != 7)
         {
           int sb;
-          real t1 = tan1[is_p],t2 = tan2[is_p]; 
+          real t1 = tab1[is_p],t2 = tab2[is_p]; 
 
           for ( sb = bi->longDiff[21]; sb > 0; sb--,idx++ )
           {
@@ -1532,7 +1765,7 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
   int single = fr->single;
   int ms_stereo,i_stereo;
   int sfreq = fr->sampling_frequency;
-  int stereo1;
+  int stereo1,granules;
 
   if(stereo == 1) {
     stereo1 = 1;
@@ -1546,10 +1779,18 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
   ms_stereo = (fr->mode == MPG_MD_JOINT_STEREO) && (fr->mode_ext & 0x2);
   i_stereo = (fr->mode == MPG_MD_JOINT_STEREO) && (fr->mode_ext & 0x1);
 
-  III_get_side_info(&sideinfo,stereo,ms_stereo,sfreq);
+  if(fr->lsf) {
+    granules = 1;
+    III_get_side_info_2(&sideinfo,stereo,ms_stereo,sfreq);
+  }
+  else {
+    granules = 2;
+    III_get_side_info_1(&sideinfo,stereo,ms_stereo,sfreq);
+  }
+
   set_pointer(sideinfo.main_data_begin);
 
-  for (gr=0;gr<2;gr++) 
+  for (gr=0;gr<granules;gr++) 
   {
     static real hybridIn[2][SBLIMIT][SSLIMIT];
     static real hybridOut[2][SSLIMIT][SBLIMIT];
@@ -1557,14 +1798,20 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
     {
       struct gr_info_s *gr_info = &(sideinfo.ch[0].gr[gr]);
       long part2bits;
-      part2bits = III_get_scale_factors(scalefacs[0],gr_info);
+      if(fr->lsf)
+        part2bits = III_get_scale_factors_2(scalefacs[0],gr_info,0);
+      else
+        part2bits = III_get_scale_factors_1(scalefacs[0],gr_info);
       if(III_dequantize_sample(hybridIn[0], scalefacs[0],gr_info,sfreq,part2bits))
         return clip;
     }
     if(stereo == 2) {
       struct gr_info_s *gr_info = &(sideinfo.ch[1].gr[gr]);
       long part2bits;
-      part2bits = III_get_scale_factors(scalefacs[1],gr_info);
+      if(fr->lsf) 
+        part2bits = III_get_scale_factors_2(scalefacs[1],gr_info,i_stereo);
+      else
+        part2bits = III_get_scale_factors_1(scalefacs[1],gr_info);
       if(ms_stereo) {
         if(III_dequantize_sample_ms(hybridIn,scalefacs[1],gr_info,sfreq,part2bits))
           return clip;
@@ -1575,7 +1822,7 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
       }
 
       if(i_stereo)
-        III_stereo(hybridIn,scalefacs[1],gr_info,sfreq,ms_stereo);
+        III_i_stereo(hybridIn,scalefacs[1],gr_info,sfreq,ms_stereo,fr->lsf);
 
       if(single >= 0) {
         if(single == 3) {

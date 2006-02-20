@@ -1,6 +1,6 @@
 **********************************************************************
-* MPEG 1.0 _AUDIO_ PLAYER, V0.59c                                    * 
-* (full?) MPEG 1.0, Layer 1,2 and 3 support                          *
+* MPEG 1.0/2.0 _AUDIO_ PLAYER, V0.59e                                    * 
+* (full?) MPEG 1.0/2.0, Layer 1,2 and 3 support                          *
 * Layer-3 realtime only with a 'fast' machine (e.g Sparc10)          *
 * Since 29.3.96 128kbit j-stereo on an amd 5x86-P75 (133Mhz), too ;) *
 * Layer 1,2 stereo or Layer 3 with one channel seems to be           *
@@ -104,7 +104,8 @@ known bugs:
   no CRC checking ..
   no 'free format streams'
   no clean audio interface
-  no MPEG 2.0 support
+  MPEG 2.0, Layer1 and Layer2 not tested (and probably will not work)
+  MPEG 2.0, Layer3 not heavily tested .. may has bugs.
 
 
 ******************************************************************************

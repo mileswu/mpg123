@@ -7,12 +7,17 @@
 /* max = 1728 */
 #define MAXFRAMESIZE 1792
 
-static int tabsel_123[3][16] = 
+static int tabsel_123[2][3][16] = {
    { {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,},
      {0,32,48,56, 64, 80, 96,112,128,160,192,224,256,320,384,},
-     {0,32,40,48, 56, 64, 80, 96,112,128,160,192,224,256,320,} };
+     {0,32,40,48, 56, 64, 80, 96,112,128,160,192,224,256,320,} },
 
-long freqs[4] = { 44100, 48000, 32000, 999999 };
+   { {0,32,48,56,64,80,96,112,128,144,160,176,192,224,256,},
+     {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,},
+     {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,} }
+};
+
+long freqs[6] = { 44100, 48000, 32000, 22050, 24000, 16000 };
 
 #ifdef I386_ASSEM
 int bitindex;
@@ -81,7 +86,10 @@ static void get_II_stuff(struct frame *fr)
   static struct al_table *tables[4] = { alloc_0, alloc_1, alloc_2, alloc_3 };
   static int sblims[4] = { 27 , 30 , 8, 12 };
 
-  table = translate[fr->sampling_frequency][2-fr->stereo][fr->bitrate_index];
+  if(fr->lsf)
+    table = 4;
+  else
+    table = translate[fr->sampling_frequency][2-fr->stereo][fr->bitrate_index];
   sblim = sblims[table];
 
   fr->alloc = tables[table];
@@ -172,11 +180,9 @@ int read_frame(struct frame *fr)
     fprintf(stderr,"Major headerchange %08lx->%08lx.\n",oldhead,newhead);
 #endif
 
-    if( (newhead & 0xfff80000) != 0xfff80000)
+    if( (newhead & 0xfff00000) != 0xfff00000)
     {
-      if((newhead & 0xfff80000) == 0xfff00000)
-        fprintf(stderr,"MPEG 2.0 Audio not supported!\n");
-      else if((newhead & 0xfff80000) == 0xffe00000)
+      if((newhead & 0xfff80000) == 0xffe00000)
         fprintf(stderr,"MPEG '2.5' Audio not supported!\n");
       else
         fprintf(stderr,"Illegal Audio-MPEG-Header 0x%08lx at offset 0x%lx.\n",
@@ -209,13 +215,17 @@ int read_frame(struct frame *fr)
     if (!firsthead)
       firsthead = newhead;
 
-    fr->version = 1;
+    fr->lsf = (newhead & (1<<19)) ? 0x0 : 0x1;
     if (!tryresync || !oldhead) {
           /* If "tryresync" is true, assume that certain
              parameters do not change within the stream! */
       fr->lay = 4-((newhead>>17)&3);
       fr->bitrate_index = ((newhead>>12)&0xf);
-      fr->sampling_frequency = ((newhead>>10)&0x3);
+      if( ((newhead>>10)&0x3) == 0x3) {
+        fprintf(stderr,"Stream error\n");
+        exit(1);
+      }
+      fr->sampling_frequency = ((newhead>>10)&0x3) | (fr->lsf*3);
       fr->error_protection = ((newhead>>16)&0x1)^0x1;
     }
     fr->padding = ((newhead>>9)&0x1);
@@ -247,7 +257,7 @@ int read_frame(struct frame *fr)
 #endif
         fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ? 
                          (fr->mode_ext<<2)+4 : 32;
-        framesize  = (long) tabsel_123[0][fr->bitrate_index] * 12000;
+        framesize  = (long) tabsel_123[fr->lsf][0][fr->bitrate_index] * 12000;
         framesize /= freqs[fr->sampling_frequency];
         framesize  = ((framesize+fr->padding)<<2)-4;
         break;
@@ -261,11 +271,15 @@ int read_frame(struct frame *fr)
         get_II_stuff(fr);
         fr->jsbound = (fr->mode == MPG_MD_JOINT_STEREO) ?
                          (fr->mode_ext<<2)+4 : fr->II_sblimit;
-        framesize = fs[fr->sampling_frequency][fr->bitrate_index]-4;
+/* can't work for MPEG 2.0 -> (Freq is new) */
+        framesize = fs[fr->sampling_frequency&0x3][fr->bitrate_index]-4;
         framesize += fr->padding;
         break;
       case 3:
-        ssize = (fr->stereo == 1) ? 17 : 32;
+        if(fr->lsf)
+          ssize = (fr->stereo == 1) ? 9 : 17;
+        else
+          ssize = (fr->stereo == 1) ? 17 : 32;
         if(fr->error_protection)
           ssize += 2;
 #ifdef VARMODESUPPORT
@@ -275,8 +289,8 @@ int read_frame(struct frame *fr)
                       (((unsigned int) hbuf[4] << 8) | (unsigned int) hbuf[5]);
         else {
 #endif
-          framesize  = (long) tabsel_123[2][fr->bitrate_index] * 144000;
-          framesize /= freqs[fr->sampling_frequency];
+          framesize  = (long) tabsel_123[fr->lsf][2][fr->bitrate_index] * 144000;
+          framesize /= freqs[fr->sampling_frequency]<<(fr->lsf);
           framesize = framesize + fr->padding - 4;
 #ifdef VARMODESUPPORT
         }
@@ -315,16 +329,18 @@ void print_header(struct frame *fr)
 {
 	static char *modes[4] = { "Stereo", "Joint-Stereo", "Dual-Channel", "Single-Channel" };
 	static char *layers[4] = { "Unknown" , "I", "II", "III" };
+    static char *mpeg_type[2] = { "MPEG 1.0" , "MPEG 2.0" };
  
-	fprintf(stderr,"Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF: %d\n",
+	fprintf(stderr,"%s, Layer: %s, Freq: %ld, mode: %s, modext: %d, BPF: %d\n",
+        mpeg_type[fr->lsf],
 		layers[fr->lay],freqs[fr->sampling_frequency],
 		modes[fr->mode],fr->mode_ext,fsize+4);
-	fprintf(stderr,"chan: %d, copyright: %s, original: %s, CRC: %s, emphasis: %d.\n",
+	fprintf(stderr,"Channels: %d, copyright: %s, original: %s, CRC: %s, emphasis: %d.\n",
 		fr->stereo,fr->copyright?"Yes":"No",
 		fr->original?"Yes":"No",fr->error_protection?"Yes":"No",
 		fr->emphasis);
 	fprintf(stderr,"Bitrate: %d Kbits/s, Extension value: %d\n",
-		tabsel_123[fr->lay-1][fr->bitrate_index],fr->extension);
+		tabsel_123[fr->lsf][fr->lay-1][fr->bitrate_index],fr->extension);
 }
 
 /* open the device to read the bit stream from it */
@@ -349,13 +365,17 @@ void close_stream(char *bs_filenam)
         fclose(filept);
 }
 
-#ifndef I386_ASSEM
+#if !defined(I386_ASSEM) || defined(DEBUG_GETBITS)
 #ifdef _gcc_
 inline 
 #endif
 unsigned int getbits(int number_of_bits)
 {
   unsigned long rval;
+
+#ifdef DEBUG_GETBITS
+fprintf(stderr,"g%d",number_of_bits);
+#endif
 
   if(!number_of_bits)
     return 0;
@@ -381,6 +401,9 @@ unsigned int getbits(int number_of_bits)
     bitindex &= 7;
   }
 
+#ifdef DEBUG_GETBITS
+fprintf(stderr,":%x ",rval);
+#endif
   return rval;
 }
 
@@ -390,6 +413,10 @@ inline
 unsigned int getbits_fast(int number_of_bits)
 {
   unsigned long rval;
+
+#ifdef DEBUG_GETBITS
+fprintf(stderr,"g%d",number_of_bits);
+#endif
 
   {
     rval = wordpointer[0];
@@ -408,6 +435,12 @@ unsigned int getbits_fast(int number_of_bits)
     bitindex &= 7;
   }
 
+
+#ifdef DEBUG_GETBITS
+fprintf(stderr,":%x ",rval);
+#endif
+
+
   return rval;
 }
 
@@ -418,11 +451,19 @@ unsigned int get1bit(void)
 {
   unsigned char rval;
 
+#ifdef DEBUG_GETBITS
+fprintf(stderr,"g%d",1);
+#endif
+
   rval = *wordpointer << bitindex;
 
   bitindex++;
   wordpointer += (bitindex>>3);
   bitindex &= 7;
+
+#ifdef DEBUG_GETBITS
+fprintf(stderr,":%d ",rval>>7);
+#endif
 
   return rval>>7;
 }

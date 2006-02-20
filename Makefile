@@ -34,6 +34,14 @@ nothing-specified:
 	@echo "Please read the file INSTALL for additional information."
 	@echo ""
 
+linux-devel:
+	$(MAKE) OBJECTS='decode_i386.o dct64_i386.o' \
+        CC=gcc LDFLAGS= \
+        CFLAGS='-DDEBUG_GETBITS -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486 \
+            -fomit-frame-pointer -funroll-all-loops \
+            -finline-functions -ffast-math' \
+        mpg123
+
 linux:
 	$(MAKE) OBJECTS='decode_i386.o dct64_i386.o getbits.o' linux-generic
 
@@ -43,6 +51,7 @@ linux-generic:
 			-fomit-frame-pointer -funroll-all-loops \
 			-finline-functions -ffast-math' \
 		mpg123
+
 #### the following defines are for experimental use ... 
 #
 #CFLAGS='-pg -DI386_ASSEM -DREAL_IS_FLOAT -DLINUX -Wall -O2 -m486 -funroll-all-loops -finline-functions -ffast-math' mpg123
@@ -138,7 +147,7 @@ dct64_i386.o:	mpg123.h
 xfermem.o:	xfermem.h
 
 clean:
-	rm -f *.o *core *~ mpg123
+	rm -f *.o *core *~ mpg123 gmon.out
 
 prepared-for-install:
 	@if [ ! -x mpg123 ]; then \

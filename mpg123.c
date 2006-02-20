@@ -367,9 +367,10 @@ int main(int argc, char *argv[])
 
 static void print_title(void)
 {
-    fprintf(stderr,"High Performance MPEG 1.0 Audio Player for Layer 1, 2 and 3.\n");
+    fprintf(stderr,"High Performance MPEG 1.0/2.0 Audio Player for Layer 1, 2 and 3.\n");
     fprintf(stderr,"Version %s (%s). Written and copyrights by Michael Hipp.\n", prgVersion, prgDate);
     fprintf(stderr,"Uses code from various people. See 'README' for more!\n");
+    fprintf(stderr,"THIS SOFTWARE COMES WITH ABSOLUTELY NO WARRANTY! USE AT YOUR OWN RISK!\n");
 }
 
 static void usage(char *dummy)  /* print syntax & exit */
@@ -393,3 +394,5 @@ static void usage(char *dummy)  /* print syntax & exit */
    fprintf(stderr,"See the manpage %s(1) for more information.\n", prgName);
    exit(1);
 }
+
+
