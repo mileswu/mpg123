@@ -39,6 +39,36 @@ static off_t   posix_lseek(int fd, off_t offset, int whence){ return lseek(fd, o
 
 static ssize_t plain_fullread(mpg123_handle *fr,unsigned char *buf, ssize_t count);
 
+#if defined (WANT_WIN32_UNICODE)
+#include <windows.h>
+#include <winnls.h>
+static int
+win32_mbc2uni_private (const char *const mbptr, const wchar_t ** const wptr,
+	       size_t * const buflen)
+{
+  size_t len;
+  wchar_t *buf;
+  int ret;
+  len = MultiByteToWideChar (CP_UTF8, 0, mbptr, -1, NULL, 0);
+  buf = calloc (len, sizeof (wchar_t));
+  debug2("win32_uni2mbc allocated %u bytes at %p", len, buf);
+  if (buf)
+    {
+      ret = MultiByteToWideChar (CP_UTF8, 0, mbptr, -1, buf, len);
+      *wptr = buf;
+      if (buflen)
+	*buflen = len * sizeof (wchar_t);
+      return ret;
+    }
+  else
+    {
+      if (buflen)
+	*buflen = 0;
+      return 0;
+    }
+}
+#endif
+
 #ifndef NO_FEEDER
 /* Bufferchain methods. */
 static void bc_init(struct bufferchain *bc);
@@ -983,8 +1013,10 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 {
 	int filept_opened = 1;
 	int filept; /* descriptor of opened file/stream */
+	const wchar_t *frag = NULL;
 
 	clear_icy(&fr->icy); /* can be done inside frame_clear ...? */
+	win32_mbc2uni_private(bs_filenam, &frag, NULL);
 	if(!bs_filenam) /* no file to open, got a descriptor (stdin) */
 	{
 		filept = fd;
@@ -993,7 +1025,14 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 	#ifndef O_BINARY
 	#define O_BINARY (0)
 	#endif
-	else if((filept = open(bs_filenam, O_RDONLY|O_BINARY)) < 0) /* a plain old file to open... */
+	else if(
+	#if defined (WANT_WIN32_UNICODE)
+	(win32_mbc2uni_private(bs_filenam, &frag, NULL)) &&
+	(filept = _wopen(frag, O_RDONLY|O_BINARY)) < 0
+	#else
+	(filept = open(bs_filenam, O_RDONLY|O_BINARY)) < 0
+	#endif
+	) /* a plain old file to open... */
 	{
 		if(NOQUIET) error2("Cannot open file %s: %s", bs_filenam, strerror(errno));
 		fr->err = MPG123_BAD_FILE;
@@ -1023,5 +1062,6 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 
 	if(fr->rd->init(fr) < 0) return -1;
 
+	free((void *)frag); /* Freeing NULL should be safe */
 	return MPG123_OK;
 }
