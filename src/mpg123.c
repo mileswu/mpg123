@@ -10,6 +10,8 @@
 #include "mpg123app.h"
 #include "mpg123.h"
 #include "local.h"
+#include "win32conv.h"
+#include "cleaner.h"
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -675,18 +677,65 @@ int skip_or_die(struct timeval *start_time)
 #define skip_or_die(a) TRUE
 #endif
 
-int main(int argc, char *argv[])
+#if defined (WANT_WIN32_UNICODE)
+static int
+argv_cleanup(void *in)
+{
+	debug ("argv_cleanup running!\n");
+	char ** ptr;
+	ptr = (char **)in;
+	while (ptr && *ptr) 
+	{
+		free ((void *)*ptr);
+		++ptr;
+	}
+	free(in);
+	debug ("argv_cleanup ran!\n");
+	return 0;
+}
+#endif
+
+int main(int argcA, char *argvA[])
 {
 	int result;
 	long parr;
 	char *fname;
 	int libpar = 0;
 	mpg123_pars *mp;
+	char **argv;
+    int argc;
+    atexit(exit_cleanup);
 #if !defined(WIN32) && !defined(GENERIC)
 	struct timeval start_time;
 #endif
-
-	/* Extract binary and path, take stuff before/after last / or \ . */
+#if defined (WANT_WIN32_UNICODE)
+	wchar_t **argvW;
+	char *argvptr;
+	int argcounter;
+	argvW = CommandLineToArgvW (GetCommandLineW(), &argc);
+	argv = (char **)calloc(sizeof (char *), argc + 1);
+	if (!(argvW && argv))
+	{
+		error("Malloc for argument processing failed\n");
+		abort();
+	}
+	for (argcounter = 0; argcounter < argc; argcounter++)
+		{
+			win32_uni2mbc(argvW[argcounter], (const char **)&argvptr, NULL);
+			argv[argcounter] = argvptr;
+		}
+	LocalFree(argvW); /* We don't need it anymore */
+	if (register_dtor_cleanup (argv_cleanup, (void *)argv))
+	{
+		debug("Failed to register dtor\n");
+		abort();
+	}
+    debug("argv_cleanup registered!\n");
+#else
+	argv = argvA;
+	argc = argcA;
+#endif
+        /* Extract binary and path, take stuff before/after last / or \ . */
 	if((prgName = strrchr(argv[0], '/')) || (prgName = strrchr(argv[0], '\\')))
 	{
 		/* There is some explicit path. */
