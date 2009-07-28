@@ -560,10 +560,15 @@ case $host in
   *-pc-cygwin*)
     cpu_type="generic_fpu"
   ;;
-  *-*-mingw32)
+  i[3-7]86-*-mingw32*)
     LIBS="$LIBS"
     buffer=disabled
     cpu_type="x86"
+  ;;
+  x86_64-*-mingw32*)
+    LIBS="$LIBS"
+    buffer=disabled
+    cpu_type="x86-64"
   ;;
 	i386-*)
 		AC_MSG_WARN([Unknown host operating system])
