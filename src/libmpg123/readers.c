@@ -1016,7 +1016,11 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 	const wchar_t *frag = NULL;
 
 	clear_icy(&fr->icy); /* can be done inside frame_clear ...? */
-	win32_mbc2uni_private(bs_filenam, &frag, NULL);
+
+	#if defined (WANT_WIN32_UNICODE)
+	win32_mbc2uni_private(bs_filenam, &frag, NULL); /* Get UCS-2 text */
+	#endif
+
 	if(!bs_filenam) /* no file to open, got a descriptor (stdin) */
 	{
 		filept = fd;
