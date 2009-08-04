@@ -1009,17 +1009,34 @@ int open_feed(mpg123_handle *fr)
 #endif /* NO_FEEDER */
 }
 
+static int
+get_filehandle(const char *bs_filenam, int mode)
+{
+  int ret;
+  #if defined (WANT_WIN32_UNICODE)
+  const wchar_t *frag = NULL;
+
+  ret = win32_mbc2uni_private(bs_filenam, &frag, NULL);
+  if ((frag == NULL) || (ret == 0)) goto fallback; /* Fallback to plain open when ucs-2 conversion fails */
+  ret = _wopen(frag, mode); /*Try _wopen */
+  if (ret != -1 ) goto open_ok; /* msdn says -1 means failure */
+  fallback:
+  #endif
+  ret = open (bs_filenam, mode); /* Try plain old open(), if it fails, do nothing */
+
+  #if defined (WANT_WIN32_UNICODE)
+  open_ok:
+  free ((void *)frag); /* Freeing a NULL should be OK */
+  #endif
+  return ret;
+}
+
 int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 {
 	int filept_opened = 1;
 	int filept; /* descriptor of opened file/stream */
-	const wchar_t *frag = NULL;
 
 	clear_icy(&fr->icy); /* can be done inside frame_clear ...? */
-
-	#if defined (WANT_WIN32_UNICODE)
-	win32_mbc2uni_private(bs_filenam, &frag, NULL); /* Get UCS-2 text */
-	#endif
 
 	if(!bs_filenam) /* no file to open, got a descriptor (stdin) */
 	{
@@ -1029,14 +1046,7 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 	#ifndef O_BINARY
 	#define O_BINARY (0)
 	#endif
-	else if(
-	#if defined (WANT_WIN32_UNICODE)
-	(win32_mbc2uni_private(bs_filenam, &frag, NULL)) &&
-	(filept = _wopen(frag, O_RDONLY|O_BINARY)) < 0
-	#else
-	(filept = open(bs_filenam, O_RDONLY|O_BINARY)) < 0
-	#endif
-	) /* a plain old file to open... */
+	else if((filept = get_filehandle(bs_filenam, O_RDONLY|O_BINARY)) < 0) /* a plain old file to open... */
 	{
 		if(NOQUIET) error2("Cannot open file %s: %s", bs_filenam, strerror(errno));
 		fr->err = MPG123_BAD_FILE;
@@ -1066,6 +1076,5 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 
 	if(fr->rd->init(fr) < 0) return -1;
 
-	free((void *)frag); /* Freeing NULL should be safe */
 	return MPG123_OK;
 }
