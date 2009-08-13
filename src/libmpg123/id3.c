@@ -250,28 +250,31 @@ void id3_to_utf8(mpg123_string *sb, unsigned char encoding, const unsigned char 
 char *next_text(char* prev, int encoding, size_t limit)
 {
 	char *text = prev;
-	unsigned long neednull = encoding_widths[encoding];
-	/* So I go lengths to find zero or double zero... */
-	while(text-prev < (int)limit)
+	size_t width = encoding_widths[encoding];
+
+	/* So I go lengths to find zero or double zero...
+	   Remember bug 2834636: Only check for aligned NULLs! */
+	while(text-prev < (ssize_t)limit)
 	{
 		if(text[0] == 0)
 		{
-			if(neednull <= limit-(text-prev))
+			if(width <= limit-(text-prev))
 			{
-				unsigned long i = 1;
-				for(; i<neednull; ++i) if(text[i] != 0) break;
+				size_t i = 1;
+				for(; i<width; ++i) if(text[i] != 0) break;
 
-				if(i == neednull) /* found a null wide enough! */
+				if(i == width) /* found a null wide enough! */
 				{
-					text += neednull;
+					text += width;
 					break;
 				}
 			}
-			else{ text = NULL; break; }
+			else return NULL; /* No full character left? This text is broken */
 		}
-		++text;
+
+		text += width;
 	}
-	if(text-prev == limit) text = NULL;
+	if(text-prev >= limit) text = NULL;
 
 	return text;
 }
@@ -345,7 +348,7 @@ static void process_comment(mpg123_handle *fr, enum frame_types tt, char *realda
 	}
 
 	init_mpg123_text(&localcom);
-	/* Store the text, with out without translation to UTF-8, but for comments always a local copy in UTF-8.
+	/* Store the text, without translation to UTF-8, but for comments always a local copy in UTF-8.
 	   Reminder: No bailing out from here on without freeing the local comment data! */
 	store_id3_text(&xcom->description, descr-1, text-descr+1, NOQUIET, fr->p.flags & MPG123_PLAIN_ID3TEXT);
 	if(tt == comment)
