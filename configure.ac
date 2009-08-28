@@ -505,6 +505,19 @@ case $host in
   *-*-linux*|*-*-kfreebsd*-gnu)
     cpu_type="generic_fpu"
   ;;
+  i386-apple-darwin10*)
+    AC_MSG_CHECKING([if CPU type supports x86-64])
+    case `sysctl -n hw.optional.x86_64` in
+      1)
+        AC_MSG_RESULT([yes])
+        cpu_type="x86-64_all"
+      ;;
+      *)
+        AC_MSG_RESULT([no])
+        cpu_type="x86"
+      ;;
+    esac
+  ;;
   i386-apple-darwin*)
     cpu_type="x86"
   ;;
@@ -1171,7 +1184,7 @@ case $cpu_type in
       i386-apple-darwin8*)
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-read_only_relocs,suppress"
       ;;
-      i386-apple-darwin9*)
+      i386-apple-darwin9*|i386-apple-darwin10*)
         ADD_CFLAGS="$ADD_CFLAGS -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk"
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-syslibroot,/Developer/SDKs/MacOSX10.4u.sdk -Wl,-classic_linker -Wl,-read_only_relocs,suppress"
       ;;
@@ -1789,6 +1802,8 @@ AC_ARG_ENABLE(win32_unicode,
 		AC_MSG_RESULT([yes])
 	   fi
 	], [AC_MSG_RESULT([no])])
+
+AM_CONDITIONAL([WIN32_USE_UNICODE], [ test "x$win32_unicode" == xenabled])
 
 dnl ############## Final Output
 

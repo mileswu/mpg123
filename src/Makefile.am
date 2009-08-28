@@ -56,10 +56,14 @@ mpg123_SOURCES = \
 	term.h \
 	wav.c \
 	wavhead.h \
-	win32conv.c \
-	win32conv.h \
 	xfermem.c \
 	xfermem.h
+
+if WIN32_USE_UNICODE
+    mpg123_SOURCES += \
+    win32conv.c \
+	win32conv.h
+endif
 
 # That is not nice... but it is how I manage to get the dependency on output/alsa.o without error about .deps/output/alsa.Tpo .
 # Did I mention that recursive make sucks?

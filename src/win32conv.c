@@ -1,5 +1,4 @@
 #include "config.h"
-#if (WIN32 && WANT_WIN32_UNICODE)
 #define WIN32_LEAN_AND_MEAN 1
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +63,3 @@ win32_mbc2uni (const char *const mbptr, const wchar_t ** const wptr,
       return 0;
     }
 }
-
-#endif /* WIN32 && WANT_WIN32_UNICODE */
-
