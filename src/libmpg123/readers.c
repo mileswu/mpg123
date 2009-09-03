@@ -12,19 +12,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-/* For select(), I need select.h according to POSIX 2001, else: sys/time.h sys/types.h unistd.h */
-/* Including these here although it works without on my Linux install... curious about _why_. */
+/* For select(), I need select.h according to POSIX 2001, else: sys/time.h sys/types.h unistd.h (the latter two included in compat.h already). */
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
 #endif
 #ifdef _MSC_VER
 #include <io.h>
@@ -38,36 +31,6 @@ static ssize_t posix_read(int fd, void *buf, size_t count){ return read(fd, buf,
 static off_t   posix_lseek(int fd, off_t offset, int whence){ return lseek(fd, offset, whence); }
 
 static ssize_t plain_fullread(mpg123_handle *fr,unsigned char *buf, ssize_t count);
-
-#if defined (WANT_WIN32_UNICODE)
-#include <windows.h>
-#include <winnls.h>
-static int
-win32_mbc2uni_private (const char *const mbptr, const wchar_t ** const wptr,
-	       size_t * const buflen)
-{
-  size_t len;
-  wchar_t *buf;
-  int ret;
-  len = MultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, mbptr, -1, NULL, 0);
-  buf = calloc (len, sizeof (wchar_t));
-  debug2("win32_uni2mbc allocated %u bytes at %p", len, buf);
-  if (buf)
-    {
-      ret = MultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, mbptr, -1, buf, len);
-      *wptr = buf;
-      if (buflen)
-	*buflen = len * sizeof (wchar_t);
-      return ret;
-    }
-  else
-    {
-      if (buflen)
-	*buflen = 0;
-      return 0;
-    }
-}
-#endif
 
 #ifndef NO_FEEDER
 /* Bufferchain methods. */
@@ -1009,28 +972,6 @@ int open_feed(mpg123_handle *fr)
 #endif /* NO_FEEDER */
 }
 
-static int
-get_filehandle(const char *bs_filenam, int mode)
-{
-  int ret;
-  #if defined (WANT_WIN32_UNICODE)
-  const wchar_t *frag = NULL;
-
-  ret = win32_mbc2uni_private(bs_filenam, &frag, NULL);
-  if ((frag == NULL) || (ret == 0)) goto fallback; /* Fallback to plain open when ucs-2 conversion fails */
-  ret = _wopen(frag, mode); /*Try _wopen */
-  if (ret != -1 ) goto open_ok; /* msdn says -1 means failure */
-  fallback:
-  #endif
-  ret = open (bs_filenam, mode); /* Try plain old open(), if it fails, do nothing */
-
-  #if defined (WANT_WIN32_UNICODE)
-  open_ok:
-  free ((void *)frag); /* Freeing a NULL should be OK */
-  #endif
-  return ret;
-}
-
 int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 {
 	int filept_opened = 1;
@@ -1046,7 +987,7 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 	#ifndef O_BINARY
 	#define O_BINARY (0)
 	#endif
-	else if((filept = get_filehandle(bs_filenam, O_RDONLY|O_BINARY)) < 0) /* a plain old file to open... */
+	else if((filept = compat_open(bs_filenam, O_RDONLY|O_BINARY)) < 0) /* a plain old file to open... */
 	{
 		if(NOQUIET) error2("Cannot open file %s: %s", bs_filenam, strerror(errno));
 		fr->err = MPG123_BAD_FILE;
