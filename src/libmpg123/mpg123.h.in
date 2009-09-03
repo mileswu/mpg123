@@ -916,15 +916,15 @@ EXPORT int mpg123_replace_reader( mpg123_handle *mh,
 
 /* @} */
 
-/** Feature set available for query with mpg123_features.
+/** Feature set available for query with mpg123_feature.
 enum mpg123_feature_set
 {
-	 mpg123_features_win32_wopen = 0 /**< Using win32 wopen. */
-	,mpg123_features_64bit_files     /**< Using 64bit offsets for file. */
+	 mpg123_feature_win32_wopen = 0 /**< Using win32 wopen. */
+	,mpg123_feature_64bit_files     /**< Using 64bit offsets for file. */
 };
 
-/** Query libmpg123 features, 1 for success, 0 for unimplemented functions. */
-EXPORT int mpg123_features(const enum mpg123_feature_set key);
+/** Query libmpg123 feature, 1 for success, 0 for unimplemented functions. */
+EXPORT int mpg123_feature(const enum mpg123_feature_set key);
 
 #ifdef __cplusplus
 }
