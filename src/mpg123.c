@@ -11,7 +11,6 @@
 #include "mpg123.h"
 #include "local.h"
 #include "win32conv.h"
-#include "cleaner.h"
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -138,6 +137,14 @@ int OutputDescriptor;
 static int filept = -1;
 char *binpath; /* Path to myself. */
 
+/* File-global storage of command line arguments.
+   They may be needed for cleanup after charset conversion. */
+static char **argv = NULL;
+static int    argc = 0;
+
+/* Cleanup marker to know that we intiialized libmpg123 already. */
+static int cleanup_mpg123 = FALSE;
+
 void set_intflag()
 {
 	debug("set_intflag TRUE");
@@ -178,8 +185,14 @@ void safe_exit(int code)
 
 	if(mh != NULL) mpg123_delete(mh);
 
-	mpg123_exit();
+	if(cleanup_mpg123) mpg123_exit();
+
 	httpdata_free(&htd);
+
+#ifdef WIN32_WANT_UNICODE
+	win32_cmdline_free(argc, argv); /* This handles the premature argv == NULL, too. */
+#endif
+
 	/* It's ugly... but let's just fix this still-reachable memory chunk of static char*. */
 	split_dir_file("", &dummy, &dammy);
 	exit(code);
@@ -695,47 +708,29 @@ argv_cleanup(void *in)
 }
 #endif
 
-int main(int argcA, char *argvA[])
+int main(int sys_argc, char ** sys_argv)
 {
 	int result;
 	long parr;
 	char *fname;
 	int libpar = 0;
 	mpg123_pars *mp;
-	char **argv;
-    int argc;
-    atexit(exit_cleanup);
 #if !defined(WIN32) && !defined(GENERIC)
 	struct timeval start_time;
 #endif
+
 #if defined (WANT_WIN32_UNICODE)
-	wchar_t **argvW;
-	char *argvptr;
-	int argcounter;
-	argvW = CommandLineToArgvW (GetCommandLineW(), &argc);
-	argv = (char **)calloc(sizeof (char *), argc + 1);
-	if (!(argvW && argv))
+	if(win32_cmdline_utf8(&argc, &argv) != 0)
 	{
-		error("Malloc for argument processing failed\n");
-		abort();
+		error("Cannot convert command line to UTF8!");
+		safe_exit(76);
 	}
-	for (argcounter = 0; argcounter < argc; argcounter++)
-		{
-			win32_uni2mbc(argvW[argcounter], (const char **)&argvptr, NULL);
-			argv[argcounter] = argvptr;
-		}
-	LocalFree(argvW); /* We don't need it anymore */
-	if (register_dtor_cleanup (argv_cleanup, (void *)argv))
-	{
-		debug("Failed to register dtor\n");
-		abort();
-	}
-    debug("argv_cleanup registered!\n");
 #else
-	argv = argvA;
-	argc = argcA;
+	argv = sys_argv;
+	argc = sys_argc;
 #endif
-        /* Extract binary and path, take stuff before/after last / or \ . */
+
+	/* Extract binary and path, take stuff before/after last / or \ . */
 	if((prgName = strrchr(argv[0], '/')) || (prgName = strrchr(argv[0], '\\')))
 	{
 		/* There is some explicit path. */
@@ -755,13 +750,15 @@ int main(int argcA, char *argvA[])
 	if(result != MPG123_OK)
 	{
 		error1("Cannot initialize mpg123 library: %s", mpg123_plain_strerror(result));
-		exit(77);
+		safe_exit(77);
 	}
+	cleanup_mpg123 = TRUE;
+
 	mp = mpg123_new_pars(&result); /* This may get leaked on premature exit(), which is mainly a cosmetic issue... */
 	if(mp == NULL)
 	{
 		error1("Crap! Cannot get mpg123 parameters: %s", mpg123_plain_strerror(result));
-		safe_exit(77);
+		safe_exit(78);
 	}
 
 	/* get default values */

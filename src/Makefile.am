@@ -29,8 +29,6 @@ mpg123_SOURCES = \
 	buffer.h \
 	common.c \
 	common.h \
-	cleaner.c \
-	cleaner.h \
 	libmpg123/compat.c \
 	libmpg123/compat.h \
 	control_generic.c \
