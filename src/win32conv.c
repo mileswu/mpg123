@@ -5,12 +5,14 @@
 #include <wchar.h>
 #include <windows.h>
 #include <winnls.h>
+#include <shellapi.h>
 
 #include "mpg123.h"
 #include "debug.h"
+#include "compat.h"
 #include "win32conv.h"
 
-int win32_cmdline_utf8(int * argc, char *** argv);
+int win32_cmdline_utf8(int * argc, char *** argv)
 {
 	wchar_t **argv_wide;
 	char *argvptr;
