@@ -571,7 +571,7 @@ case $host in
   *-pc-cygwin*)
     cpu_type="generic_fpu"
   ;;
-  i[3-7]86-*-mingw32*)
+  i@<:@3-7@:>@86-*-mingw32*)
     LIBS="$LIBS"
     buffer=disabled
     cpu_type="x86"
