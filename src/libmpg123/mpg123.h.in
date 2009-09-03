@@ -161,6 +161,16 @@ EXPORT int mpg123_param(mpg123_handle *mh, enum mpg123_parms type, long value, d
  *  See the mpg123_parms enumeration for a list of available parameters. */
 EXPORT int mpg123_getparam(mpg123_handle *mh, enum mpg123_parms type, long *val, double *fval);
 
+/** Feature set available for query with mpg123_feature.
+enum mpg123_feature_set
+{
+	 mpg123_feature_utf8open = 0 /**< mpg123 expects path names to be given in UTF-8 encoding instead of plain native. */
+	,mpg123_feature_64bit_files  /**< Using 64bit offsets for file access. */
+};
+
+/** Query libmpg123 feature, 1 for success, 0 for unimplemented functions. */
+EXPORT int mpg123_feature(const enum mpg123_feature_set key);
+
 /* @} */
 
 
@@ -916,15 +926,6 @@ EXPORT int mpg123_replace_reader( mpg123_handle *mh,
 
 /* @} */
 
-/** Feature set available for query with mpg123_feature.
-enum mpg123_feature_set
-{
-	 mpg123_feature_win32_wopen = 0 /**< Using win32 wopen. */
-	,mpg123_feature_64bit_files     /**< Using 64bit offsets for file. */
-};
-
-/** Query libmpg123 feature, 1 for success, 0 for unimplemented functions. */
-EXPORT int mpg123_feature(const enum mpg123_feature_set key);
 
 #ifdef __cplusplus
 }
