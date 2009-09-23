@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="mpg123clr"
 	ProjectGUID="{99E8B20E-9C29-46BC-B766-A50F237D88BF}"
 	RootNamespace="mpg123clr"
@@ -63,7 +63,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="&quot;$(SolutionDir)\..\2008\$(ConfigurationName)\libmpg123.lib&quot;"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				AssemblyDebug="1"
@@ -141,7 +140,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="&quot;$(SolutionDir)\..\2008\$(ConfigurationName)\libmpg123.lib&quot;"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -174,6 +172,10 @@
 		</Configuration>
 	</Configurations>
 	<References>
+		<ProjectReference
+			ReferencedProjectIdentifier="{67CAA87B-7CF1-4F93-BB67-21C513F40803}"
+			RelativePathToProject="..\2008\libmpg123\libmpg123.vcproj"
+		/>
 	</References>
 	<Files>
 		<Filter
