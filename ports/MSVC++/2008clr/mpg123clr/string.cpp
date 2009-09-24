@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #include "StdAfx.h"
@@ -24,8 +25,8 @@
 mpg123clr::mpg123str::mpg123str(void)
 {
 	instanced = true;
-	sb = new mpg123_string;
-	Init();
+	sb = new ::mpg123_string;
+	mpg123_init_string();
 
 }
 
@@ -39,10 +40,10 @@ mpg123clr::mpg123str::mpg123str(mpg123_string* sb)
 mpg123clr::mpg123str::mpg123str(const char* str)
 {
 	instanced = true;
-	sb = new mpg123_string;
-	Init();
+	sb = new ::mpg123_string;
+	mpg123_init_string();
 
-	mpg123_set_string(sb, str);
+	::mpg123_set_string(sb, str);
 }
 
 // Destructor cleans up all resources
@@ -58,22 +59,22 @@ mpg123clr::mpg123str::~mpg123str(void)
 // Finalizer cleans up unmanaged resources
 mpg123clr::mpg123str::!mpg123str(void)
 {
-	if (instanced && (sb != NULL)) Free();
+	if (instanced && (sb != NULL)) mpg123_free_string();
 }
 
-int mpg123clr::mpg123str::Add(String ^ s)
+int mpg123clr::mpg123str::mpg123_add_string(String ^ s)
 {
-	return Add(s, 0, s->Length);
+	return mpg123_add_substring(s, 0, s->Length);
 }
 
-int mpg123clr::mpg123str::Add(String ^ s, int from, int count)
+int mpg123clr::mpg123str::mpg123_add_substring(String ^ s, int from, int count)
 {
 	// convert CLR string to CLI string
 	using namespace Runtime::InteropServices;
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(s->Substring(from, count))).ToPointer();
 
 	// add mpg123_string info
-	int ret = mpg123_add_string(sb, chars);
+	int ret = ::mpg123_add_string(sb, chars);
 
 	// free temporary memory
 	Marshal::FreeHGlobal(IntPtr((void*)chars));
@@ -81,39 +82,44 @@ int mpg123clr::mpg123str::Add(String ^ s, int from, int count)
 	return ret;
 }
 
-int mpg123clr::mpg123str::Copy(mpg123str^ to)
+int mpg123clr::mpg123str::mpg123_copy_string(mpg123str^ to)
 {
-	return mpg123_copy_string(sb, to->sb);
+	return ::mpg123_copy_string(sb, to->sb);
 }
 
-void mpg123clr::mpg123str::Free()
+void mpg123clr::mpg123str::mpg123_free_string()
 {
-	mpg123_free_string(sb);
+	::mpg123_free_string(sb);
 }
 
-int mpg123clr::mpg123str::Grow(int newSize)
+int mpg123clr::mpg123str::mpg123_grow_string(int newSize)
 {
-	return mpg123_grow_string(sb, newSize);
+	return ::mpg123_grow_string(sb, newSize);
 }
 
-void mpg123clr::mpg123str::Init()
+int mpg123clr::mpg123str::mpg123_resize_string(int newSize)
 {
-	mpg123_init_string(sb);
+	return ::mpg123_resize_string(sb, newSize);
 }
 
-int mpg123clr::mpg123str::Set(String ^ s)
+void mpg123clr::mpg123str::mpg123_init_string()
 {
-	return Set(s, 0, s->Length);
+	::mpg123_init_string(sb);
 }
 
-int mpg123clr::mpg123str::Set(String ^ s, int from, int count)
+int mpg123clr::mpg123str::mpg123_set_string(String ^ s)
+{
+	return mpg123_set_substring(s, 0, s->Length);
+}
+
+int mpg123clr::mpg123str::mpg123_set_substring(String ^ s, int from, int count)
 {
 	// convert CLR string to CLI string
 	using namespace Runtime::InteropServices;
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(s->Substring(from, count))).ToPointer();
 
 	// set mpg123_string info
-	int ret = mpg123_set_string(sb, chars);
+	int ret = ::mpg123_set_string(sb, chars);
 
 	// free temporary memory
 	Marshal::FreeHGlobal(IntPtr((void*)chars));
@@ -141,12 +147,12 @@ String^ mpg123clr::mpg123str::Text::get()
 	return Marshal::PtrToStringAnsi((IntPtr)sb->p, (int)strnlen(sb->p, sb->fill));
 }
 
-mpg123clr::mpg123str::text_encoding mpg123clr::mpg123str::enc_from_id3(unsigned char id3_enc_byte)
+mpg123clr::mpg123str::text_encoding mpg123clr::mpg123str::mpg123_enc_from_id3(unsigned char id3_enc_byte)
 {
-	return (mpg123clr::mpg123str::text_encoding) mpg123_enc_from_id3(id3_enc_byte);
+	return (mpg123clr::mpg123str::text_encoding) ::mpg123_enc_from_id3(id3_enc_byte);
 }
 
-int mpg123clr::mpg123str::store_utf8(text_encoding enc, const unsigned char *source, size_t source_size)
+int mpg123clr::mpg123str::mpg123_store_utf8(text_encoding enc, const unsigned char *source, size_t source_size)
 {
-	return mpg123_store_utf8(sb, (mpg123_text_encoding)enc, source, source_size);
+	return ::mpg123_store_utf8(sb, (mpg123_text_encoding)enc, source, source_size);
 }

@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #pragma once
@@ -150,28 +151,28 @@ namespace mpg123clr
 		/// See Destructors and Finalizers in Visual C++
 		~mpg123(void);
 
-		///<summary>Function to initialise the mpg123 library. 
+		///<summary>(mpg123_init) Function to initialise the mpg123 library. 
 		///<para>This function is not thread-safe. Call it exactly once per process, before any other (possibly threaded) work with the library.</para>
 		///<para>Returns MPG123_OK if successful, otherwise an error number.</para></summary>
 		///<returns>Returns MPG123_OK if successful, otherwise an error number.</returns>
-		static mpg123clr::mpg::ErrorCode __clrcall Init(void);
+		static mpg123clr::mpg::ErrorCode __clrcall mpg123_init(void);
 
-		///<summary>Function to close down the mpg123 library. 
+		///<summary>(mpg123_exit) Function to close down the mpg123 library. 
 		///<para>This function is not thread-safe. Call it exactly once per process, before any other (possibly threaded) work with the library.</para></summary>
-		static void __clrcall Exit(void);
+		static void __clrcall mpg123_exit(void);
+
+		///<summary>(mpg123_new) Obtain am mpg123 handle with designated decoder.
+		///<para>Returns MPG123_OK or applicable error code.</para>
+		///</summary>
+		///<param name="decoder">Name of the decoder to attach.</param>
+		///<returns>MPG123_OK or applicable error code.</returns>
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_new(String ^ decoder);
 
 		///<summary>Obtain an mpg123 handle with default decoder.
 		///<para>Returns MPG123_OK or applicable error code.</para>
 		///</summary>
 		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall New(void);
-
-		///<summary>Obtain am mpg123 handle with designated decoder.
-		///<para>Returns MPG123_OK or applicable error code.</para>
-		///</summary>
-		///<param name="decoder">Name of the decoder to attach.</param>
-		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall New(String ^ decoder);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_new(void);
 
 		///<summary>Obtain am mpg123 handle with default decoder.
 		///<para>Allows use of common parms object for multiple connections.</para> 
@@ -179,7 +180,7 @@ namespace mpg123clr
 		///</summary>
 		///<param name="par">Supplied Advanced parameter object.</param>
 		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall New(mpg123clr::advpars^ par);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_parnew(mpg123clr::advpars^ par);
 
 		///<summary>Obtain am mpg123 handle with designated decoder.
 		///<para>Allows use of common parms object for multiple connections.</para> 
@@ -188,13 +189,13 @@ namespace mpg123clr
 		///<param name="par">Supplied Advanced parameter object.</param>
 		///<param name="decoder">Name of the decoder to attach.</param>
 		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall New(mpg123clr::advpars^ par, String^ decoder);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_parnew(mpg123clr::advpars^ par, String^ decoder);
 
-		///<summary>Delete internal mpg123 handle. Equivalent to mpg123_delete.
+		///<summary>(mpg123_delete) Delete internal mpg123 handle.
 		///<para>The framework will dispose of the object when it goes out of scope - you do not need to explicitly call Delete().
 		/// However it is available to allow reuse of this object with successive handles - using New()/Delete() pairs.</para>
 		///</summary>
-		void __clrcall Delete(void);
+		void __clrcall mpg123_delete(void);
 
 	public:
 
@@ -205,7 +206,7 @@ namespace mpg123clr
 		///<param name="val">Integer value to apply.</param>
 		///<param name="fval">Real value to apply.</param>
 		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall SetParam(mpg123clr::mpg::parms type, int val, double fval);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_param(mpg123clr::mpg::parms type, int val, double fval);
 
 		///<summary>Get a specific parameter value.
 		///<para>Returns MPG123_OK or applicable error code.</para>
@@ -214,7 +215,7 @@ namespace mpg123clr
 		///<param name="val">Returned integer value.</param>
 		///<param name="fval">Returned real value.</param>
 		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall GetParam(mpg123clr::mpg::parms type, [Out] int% val, [Out] double% fval);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_getparam(mpg123clr::mpg::parms type, [Out] int% val, [Out] double% fval);
 
 #pragma endregion -Library and Handle Setup
 
@@ -242,18 +243,18 @@ namespace mpg123clr
 		///<summary>Get string describing what error has occured in the context of this object.
 		///<para>When a function operating on an mpg123 handle returns MPG123_ERR, you should use this function to check the actual reason.</para>
 		///<para>This function will catch mh == NULL and return the message for MPG123_BAD_HANDLE.</para>
-		///<para>Property returns text representation of last error (incl. None) encountered by this object.</para>
+		///<para>Returns text representation of last error (incl. None) encountered by this object.</para>
 		///</summary>
-		///<value>Text representation of last error (incl. None) encountered by this object.</value>
-		property String^ Error{String^ __clrcall get();}
+		///<returns>Text representation of last error (incl. None) encountered by this object.</returns>
+		String^ __clrcall mpg123_strerror(void);
 
 		///<summary>Get last error encountered in the context of this object.
 		///<para>When a function operating on an mpg123 handle returns MPG123_ERR, you should use this function to check the actual reason.</para>
 		///<para>This function will catch internal handle == NULL and return MPG123_BAD_HANDLE.</para>
-		///<para>Property returns ErrorCode for last encountered error.</para>
+		///<para>Returns ErrorCode for last encountered error.</para>
 		///</summary>
-		///<value>The plain errcode intead of a string of last error (incl. None) encountered by this object.</value>
-		property mpg123clr::mpg::ErrorCode ErrorCode{mpg123clr::mpg::ErrorCode __clrcall get();}
+		///<returns>The plain errcode intead of a string of last error (incl. None) encountered by this object.</returns>
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_errcode(void);
 
 #pragma endregion -Error Handling
 
@@ -271,29 +272,29 @@ namespace mpg123clr
 		///<para>Retuns a string array of generally available decoder names (plain 8bit ASCII).</para>
 		///</summary>
 		///<returns>A string array of generally available decoder names (plain 8bit ASCII).</returns>
-		array<String^>^ __clrcall Decoders(void);
+		array<String^>^ __clrcall mpg123_decoders(void);
 
 		///<summary>Obtain list of the decoders supported by the CPU (plain 8bit ASCII).
 		///<para>Returns a string array of the decoders supported by the CPU (plain 8bit ASCII).</para>
 		///</summary>
 		///<returns>A string array of the decoders supported by the CPU (plain 8bit ASCII).</returns>
-		array<String^>^ __clrcall SupportedDecoders(void);
+		array<String^>^ __clrcall mpg123_supported_decoders(void);
 
 		///<summary>Select the decoder to use.
 		///<para>Returns MPG123_OK or applicable error code.</para>
 		///</summary>
 		///<param name="name">Name of the required decoder. (should be in SupportedDecoders list)</param>
 		///<returns>MPG123_OK or applicable error code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall SetDecoder(String^ name);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_decoder(String^ name);
 
 		///<summary>Get the currently active decoder engine name.
 		///<para>The active decoder engine can vary depening on output constraints, mostly non-resampling, integer output is accelerated via 3DNow and Co. 
 		/// but for other modes a fallback engine kicks in.</para>
 		///<para>Note that this can return a decoder that is ony active in the hidden and not available as decoder choice from the outside.</para>
-		///<para>Property returns the decoder name or String.Empty on error.</para>
+		///<para>Returns the decoder name or String.Empty on error.</para>
 		///</summary>
-		///<value>The decoder name or String.Empty on error.</value>
-		property String^ Decoder{String^ __clrcall get();}
+		///<returns>The decoder name or String.Empty on error.</returns>
+		String^ __clrcall mpg123_current_decoder(void);
 
 #pragma endregion -Decoder Selection
 
@@ -309,26 +310,30 @@ namespace mpg123clr
 		///<summary>Get an array of supported standard sample rates.
 		///<para>These are possible native sample rates of MPEG audio files.
 		/// You can still force mpg123 to resample to a different one, but by default you will only get audio in one of these samplings.</para>
-		///<para>Property returns array of sample rates.</para>
+		///<para>Returns array of sample rates.</para>
 		///</summary>
-		///<value>Returns array of sample rates.</value>
-		property array<long>^ Rates{array<long>^ __clrcall get();}
+		///<returns>An array of sample rates.</returns>
+		array<long>^ __clrcall mpg123_rates(void);
 
 		///<summary>An array of supported audio encodings.
 		///<para>An audio encoding is one of the fully qualified members of mpg.enc</para>
-		///<para>Property returns array of supported Encodings.</para>
+		///<para>Returns array of supported Encodings.</para>
 		///</summary>
-		///<value>Returns array of supported Encodings.</value>
-		property array<mpg123clr::mpg::enc>^ Encodings{array<mpg123clr::mpg::enc>^ __clrcall get();}
+		///<returns>An array of supported Encodings.</returns>
+		array<mpg123clr::mpg::enc>^ __clrcall mpg123_encodings(void);
 
-		///<summary>Configure acceptable output formats.
-		///<para>Use SetFormat(false) to clear default parameters prior to applying specific settings.</para>
+		///<summary>Configure mpg123 to accept no output format at all.
+		///<para>Use to clear default parameters prior to applying specific settings.</para>
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
-		///<param name="all">True = all formats (equiv to mpg123_fmt_all), False = no formats (equiv to mpg123_fmt_none)</param>
 		///<returns>MPG123 error codes.</returns>
-		// Waiting for optional parameters
-		mpg123clr::mpg::ErrorCode __clrcall SetFormat(bool all);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_format_none(void);
+
+		///<summary>Configure mpg123 to accept all formats including any custom formats - this is the default.
+		///<para>Returns MPG123 error codes.</para>
+		///</summary>
+		///<returns>MPG123 error codes.</returns>
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_format_all(void);
 
 		///<summary>Configure detailed output formats.
 		///<para>Returns MPG123 error codes.</para>
@@ -337,7 +342,7 @@ namespace mpg123clr
 		///<param name="channels">Combination of channelcount.stereo and channelcount.mono</param>
 		///<param name="encodings">Combination of accepted encodings for rate and channels e.g. enc.enc_signed16 | enc.enc_ulaw_8 (or 0 for none)</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall SetFormat(int rate, mpg123clr::mpg::channelcount channels, mpg123clr::mpg::enc encodings);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_format(int rate, mpg123clr::mpg::channelcount channels, mpg123clr::mpg::enc encodings);
 
 		///<summary>Get available support for supplied rate and encoding.
 		///<para>Returns 0 for no support (includes invalid parameters), or combination of channelcount.stereo and channelcount.mono.</para>
@@ -345,7 +350,7 @@ namespace mpg123clr
 		///<param name="rate">Sample rate (Hertz)</param>
 		///<param name="encoding">Combination of accepted encodings for rate and channels e.g. enc.enc_signed16 | enc.enc_ulaw_8 (or 0 for none)</param>
 		///<returns>Returns 0 for no support (includes invalid parameters), or combination of channelcount.stereo and channelcount.mono.</returns>
-		mpg123clr::mpg::channelcount __clrcall FormatSupport(int rate, mpg123clr::mpg::enc encoding);
+		mpg123clr::mpg::channelcount __clrcall mpg123_format_support(int rate, mpg123clr::mpg::enc encoding);
 
 		///<summary>Get current output format.
 		///<para>Returns MPG123 error codes.</para>
@@ -354,7 +359,7 @@ namespace mpg123clr
 		///<param name="channels">Returns combination of channelcount.stereo and channelcount.mono</param>
 		///<param name="encoding">Returns combination of accepted encodings for rate and channels e.g. enc.enc_signed16 | enc.enc_ulaw_8 (or 0 for none)</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall GetFormat([Out] int% rate, [Out] mpg123clr::mpg::channelcount% channels, [Out] mpg123clr::mpg::enc% encoding);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_getformat([Out] int% rate, [Out] mpg123clr::mpg::channelcount% channels, [Out] mpg123clr::mpg::enc% encoding);
 
 #pragma endregion -Output Audio Format
 
@@ -377,7 +382,7 @@ namespace mpg123clr
 		///<param name="path">ANSI file path. Accepts ANSI path characters. For Unicode paths use tOpen.
 		/// NOTE: can be used in Unicode environment as long as wide-char codepages are avoided.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Open(String^ path);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_open(String^ path);
 
 		///<summary>Use a previously obtained file descriptor as the bitstream input.
 		///<para>NOTE: Close() will NOT close a file opened with this method.</para>
@@ -385,20 +390,20 @@ namespace mpg123clr
 		///</summary>
 		///<param name="fd">File Descriptor of pre required file.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Open(int fd);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_open_fd(int fd);
 
 		///<summary>Open a new bitstream and prepare for direct feeding.
 		///<para>This works together with Decode(); you are responsible for reading and feeding the input bitstream.</para>
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Open(void);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_open_feed(void);
 
 		///<summary>Closes the source, if the library opened it.
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Close(void);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_close(void);
 
 		///<summary>Open and prepare to decode the file specified by UNICODE (wide-character) filename.
 		///<para>This does not open HTTP urls; the mpg library contains no networking code.
@@ -408,13 +413,13 @@ namespace mpg123clr
 		///</summary>
 		///<param name="path">UNICODE wide-character file path. See also ANSI Open(path).</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall tOpen(String^ path);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_topen(String^ path);
 
 		///<summary>Closes the file opened with tOpen.
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall tClose(void);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_tclose(void);
 
 		///<summary>Read from stream and decode.
 		///<para>Equivalent to mpg123_read(,,,)</para>
@@ -423,7 +428,7 @@ namespace mpg123clr
 		///<param name="buffer">Supplied buffer in which to return audio output data.</param>
 		///<param name="count">Returns number of actual audio output bytes returned.</param>
 		///<returns>MPG123 error codes. (watch out for MPG123_DONE and friends!)</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Read(array<unsigned char>^ buffer, [Out] size_t% count);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_read(array<unsigned char>^ buffer, [Out] size_t% count);
 
 		///<summary>Read from stream and decode.
 		///<para>Equivalent to mpg123_read(,,,) but modified to better support CLR Stream.Read</para>
@@ -434,7 +439,7 @@ namespace mpg123clr
 		///<param name="size">Maximum number of bytes to return.</param>
 		///<param name="count">Returns number of actual audio output bytes returned.</param>
 		///<returns>MPG123 error codes. (watch out for MPG123_DONE and friends!)</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Read(array<unsigned char>^ buffer, size_t offset, size_t size, [Out] size_t% count);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_read(array<unsigned char>^ buffer, size_t offset, size_t size, [Out] size_t% count);
 
 		///<summary>Feed data for a stream that has been opened with Open() - (mpg123_open_feed).
 		///<para>Equivalent to mpg123_feed(...), it's give and take: You provide the bytestream, mpg123 gives you the decoded samples.</para>
@@ -443,7 +448,7 @@ namespace mpg123clr
 		///<param name="inbuffer">Input buffer.</param>
 		///<param name="size">Number of input bytes.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Feed(array<unsigned char>^ inbuffer, size_t size);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_feed(array<unsigned char>^ inbuffer, size_t size);
 
 		///<summary>Decode MPEG Audio from inmemory to outmemory.
 		///<para>This is very close to a drop-in replacement for old mpglib.</para>
@@ -460,7 +465,7 @@ namespace mpg123clr
 		///<param name="outsize">Size in bytes of buffer.</param>
 		///<param name="count">Returns number of actual audio output bytes returned.</param>
 		///<returns>MPG123 error codes. (watch out especially for MPG123_NEED_MORE)</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Decode(array<unsigned char>^ inbuffer, size_t insize, array<unsigned char>^ outbuffer, size_t outsize, [Out] size_t% count);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_decode(array<unsigned char>^ inbuffer, size_t insize, array<unsigned char>^ outbuffer, size_t outsize, [Out] size_t% count);
 
 		///<summary>Decode next MPEG frame to internal buffer or read a frame and return after setting a new format.
 		///<para>Returns MPG123 error codes. (watch out for MPG123_NEW_FORMAT)</para>
@@ -469,7 +474,7 @@ namespace mpg123clr
 		///<param name="audio">Returns pointer to internal buffer to read the decoded audio from. (Can be NULL for NEW_FORMAT)</param>
 		///<param name="count">Returns number of actual audio output bytes ready in the buffer.</param>
 		///<returns>MPG123 error codes. (watch out for MPG123_NEW_FORMAT)</returns>
-		mpg123clr::mpg::ErrorCode __clrcall DecodeFrame([Out] off_t% num, [Out] IntPtr% audio, [Out] size_t% count);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_decode_frame([Out] off_t% num, [Out] IntPtr% audio, [Out] size_t% count);
 
 #pragma endregion -File Input and Decoding
 
@@ -498,37 +503,19 @@ namespace mpg123clr
 		///<para>Returns the current sample position.</para>
 		///</summary>
 		///<returns>The current sample position.</returns>
-		long long __clrcall Tell();
-
-		///<summary>Get the current position in samples. On the next read, you'd get that sample. Equivalent to Tell(). 
-		///<para>Property returns the current sample position.</para>
-		///</summary>
-		///<value>The current sample position.</value>
-		property long long Position{long long __clrcall get();}
+		long long __clrcall mpg123_tell();
 
 		///<summary>Get the frame number that the next read will give you data from.
 		///<para>Returns the current frame number position.</para>
 		///</summary>
 		///<returns>The current frame number position.</returns>
-		long long __clrcall TellFrame();
-
-		///<summary>Get the frame number that the next read will give you data from. Equivalent to TellFrame(). 
-		///<para>Property returns the current frame number position.</para>
-		///</summary>
-		///<value>The current frame number position.</value>
-		property long long Frame{long long __clrcall get();}
+		long long __clrcall mpg123_tellframe();
 
 		///<summary>Get the current byte offset in the input stream.
 		///<para>Returns the current byte offset.</para>
 		///</summary>
 		///<returns>The current byte offset.</returns>
-		long long __clrcall TellStream();
-
-		///<summary>Get the current byte offset in the input stream. Equivalent to TellStream(). 
-		///<para>Property returns the current byte offset.</para>
-		///</summary>
-		///<value>The current byte offset.</value>
-		property long long StreamPosition{long long __clrcall get();}
+		long long __clrcall mpg123_tell_stream();
 
 		///<summary>Seek to a desired sample offset.
 		///<para>Returns the resulting offset >= 0 or error/message code.</para>
@@ -536,7 +523,7 @@ namespace mpg123clr
 		///<param name="offset">The distance to move.</param>
 		///<param name="origin">(whence) The relative location to move from.(SeekOrigin.Begin, SeekOrigin.Current, SeekOrigin.End)</param>
 		///<returns>Returns the resulting offset >= 0 or error/message code.</returns>
-		long long __clrcall Seek(long long offset, SeekOrigin origin);
+		long long __clrcall mpg123_seek(long long offset, SeekOrigin origin);
 
 		///<summary>Seek to a desired sample offset in data feeding mode.
 		///<para>This just prepares things to be right only if you ensure that the next chunk of input data will be from input_offset byte position.</para>
@@ -546,7 +533,7 @@ namespace mpg123clr
 		///<param name="origin">(whence) The relative location to move from.(SeekOrigin.Begin, SeekOrigin.Current, SeekOrigin.End)</param>
 		///<param name="input_offset">Returns the position it expects to be at the next time data is fed to Decode().</param>
 		///<returns>Returns the resulting offset >= 0 or error/message code.</returns>
-		long long __clrcall Seek(long long offset, SeekOrigin origin, [Out] long long% input_offset);
+		long long __clrcall mpg123_feedseek(long long offset, SeekOrigin origin, [Out] long long% input_offset);
 
 		///<summary>Seek to a desired MPEG frame index.
 		///<para>Returns the resulting offset >= 0 or error/message code.</para>
@@ -554,7 +541,7 @@ namespace mpg123clr
 		///<param name="frameoffset">The numberof frames to move.</param>
 		///<param name="origin">(whence) The relative location to move from.(SEEK_SET, SEEK_CUR or SEEK_END)</param>
 		///<returns>Returns the resulting offset >= 0 or error/message code.</returns>
-		long long __clrcall SeekFrame(long long frameoffset, SeekOrigin origin);
+		long long __clrcall mpg123_seek_frame(long long frameoffset, SeekOrigin origin);
 
 		///<summary>Seek to an absolute MPEG frame offset corresponding to an offset in seconds.
 		///<para>This assumes that the samples per frame do not change in the file/stream, which is a good assumption for any sane file/stream only.</para>
@@ -562,7 +549,7 @@ namespace mpg123clr
 		///</summary>
 		///<param name="seconds">The absolute time offset required.</param>
 		///<returns>Returns the resulting offset >= 0 or error/message code.</returns>
-		long long __clrcall TimeFrame(double seconds);
+		long long __clrcall mpg123_timeframe(double seconds);
 
 		///<summary>Get a copy of the frame index table. Somewhat equivalent to mpg123_index(,,).
 		///<para>The library requests not to modify table values. Since this is a copy, modification is meaningless - it has no effect on library routines.</para>
@@ -572,7 +559,7 @@ namespace mpg123clr
 		///<param name="index">Returns array of source file position offsets (not output samples). Length of array is equivalent to mpg123_index "fill" parameter.</param>
 		///<param name="step">Returns number of MPEG frames per index entry.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall FrameIndex([Out] array<long long>^% index, [Out] long long% step);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_index([Out] array<long long>^% index, [Out] long long% step);
 
 		///<summary>Get a pointer to the frame index table. Equivalent to mpg123_index(,,).
 		///<para>Do not modify table values unless you really know what you are doing!</para>
@@ -583,7 +570,7 @@ namespace mpg123clr
 		///<param name="step">Returns number of MPEG frames per index entry.</param>
 		///<param name="fill">Returns number of recorded index offsets; size of the array.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall FrameIndex([Out] IntPtr% indexarr, [Out] long long% step, [Out] size_t% fill);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_index([Out] IntPtr% indexarr, [Out] long long% step, [Out] size_t% fill);
 
 		///<summary>Get information about current and remaining frames/seconds. Equivalent to mpg123_position(,,,,,,).
 		///<para>WARNING: This function is there because of special usage by standalone mpg123 and may be removed in the final version of libmpg123!</para>
@@ -600,7 +587,7 @@ namespace mpg123clr
 		///<param name="currentseconds">Returns projected current seconds.</param>
 		///<param name="secondsleft">Returns projected seconds remaining.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall FrameInfo(long long frameoffset, long long bufferedbytes, 
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_position(long long frameoffset, long long bufferedbytes, 
 			[Out] long long% currentframe, [Out] long long% framesleft,
 			[Out] double% currentseconds, [Out] double% secondsleft);
 
@@ -620,7 +607,7 @@ namespace mpg123clr
 		///<param name ="band">The equaliser band to change (from 0 to 31)</param>
 		///<param name="fval">The (linear) adjustment factor to be applied.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Equilization(mpg123clr::mpg::channels channel, int band, double fval);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_eq(mpg123clr::mpg::channels channel, int band, double fval);
 
 		///<summary>Get the 32 Band Audio Equalizer settings.
 		///<para>Rreturns the (linear) adjustment factor.</para>
@@ -628,27 +615,27 @@ namespace mpg123clr
 		///<param name="channel">Can be MPG123_LEFT, MPG123_RIGHT or MPG123_LEFT|MPG123_RIGHT for (arithmetic mean of) both. (enum mpg.channels)</param>
 		///<param name="band">The equaliser band to get (from 0 to 31)</param>
 		///<return>The (linear) adjustment factor.</return>
-		double __clrcall GetEquilization(mpg123clr::mpg::channels channel, int band);
+		double __clrcall mpg123_geteq(mpg123clr::mpg::channels channel, int band);
 
 		///<summary>Reset the 32 Band Audio Equalizer settings to flat.
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall ResetEquilization();
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_reset_eq();
 
 		///<summary>Set the absolute output volume including the RVA setting.
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<param name="volume">The (linear) adjustment factor to be applied, volume &lt; 0 just applies (a possibly changed) RVA setting.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Volume(double volume);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_volume(double volume);
 
 		///<summary>Adjust output volume including the RVA setting.
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<param name="change">The (linear) adjustment factor to be applied.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall ChangeVolume(double change);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_volume_change(double change);
 
 		///<summary>Get the current volume setting, the actual value due to RVA, and the RVA adjustment itself.
 		///<para>Returns MPG123 error codes.</para>
@@ -657,7 +644,7 @@ namespace mpg123clr
 		///<param name="really">Returns the actual linear volume factor due to RVA. (not percent)</param>
 		///<param name="rva_db">Returns the RVA adjustment in decibels.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall GetVolume([Out] double% basevol, [Out] double% really, [Out] double% rva_db);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_getvolume([Out] double% basevol, [Out] double% really, [Out] double% rva_db);
 
 #pragma endregion -Volume and Equalizer
 
@@ -689,7 +676,7 @@ namespace mpg123clr
 		///</summary>
 		///<param name="finfo">Returns the frame information.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Info([Out]mpeg_frameinfo^% finfo);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_info([Out]mpeg_frameinfo^% finfo);
 
 		///<summary>Get the frame information about the MPEG audio bitstream.
 		///<para>SafeInfo uses "safe" managed structures but is somewhat slower than Info().
@@ -698,13 +685,13 @@ namespace mpg123clr
 		///</summary>
 		///<param name="finfo">Returns the frame information.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall SafeInfo([Out]mpeg_frameinfo^% finfo);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_safeinfo([Out]mpeg_frameinfo^% finfo);
 
 		///<summary>Get the safe output buffer size for all cases (when you want to replace the internal buffer).
 		///<para>Returns safe buffer size.</para>
 		///</summary>
 		///<returns>Safe buffer size.</returns>
-		static size_t __clrcall SafeBufferSize(void);
+		static size_t __clrcall mpg123_safe_buffer(void);
 
 		///<summary>Make a full parsing scan of each frame in the file. 
 		///<para>ID3 tags are found. An accurate length value is stored. Seek index will be filled. 
@@ -713,13 +700,13 @@ namespace mpg123clr
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall Scan(void);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_scan(void);
 
 		///<summary>Return, if possible, the full (expected) length of current track in samples.
 		///<para>Returns length (>= 0) or MPG123_ERR if there is no length guess possible. (Multiply by BlockAlign for byte-count)</para>
 		///</summary>
 		///<returns>Length (>= 0) or MPG123_ERR if there is no length guess possible. (Multiply by BlockAlign for byte-count)</returns>
-		long long __clrcall Length(void);
+		long long __clrcall mpg123_length(void);
 
 		///<summary>Override the value for file size in bytes.
 		///<para>Useful for getting sensible track length values in feed mode or for HTTP streams.</para>
@@ -727,19 +714,19 @@ namespace mpg123clr
 		///</summary>
 		///<param name="size">Size to set.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall SetFilesize(long long size);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_set_filesize(long long size);
 
 		///<summary>Time Per Frame (seconds).
 		///<para>Returns time per frame in seconds ( &lt; 0 is error ).</para>
 		///</summary>
 		///<returns>Time per frame in seconds ( &lt; 0 is error ).</returns>
-		double __clrcall Tpf(void);
+		double __clrcall mpg123_tpf(void);
 
 		///<summary>Get and reset the clip count.
 		///<para>Returns the number of previously encountered clips.</para>
 		///</summary>
 		///<returns>The number of previously encountered clips.</returns>
-		long __clrcall Clip();
+		long __clrcall mpg123_clip();
 
 		///<summary>Get various current decoder/stream state information.
 		///<para>Returns MPG123 error codes.</para>
@@ -748,7 +735,7 @@ namespace mpg123clr
 		///<param name="val">Returns integer values.</param>
 		///<param name="fval">Returns real values.</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall GetState(mpg123clr::mpg::state key, [Out] int% val, [Out] double% fval);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_getstate(mpg123clr::mpg::state key, [Out] int% val, [Out] double% fval);
 
 #pragma endregion -Status and Information
 
@@ -768,7 +755,7 @@ namespace mpg123clr
 		///<para>Returns a combination of flags. (enum id3.id3check)</para>
 		///</summary>
 		///<returns>Returns a combination of flags. (enum id3.id3check)</returns>
-		mpg123clr::id3::id3check __clrcall MetaCheck(void); /* On error (no valid handle) just 0 is returned. */
+		mpg123clr::id3::id3check __clrcall mpg123_meta_check(void); /* On error (no valid handle) just 0 is returned. */
 
 		///<summary>Get ID3 data. Data structures may change on any (next) read/decode function call.
 		///<para>v1 and/or v2 may be Empty if no corresponding data exists.</para>
@@ -777,7 +764,7 @@ namespace mpg123clr
 		///<param name="v1">Returns mpg123id3v1 data structure containing ID3v1 data (usually from end of file).</param>
 		///<param name="v2">Returns mpg123id3v2 data structure containing ID3v2 data (usually - but not restricted to - from beginning of file).</param>
 		///<returns>Returns MPG123_OK or MPG123_ERR.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall ID3([Out]id3::mpg123id3v1^% v1, [Out]id3::mpg123id3v2^% v2);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_id3([Out]id3::mpg123id3v1^% v1, [Out]id3::mpg123id3v2^% v2);
 
 		///<summary>Get ICY meta data. Data structure may change on any (next) read/decode function call.
 		///<para>Icy_meta may be null if no corresponding data exists.</para>
@@ -785,14 +772,14 @@ namespace mpg123clr
 		///</summary>
 		///<param name="icy_meta">Returns ICY meta data (windows-1252 encoded).</param>
 		///<returns>Returns MPG123_OK or MPG123_ERR.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall ICY([Out]IntPtr% icy_meta); /* same for ICY meta string */
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_icy([Out]IntPtr% icy_meta); /* same for ICY meta string */
 
 		///<summary>Decode from windows-1252 (the encoding ICY metainfo used) to UTF-8.
 		///<para>Returns byte array of utf8 encoded data.</para>
 		///</summary>
 		///<param name="icy_text">ICY meta data in ICY encoding.</param>
 		///<returns>Returns byte array of utf8 encoded data.</returns>
-		static array<unsigned char>^ __clrcall Icy2Utf8(IntPtr icy_text);
+		static array<unsigned char>^ __clrcall mpg123_icy2utf8(IntPtr icy_text);
 
 #pragma endregion -Metadata Handling
 
@@ -829,14 +816,14 @@ namespace mpg123clr
 		///<param name="data">Pointer to supplied buffer.</param>
 		///<param name="size">Size of supplied buffer.</param>
 		///<returns>MPG123_OK or MPG123_ERR code.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall ReplaceBuffer(IntPtr data, size_t size);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_replace_buffer(IntPtr data, size_t size);
 
 		///<summary>The max size of one frame's decoded output with current settings.
 		///<para>Use that to determine an appropriate minimum buffer size for decoding one frame.</para>
 		///<para>Returns size of required buffer.</para>
 		///</summary>
 		///<returns>Size of required buffer.</returns>
-		size_t __clrcall OutBlock(void);
+		size_t __clrcall mpg123_outblock(void);
 
 		///<summary>Replace low-level stream access functions; read and lseek as known in POSIX.
 		///<para>You can use this to make any fancy file opening/closing yourself, 
@@ -847,7 +834,7 @@ namespace mpg123clr
 		///<param name="r_read">Delegate for read function, null for default.</param>
 		///<param name="r_lseek">Delegate for lseek function, null for default.</param>
 		///<returns>Always MPG123_OK.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall ReplaceReader(ReadDelegate^ r_read, SeekDelegate^ r_lseek);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_replace_reader(ReadDelegate^ r_read, SeekDelegate^ r_lseek);
 
 	private:
 

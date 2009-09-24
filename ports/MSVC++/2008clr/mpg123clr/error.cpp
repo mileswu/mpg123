@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #include "StdAfx.h"
@@ -37,10 +38,11 @@ mpg123clr::mpg123error::~mpg123error(void)
 // Finalizer cleans up unmanaged resources
 mpg123clr::mpg123error::!mpg123error(void)
 {
+	// none!
 }
 
-String^ mpg123clr::mpg123error::Description(mpg123clr::mpg::ErrorCode errcode)
+String^ mpg123clr::mpg123error::mpg123_plain_strerror(mpg123clr::mpg::ErrorCode errcode)
 {
-	return gcnew String(mpg123_plain_strerror((int)errcode));
+	return gcnew String(::mpg123_plain_strerror((int)errcode));
 }
 

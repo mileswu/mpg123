@@ -13,6 +13,9 @@
   You just jet invalid results on invalid operations... */
 /* Ditto for mpg123clr (MB) */
 
+/*
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+*/
 
 using System;
 using System.Collections.Generic;
@@ -40,27 +43,27 @@ namespace scanclr
 
             mpg123clr.mpg.ErrorCode err;
 
-            err = mpg123.Init();
+            err = mpg123.mpg123_init();
 
             mpg123 mp = new mpg123();
-            err = mp.New();
+            err = mp.mpg123_new();
 
-            mp.SetParam(mpg123clr.mpg.parms.resync_limit, -1, 0);
+            mp.mpg123_param(mpg123clr.mpg.parms.resync_limit, -1, 0);
 
             foreach (string name in args)
             {
 
-                err = mp.Open(name);
+                err = mp.mpg123_open(name);
 
                 long a, b;
 
-                a = mp.Length();
+                a = mp.mpg123_length();
 
-                mp.Scan();
+                mp.mpg123_scan();
 
-                b = mp.Length();
+                b = mp.mpg123_length();
 
-                mp.Close();
+                mp.mpg123_close();
 
                 Console.WriteLine(string.Format("File {0}: estimated {1} vs. scanned {2}", name, a, b));
             }
@@ -70,7 +73,7 @@ namespace scanclr
 
             mp.Dispose();
 
-            mpg123.Exit();
+            mpg123.mpg123_exit();
         }
     }
 }

@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #include "StdAfx.h"
@@ -23,7 +24,7 @@
 mpg123clr::advpars::advpars(int% error)
 {
 	pin_ptr<int> err = &error;
-	mp = mpg123_new_pars(err);
+	mp = ::mpg123_new_pars(err);
 }
 
 mpg123clr::advpars::~advpars(void)
@@ -39,40 +40,43 @@ mpg123clr::advpars::!advpars(void)
 {
 	if (mp != NULL) 
 	{
-		mpg123_delete_pars(mp);
+		::mpg123_delete_pars(mp);
 		mp = NULL;
 	}
 }
 
-mpg123clr::mpg::ErrorCode mpg123clr::advpars::SetFormat(bool all)
+mpg123clr::mpg::ErrorCode mpg123clr::advpars::mpg123_fmt_none(void)
 {
-	if (all) return (mpg123clr::mpg::ErrorCode) mpg123_fmt_all(mp);
-
-	return (mpg123clr::mpg::ErrorCode) mpg123_fmt_none(mp);
+	return (mpg123clr::mpg::ErrorCode) ::mpg123_fmt_none(mp);
 }
 
-mpg123clr::mpg::ErrorCode mpg123clr::advpars::SetFormat(int rate, mpg123clr::mpg::channelcount channels, int encodings)
+mpg123clr::mpg::ErrorCode mpg123clr::advpars::mpg123_fmt_all(void)
 {
-	return (mpg123clr::mpg::ErrorCode) mpg123_fmt(mp, rate, (int)channels, encodings);
+	return (mpg123clr::mpg::ErrorCode) ::mpg123_fmt_all(mp);
 }
 
-mpg123clr::mpg::channelcount mpg123clr::advpars::FormatSupport(int rate, int encodings)
+mpg123clr::mpg::ErrorCode mpg123clr::advpars::mpg123_fmt(int rate, mpg123clr::mpg::channelcount channels, int encodings)
 {
-	return (mpg123clr::mpg::channelcount) mpg123_fmt_support(mp, rate, encodings);
+	return (mpg123clr::mpg::ErrorCode) ::mpg123_fmt(mp, rate, (int)channels, encodings);
 }
 
-mpg123clr::mpg::ErrorCode mpg123clr::advpars::Set(mpg123clr::mpg::parms type, int val, double fval)
+mpg123clr::mpg::channelcount mpg123clr::advpars::mpg123_fmt_support(int rate, int encodings)
 {
-	return (mpg123clr::mpg::ErrorCode) mpg123_par(mp, (mpg123_parms) type, val, fval);
+	return (mpg123clr::mpg::channelcount) ::mpg123_fmt_support(mp, rate, encodings);
 }
 
-mpg123clr::mpg::ErrorCode mpg123clr::advpars::Get(mpg123clr::mpg::parms type, [Out] int% val, [Out] double% fval)
+mpg123clr::mpg::ErrorCode mpg123clr::advpars::mpg123_par(mpg123clr::mpg::parms type, int val, double fval)
+{
+	return (mpg123clr::mpg::ErrorCode) ::mpg123_par(mp, (mpg123_parms) type, val, fval);
+}
+
+mpg123clr::mpg::ErrorCode mpg123clr::advpars::mpg123_getpar(mpg123clr::mpg::parms type, [Out] int% val, [Out] double% fval)
 {
 	// Avoid need for local intermediary variables
 	pin_ptr<int> _val = &val;
 	pin_ptr<double> _fval = &fval;
 
-	return (mpg123clr::mpg::ErrorCode) mpg123_getpar(mp, (mpg123_parms) type, (long*)_val, _fval);
+	return (mpg123clr::mpg::ErrorCode) ::mpg123_getpar(mp, (mpg123_parms) type, (long*)_val, _fval);
 }
 
 

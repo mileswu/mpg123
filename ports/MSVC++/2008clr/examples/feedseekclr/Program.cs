@@ -11,6 +11,10 @@
         eg: byte[]/ASCII text, Marshal.Copy, static fields, lots of casts etc.
 */
 
+/*
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+*/
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -133,7 +137,7 @@ namespace feedseekclr
             const long INBUFF = 16384 * 2 * 2;
 
             int ret;
-            int state;
+            mpg123clr.mpg.ErrorCode state;
             long inoffset,inc = 0;
             long outc = 0;
             byte[] buf = new byte[INBUFF];
@@ -149,30 +153,30 @@ namespace feedseekclr
 
             mpg123clr.mpg.ErrorCode err;
 
-            err = mpg123.Init();
+            err = mpg123.mpg123_init();
 
             mpg123 mp = new mpg123();
-            err = mp.New();
+            err = mp.mpg123_new();
 
             if (err != mpg123clr.mpg.ErrorCode.ok)
             {
-                Console.WriteLine("Unable to create mpg123 handle: " + mpg123error.Description(err));
+                Console.WriteLine("Unable to create mpg123 handle: " + mpg123error.mpg123_plain_strerror(err));
                 Console.WriteLine("Press any key to exit:");
                 while (Console.Read() == 0) ;
 
                 return;
             }
 
-            mp.SetParam(mpg123clr.mpg.parms.verbose, 4, 0);
+            mp.mpg123_param(mpg123clr.mpg.parms.verbose, 4, 0);
 
-            err = mp.SetParam(mpg123clr.mpg.parms.flags, 
+            err = mp.mpg123_param(mpg123clr.mpg.parms.flags, 
                 (int) (mpg123clr.mpg.param_flags.fuzzy | 
                 mpg123clr.mpg.param_flags.seekbuffer | 
                 mpg123clr.mpg.param_flags.gapless), 0);
 
             if (err != mpg123clr.mpg.ErrorCode.ok)
             {
-                Console.WriteLine("Unable to set library options: " + mp.Error);
+                Console.WriteLine("Unable to set library options: " + mp.mpg123_strerror());
                 Console.WriteLine("Press any key to exit:");
                 while (Console.Read() == 0) ;
 
@@ -180,11 +184,11 @@ namespace feedseekclr
             }
 
             // Let the seek index auto-grow and contain an entry for every frame
-            err = mp.SetParam(mpg123clr.mpg.parms.index_size, -1, 0);
+            err = mp.mpg123_param(mpg123clr.mpg.parms.index_size, -1, 0);
 
             if (err != mpg123clr.mpg.ErrorCode.ok)
             {
-                Console.WriteLine("Unable to set index size: " + mp.Error);
+                Console.WriteLine("Unable to set index size: " + mp.mpg123_strerror());
                 Console.WriteLine("Press any key to exit:");
                 while (Console.Read() == 0) ;
 
@@ -192,25 +196,25 @@ namespace feedseekclr
             }
 
             // Use float output formats only
-            err = mp.SetFormat(false);  // equivalent to mpg123_format_none
+            err = mp.mpg123_format_none();
 
             if (err != mpg123clr.mpg.ErrorCode.ok)
             {
-                Console.WriteLine("Unable to disable all output formats: " + mp.Error);
+                Console.WriteLine("Unable to disable all output formats: " + mp.mpg123_strerror());
                 Console.WriteLine("Press any key to exit:");
                 while (Console.Read() == 0) ;
 
                 return;
             }
 
-            int[] rates = mp.Rates;
+            int[] rates = mp.mpg123_rates();
             foreach (int rate in rates)
             {
-                err = mp.SetFormat(rate, mpg123clr.mpg.channelcount.both, mpg123clr.mpg.enc.enc_float_32);
+                err = mp.mpg123_format(rate, mpg123clr.mpg.channelcount.both, mpg123clr.mpg.enc.enc_float_32);
 
                 if (err != mpg123clr.mpg.ErrorCode.ok)
                 {
-                    Console.WriteLine("Unable to set float output formats: " + mp.Error);
+                    Console.WriteLine("Unable to set float output formats: " + mp.mpg123_strerror());
                     Console.WriteLine("Press any key to exit:");
                     while (Console.Read() == 0) ;
 
@@ -218,11 +222,11 @@ namespace feedseekclr
                 }
             }
 
-            err = mp.Open();    // equivalent to mpg123_open_feed
+            err = mp.mpg123_open_feed();
 
             if (err != mpg123clr.mpg.ErrorCode.ok)
             {
-                Console.WriteLine("Unable to open feed: " + mp.Error);
+                Console.WriteLine("Unable to open feed: " + mp.mpg123_strerror());
                 Console.WriteLine("Press any key to exit:");
                 while (Console.Read() == 0) ;
 
@@ -234,7 +238,7 @@ namespace feedseekclr
 
             _out = new BinaryWriter(File.Open(args[1], FileMode.Create));
 
-            while ((ret = (int)(mp.Seek(95000, SeekOrigin.Begin, out inoffset))) == (int) mpg123clr.mpg.ErrorCode.need_more) // equiv to mpg123_feedseek
+            while ((ret = (int)(mp.mpg123_feedseek(95000, SeekOrigin.Begin, out inoffset))) == (int)mpg123clr.mpg.ErrorCode.need_more) // equiv to mpg123_feedseek
             {
                 buf = _in.ReadBytes((int)INBUFF);
 
@@ -242,11 +246,11 @@ namespace feedseekclr
 
                 inc += buf.Length;
 
-                state = (int)mp.Feed(buf, (uint)buf.Length);    // equiv to mpg123_feed
+                state = mp.mpg123_feed(buf, (uint)buf.Length); 
 
-                if (state == (int)mpg123clr.mpg.ErrorCode.err)
+                if (state == mpg123clr.mpg.ErrorCode.err)
                 {
-                    Console.WriteLine("Feed error: " + mp.Error);
+                    Console.WriteLine("Feed error: " + mp.mpg123_strerror());
                     Console.WriteLine("Press any key to exit:");
                     while (Console.Read() == 0) ;
 
@@ -263,19 +267,19 @@ namespace feedseekclr
 
                 inc += buf.Length;
 
-                ret = (int)mp.Feed(buf, (uint)buf.Length);  // equiv to mpg123_feed
+                err = mp.mpg123_feed(buf, (uint)buf.Length); 
 
                 int num;
                 uint bytes;
                 IntPtr audio;
 
-                while (ret != (int)mpg123clr.mpg.ErrorCode.err && ret != (int)mpg123clr.mpg.ErrorCode.need_more)
+                while (err != mpg123clr.mpg.ErrorCode.err && err != mpg123clr.mpg.ErrorCode.need_more)
                 {
-                    ret = (int)mp.DecodeFrame(out num, out audio, out bytes);   // equiv to mpg123_decode_frame
+                    err = mp.mpg123_decode_frame(out num, out audio, out bytes); 
 
-                    if (ret == (int)mpg123clr.mpg.ErrorCode.new_format)
+                    if (err == mpg123clr.mpg.ErrorCode.new_format)
                     {
-                        mp.GetFormat(out rate, out channels, out enc);  // equiv mpg123_getformat
+                        mp.mpg123_getformat(out rate, out channels, out enc); 
 
                         initwavformat();
                         initwav();
@@ -302,9 +306,9 @@ namespace feedseekclr
                     outc += bytes;
                 }
 
-                if (ret == (int)mpg123clr.mpg.ErrorCode.err)
+                if (err == mpg123clr.mpg.ErrorCode.err)
                 {
-                    Console.WriteLine("Error: " + mp.Error);
+                    Console.WriteLine("Error: " + mp.mpg123_strerror());
                     break;
                 }
 
@@ -317,10 +321,10 @@ namespace feedseekclr
             _out.Close();
             _in.Close();
 
-            mp.Delete();
+            mp.mpg123_delete();
             mp.Dispose();
 
-            mpg123.Exit();
+            mpg123.mpg123_exit();
 
         }
     }

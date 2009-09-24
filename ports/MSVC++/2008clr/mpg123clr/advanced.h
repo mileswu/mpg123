@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #pragma once
@@ -73,13 +74,18 @@ namespace mpg123clr
 		///<summary>Destructor.</summary>
 		~advpars(void);
 
-		///<summary>Configure acceptable output formats.
-		///<para>Use SetFormat(false) to clear default parameters prior to applying specific settings.</para>
+		///<summary>Configure mpg123 parameters to accept no output formats.
+		///<para>Use to clear default parameters prior to applying specific settings.</para>
 		///<para>Returns MPG123 error codes.</para>
 		///</summary>
-		///<param name="all">True = all formats (equiv to mpg123_fmt_all), False = no formats (equiv to mpg123_fmt_none)</param>
 		///<returns>MPG123 error codes.</returns>
-		mpg123clr::mpg::ErrorCode __clrcall SetFormat(bool all);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_fmt_none(void);
+
+		///<summary>Configure mpg123 parameters to accept all formats including custom rate you may set - this is the default.
+		///<para>Returns MPG123 error codes.</para>
+		///</summary>
+		///<returns>MPG123 error codes.</returns>
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_fmt_all(void);
 
 		///<summary>Configure detailed output formats.
 		///<para>Returns MPG123 error codes.</para>
@@ -89,7 +95,7 @@ namespace mpg123clr
 		///<param name="encodings">Combination of accepted encodings for rate and channels e.g. enc.enc_signed16 | enc.enc_ulaw_8 (or 0 for none)</param>
 		///<returns>MPG123 error codes.</returns>
 		/// VERSION CHECK: long as int for Intellisense
-		mpg123clr::mpg::ErrorCode __clrcall SetFormat(int rate, mpg123clr::mpg::channelcount channels, int encodings);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_fmt(int rate, mpg123clr::mpg::channelcount channels, int encodings);
 
 		///<summary>Get available support for supplied rate and encoding.
 		///<para>Returns 0 for no support (includes invalid parameters), or combination of channelcount.stereo and channelcount.mono.</para>
@@ -98,7 +104,7 @@ namespace mpg123clr
 		///<param name="encoding">Combination of accepted encodings for rate and channels e.g. enc.enc_signed16 | enc.enc_ulaw_8 (or 0 for none)</param>
 		///<returns>Returns 0 for no support (includes invalid parameters), or combination of channelcount.stereo and channelcount.mono.</returns>
 		/// VERSION CHECK: long as int for Intellisense
-		mpg123clr::mpg::channelcount __clrcall FormatSupport(int rate, int encoding);
+		mpg123clr::mpg::channelcount __clrcall mpg123_fmt_support(int rate, int encoding);
 
 		///<summary>Set a specific advpars value.
 		///<para>Returns MPG123 error codes.</para>
@@ -108,7 +114,7 @@ namespace mpg123clr
 		///<param name="fval">The real value to be applied.</param>
 		///<returns>MPG123 error codes.</returns>
 		/// VERSION CHECK: long as int for Intellisense
-		mpg123clr::mpg::ErrorCode __clrcall Set(mpg123clr::mpg::parms type, int val, double fval);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_par(mpg123clr::mpg::parms type, int val, double fval);
 
 		///<summary>Get a specific advpars value.
 		///<para>Returns MPG123 error codes.</para>
@@ -118,7 +124,7 @@ namespace mpg123clr
 		///<param name="fval">Returns the applicable real value.</param>
 		///<returns>MPG123 error codes.</returns>
 		/// VERSION CHECK: long as int for Intellisense
-		mpg123clr::mpg::ErrorCode __clrcall Get(mpg123clr::mpg::parms type, [Out] int% val, [Out] double% fval);
+		mpg123clr::mpg::ErrorCode __clrcall mpg123_getpar(mpg123clr::mpg::parms type, [Out] int% val, [Out] double% fval);
 	};
 
 }

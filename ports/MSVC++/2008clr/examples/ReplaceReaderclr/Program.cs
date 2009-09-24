@@ -8,6 +8,10 @@
     not to be used as an example of good coding practices, note the total absence of error handling!!!  
 */
 
+/*
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+*/
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -41,31 +45,37 @@ namespace ReplaceReaderclr
 
         static unsafe void Main(string[] args)
         {
+            if (args.Length == 0)
+            {
+                Console.WriteLine("I need a file to work on:\n\nPress any key to exit.");
+                while (Console.Read() == 0) ;
+                return;
+            }
             mpg123clr.mpg.ErrorCode err;
 
-            err = mpg123.Init();
+            err = mpg123.mpg123_init();
             Console.WriteLine("Init:");
 
             mpg123 mp = new mpg123();
-            err = mp.New();
+            err = mp.mpg123_new();
 
             // ReplaceReader example
             mpg123clr.mpg123.ReadDelegate rdel = MyReadFunc;
             mpg123clr.mpg123.SeekDelegate sdel = MySeekFunc;
-            err = mp.ReplaceReader(rdel, sdel);
+            err = mp.mpg123_replace_reader(rdel, sdel);
 
-            err = mp.Open(args[0]);
+            err = mp.mpg123_open(args[0]);
 
             if (err != mpg123clr.mpg.ErrorCode.ok)
             {
-                Console.WriteLine("Error: " + mp.Error);
+                Console.WriteLine("Error: " + mp.mpg123_strerror());
             }
             else
             {
                 Console.WriteLine("Open:");
 
                 // Show available decoders
-                string[] Decoders = mp.Decoders();
+                string[] Decoders = mp.mpg123_decoders();
 
                 if (Decoders.Length > 0)
                 {
@@ -74,7 +84,7 @@ namespace ReplaceReaderclr
                 }
 
                 // Show supported decoders
-                string[] supDecoders = mp.SupportedDecoders();
+                string[] supDecoders = mp.mpg123_supported_decoders();
 
                 if (supDecoders.Length > 0)
                 {
@@ -83,21 +93,21 @@ namespace ReplaceReaderclr
                 }
 
                 // Show actual decoder
-                Console.WriteLine("\nDecoder: " + mp.Decoder);
+                Console.WriteLine("\nDecoder: " + mp.mpg123_current_decoder());
 
                 // Show estimated file length
-                Console.WriteLine("\nLength Estimate: " + mp.Length().ToString());
+                Console.WriteLine("\nLength Estimate: " + mp.mpg123_length().ToString());
 
                 // Scan - gets actual details including ID3v2 and Frame offsets
-                err = mp.Scan();
+                err = mp.mpg123_scan();
 
                 // Show actual file length
-                if (err == mpg123clr.mpg.ErrorCode.ok) Console.WriteLine("Length Actual  : " + mp.Length().ToString());
+                if (err == mpg123clr.mpg.ErrorCode.ok) Console.WriteLine("Length Actual  : " + mp.mpg123_length().ToString());
 
                 // Get ID3 data
                 mpg123clr.id3.mpg123id3v1 iv1;
                 mpg123clr.id3.mpg123id3v2 iv2;
-                err = mp.ID3(out iv1, out iv2);
+                err = mp.mpg123_id3(out iv1, out iv2);
 
                 // Show ID3v2 data
                 Console.WriteLine("\nTitle  : " + iv2.title);
@@ -107,11 +117,11 @@ namespace ReplaceReaderclr
                 Console.WriteLine("Year   : " + iv2.year);
 
                 // Demo seek (back to start of file - note: scan should already have done this)
-                long pos = mp.Seek(0, System.IO.SeekOrigin.Begin);
+                long pos = mp.mpg123_seek(0, System.IO.SeekOrigin.Begin);
 
                 long[] frameindex;
                 long step;
-                err = mp.FrameIndex(out frameindex, out step);
+                err = mp.mpg123_index(out frameindex, out step);
 
                 if (err == mpg123clr.mpg.ErrorCode.ok)
                 {
@@ -132,7 +142,7 @@ namespace ReplaceReaderclr
 
                 while (err == mpg123clr.mpg.ErrorCode.ok || err == mpg123clr.mpg.ErrorCode.new_format)
                 {
-                    err = mp.DecodeFrame(out num, out audio, out cnt);
+                    err = mp.mpg123_decode_frame(out num, out audio, out cnt);
 
                     // do something with "audio" here....
                 }
@@ -147,10 +157,10 @@ namespace ReplaceReaderclr
             Console.WriteLine("\nPress any key to exit:");
             while (Console.Read() == 0) ;
 
-            mp.Close();
+            mp.mpg123_close();
             mp.Dispose();
 
-            mpg123.Exit();
+            mpg123.mpg123_exit();
         }
     }
 }

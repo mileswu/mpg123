@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #pragma once
@@ -123,6 +124,6 @@ namespace mpg123clr
 		///</summary>
 		///<param name="errcode">The error code to be described.</param>
 		///<returns>Returns a String description representing the error code.</returns>
-		static String^ __clrcall Description(mpg123clr::mpg::ErrorCode errcode);
+		static String^ __clrcall mpg123_plain_strerror(mpg123clr::mpg::ErrorCode errcode);
 	};
 }

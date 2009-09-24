@@ -16,6 +16,7 @@
 /*
 	1.8.1.0	04-Aug-09	Initial release.
 	1.9.0.0 16-Sep-09	1.9.0 Update - add enc_from_id3, store_utf8
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 */
 
 #pragma once
@@ -153,7 +154,7 @@ namespace mpg123clr
 		///</summary>
 		///<param name="s">String to be appended.</param>
 		///<returns>0 on error, 1 on success.</returns>
-		int __clrcall Add(String ^ s);
+		int __clrcall mpg123_add_string(String ^ s);
 
 		///<summary>Append a C# substring to this mpg123str.
 		///<para>Returns 0 on error, 1 on success.</para>
@@ -162,36 +163,43 @@ namespace mpg123clr
 		///<param name="from">String offset to copy from.</param>
 		///<param name="count">Number of characters to copy. (a null byte is always appended)</param>
 		///<returns>0 on error, 1 on success.</returns>
-		int __clrcall Add(String ^ s, int from, int count);
+		int __clrcall mpg123_add_substring(String ^ s, int from, int count);
 
 		///<summary>Copy the contents of this string to another.
 		///<para>Returns 0 on error, 1 on success.</para>
 		///</summary>
 		///<param name="to">Where to copy this string to.</param>
 		///<returns>0 on error, 1 on success.</returns>
-		int __clrcall Copy(mpg123str^ to);
+		int __clrcall mpg123_copy_string(mpg123str^ to);
 
 		///<summary>Free-up mempory for an existing mpg123_string.
 		///</summary>
-		void __clrcall Free(void);
+		void __clrcall mpg123_free_string(void);
 
 		///<summary>Increase size of a mpg123_string if necessary (it may stay larger).
 		///<para>Returns 0 on error, 1 on success.</para>
 		///</summary>
 		///<param name="newSize">Required size.</param>
 		///<returns>0 on error, 1 on success.</returns>
-		int __clrcall Grow(int newSize);
+		int __clrcall mpg123_grow_string(int newSize);
+
+		///<summary>Change the size of a mpg123_string.
+		///<para>Returns 0 on error, 1 on success.</para>
+		///</summary>
+		///<param name="newSize">Required size.</param>
+		///<returns>0 on error, 1 on success.</returns>
+		int __clrcall mpg123_resize_string(int newSize);
 
 		///<summary>Create and allocate memory for a new mpg123_string.
 		///</summary>
-		void __clrcall Init(void);
+		void __clrcall mpg123_init_string(void);
 
 		///<summary>Set the contents to a C# string.
 		///<para>Returns 0 on error, 1 on success.</para>
 		///</summary>
 		///<param name="s">String to be applied.</param>
 		///<returns>0 on error, 1 on success.</returns>
-		int __clrcall Set(String ^ s);
+		int __clrcall mpg123_set_string(String ^ s);
 
 		///<summary>Set the contents to a C# substring.
 		///<para>Returns 0 on error, 1 on success.</para>
@@ -200,7 +208,7 @@ namespace mpg123clr
 		///<param name="from">String offset to copy from.</param>
 		///<param name="count">Number of characters to copy. (a null byte is always appended)</param>
 		///<returns>0 on error, 1 on success.</returns>
-		int __clrcall Set(String ^ s, int from, int count);
+		int __clrcall mpg123_set_substring(String ^ s, int from, int count);
 
 		///<summary>Get the number of used bytes. (including closing zero byte).
 		///<para>Property returns the number of used bytes.</para>
@@ -227,7 +235,7 @@ namespace mpg123clr
 		///</summary>
 		///<param name="id3_enc_byte">The ID3 encoding byte to be converted.</param>
 		///<returns>The text_encoding enum of the converted value.</returns>
-		static text_encoding __clrcall enc_from_id3(unsigned char id3_enc_byte);
+		static text_encoding __clrcall mpg123_enc_from_id3(unsigned char id3_enc_byte);
 
 		///<summary>Store text data in string, after converting to UTF-8 from indicated encoding.
 		///<para>A prominent error can be that you provided an unknown encoding value, or this build of libmpg123 lacks support for certain encodings (ID3 or ICY stuff missing).
@@ -239,7 +247,7 @@ namespace mpg123clr
 		///<param name="source">Source buffer with plain unsigned bytes.</param>
 		///<param name="source_size">Number of bytes in the source buffer.</param>
 		///<returns>0 on error, 1 on success (on error, mpg123_free_string is called on sb).</returns>
-		int __clrcall store_utf8(text_encoding enc, const unsigned char *source, size_t source_size);
+		int __clrcall mpg123_store_utf8(text_encoding enc, const unsigned char *source, size_t source_size);
 
 // 1.9.0.0 -add
 
