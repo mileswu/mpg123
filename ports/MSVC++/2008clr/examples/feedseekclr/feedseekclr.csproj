@@ -63,4 +63,7 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <PropertyGroup>
+    <PostBuildEvent>if exist "$(SolutionDir)$(ConfigurationName)\libmpg123.dll" copy /y "$(SolutionDir)$(ConfigurationName)\libmpg123.dll" "$(TargetDir)"</PostBuildEvent>
+  </PropertyGroup>
 </Project>

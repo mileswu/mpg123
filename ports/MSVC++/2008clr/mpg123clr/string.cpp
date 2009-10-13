@@ -16,6 +16,7 @@
 /*
 	1.8.1.0	04-Aug-09	Initial release.
 	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
 */
 
 #include "StdAfx.h"
@@ -59,7 +60,7 @@ mpg123clr::mpg123str::~mpg123str(void)
 // Finalizer cleans up unmanaged resources
 mpg123clr::mpg123str::!mpg123str(void)
 {
-	if (instanced && (sb != NULL)) mpg123_free_string();
+	if (instanced && (sb != nullptr)) mpg123_free_string();
 }
 
 int mpg123clr::mpg123str::mpg123_add_string(String ^ s)

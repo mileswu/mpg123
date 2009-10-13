@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
 */
 
 #include "StdAfx.h"
@@ -48,42 +49,42 @@ mpg123clr::id3::mpg123id3v1::!mpg123id3v1(void)
 
 String^ mpg123clr::id3::mpg123id3v1::tag::get()
 {
-	if (sb == NULL || sb->tag == NULL) return gcnew String("");
+	if (sb == nullptr || sb->tag == nullptr) return gcnew String("");
 
 	return Marshal::PtrToStringAnsi((IntPtr)sb->tag, (int)strnlen(sb->tag, 3));
 }
 
 String^ mpg123clr::id3::mpg123id3v1::title::get()
 {
-	if (sb == NULL || sb->title == NULL) return gcnew String("");
+	if (sb == nullptr || sb->title == nullptr) return gcnew String("");
 
 	return Marshal::PtrToStringAnsi((IntPtr)sb->title, (int)strnlen(sb->title, 30));
 }
 
 String^ mpg123clr::id3::mpg123id3v1::artist::get()
 {
-	if (sb == NULL || sb->artist == NULL) return gcnew String("");
+	if (sb == nullptr || sb->artist == nullptr) return gcnew String("");
 
 	return Marshal::PtrToStringAnsi((IntPtr)sb->artist, (int)strnlen(sb->artist, 30));
 }
 
 String^ mpg123clr::id3::mpg123id3v1::album::get()
 {
-	if (sb == NULL || sb->album == NULL) return gcnew String("");
+	if (sb == nullptr || sb->album == nullptr) return gcnew String("");
 
 	return Marshal::PtrToStringAnsi((IntPtr)sb->album, (int)strnlen(sb->album, 30));
 }
 
 String^ mpg123clr::id3::mpg123id3v1::comment::get()
 {
-	if (sb == NULL || sb->comment == NULL) return gcnew String("");
+	if (sb == nullptr || sb->comment == nullptr) return gcnew String("");
 
 	return Marshal::PtrToStringAnsi((IntPtr)sb->comment, (int)strnlen(sb->comment, 30));
 }
 
 int mpg123clr::id3::mpg123id3v1::genre::get()
 {
-	if (sb == NULL) return 0;
+	if (sb == nullptr) return 0;
 
 	return sb->genre;
 }

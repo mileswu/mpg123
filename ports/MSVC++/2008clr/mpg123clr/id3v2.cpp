@@ -15,6 +15,7 @@
 */
 /*
 	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
 */
 
 #include "StdAfx.h"
@@ -49,7 +50,7 @@ mpg123clr::id3::mpg123id3v2::!mpg123id3v2(void)
 String^ mpg123clr::id3::mpg123id3v2::title::get()
 {
 	// updated: more efficient "union style" mpg123str
-	mpg123str^ str = (sb->title == NULL) ? gcnew mpg123str("") : gcnew mpg123str(sb->title);
+	mpg123str^ str = (sb->title == nullptr) ? gcnew mpg123str("") : gcnew mpg123str(sb->title);
 
 	// Deprecated remnant - uses "overlayed style" mpg123str - note inefficient PtrToStrucure...
 	//	mpg123str^% str = gcnew mpg123str;
@@ -60,35 +61,35 @@ String^ mpg123clr::id3::mpg123id3v2::title::get()
 
 String^ mpg123clr::id3::mpg123id3v2::artist::get()
 {
-	mpg123str^ str = (sb->artist == NULL) ? gcnew mpg123str("") : gcnew mpg123str(sb->artist);
+	mpg123str^ str = (sb->artist == nullptr) ? gcnew mpg123str("") : gcnew mpg123str(sb->artist);
 
 	return str->Text;
 }
 
 String^ mpg123clr::id3::mpg123id3v2::album::get()
 {
-	mpg123str^ str = (sb->album == NULL) ? gcnew mpg123str("") : gcnew mpg123str(sb->album);
+	mpg123str^ str = (sb->album == nullptr) ? gcnew mpg123str("") : gcnew mpg123str(sb->album);
 
 	return str->Text;
 }
 
 String^ mpg123clr::id3::mpg123id3v2::comment::get()
 {
-	mpg123str^ str = (sb->comment == NULL) ? gcnew mpg123str("") : gcnew mpg123str(sb->comment);
+	mpg123str^ str = (sb->comment == nullptr) ? gcnew mpg123str("") : gcnew mpg123str(sb->comment);
 
 	return str->Text;
 }
 
 String^ mpg123clr::id3::mpg123id3v2::year::get()
 {
-	mpg123str^ str = (sb->year == NULL) ? gcnew mpg123str("") : gcnew mpg123str(sb->year);
+	mpg123str^ str = (sb->year == nullptr) ? gcnew mpg123str("") : gcnew mpg123str(sb->year);
 
 	return str->Text;
 }
 
 String^ mpg123clr::id3::mpg123id3v2::genre::get()
 {
-	mpg123str^ str = (sb->genre == NULL) ? gcnew mpg123str("") : gcnew mpg123str(sb->genre);
+	mpg123str^ str = (sb->genre == nullptr) ? gcnew mpg123str("") : gcnew mpg123str(sb->genre);
 
 	return str->Text;
 }

@@ -17,6 +17,7 @@ The solution includes the following projects:
 	scanclr				Demonstration project for comparison with scan.c example.
 	feedseekclr			Demonstration project for comparison with feedseek.c example
 	replacereaderclr	Demonstration project, how to implement ReplaceReader in CLR (proof of concept)
+	libmpg123			For convenience, ensures that libmpg123.lib is available for linking
 
 =========================================================================
 Compiling:
@@ -26,7 +27,7 @@ mpg123clr requires linking to a libmpg123 static library, this library must be c
 compiling the clr projects. mpg123clr uses relative folder position during linking; therefore either:-
 
 	ensure that the 2008clr solution is correctly located within the ports\msvc++ folder, or
-	change the "linker->input->additional dependancies" to suit your installation configuration
+	change the "linker->input->additional dependencies" to suit your installation configuration
 
 NOTE: x64 Active Solution Platform configurations are not supplied with this solution but have been tested.
 (Effectively all that is required is to change all "include" references to account for the "x64" output locations) 
@@ -47,6 +48,19 @@ to assist usage. If you manually relocate the .dll please also copy the .xml fil
 operation.
 
 ===========================================================================
+Common Errors:
+
+1)	Problem: "Unhandled Exception - file not found" error when the application is executed.
+	Cause: Incorrect libmpg123 library build / missing libmpg123.dll.
+	Solution: Copy libmpg123.dll to the application output folder - possibly in a Post-Build Event (see scanclr for
+		an example).
+	Explanation: mpg123clr requires static library libmpg123.lib and NOT dynamic library libmpg123.dll. 
+		If the libmpg123 library is built using an incorrect Project Context (such as Debug_Generic_Dll), mpg123clr 
+		will attempt to load the libmpg123.dll at runtime even though this file is not required. 
+	Alternatively: Use Configuration Manager and select a non-dll build context for the libmpg123 project.
+		(i.e. Debug_Generic not Debug_Generic_Dll)
+	 
+===========================================================================
 Developer Notes:
 
  1) Documentation <remarks> do not appear in CLR Intellisense environment (at time of writing). 
@@ -54,7 +68,7 @@ Developer Notes:
  2) During development "off_t" parameters conflicted with intellisense (although size_t worked just fine)
 	Since many CLR functions that refer to off_t features (e.g. positioners) actually expect 64bit long
 	(or long long in C++) parameters, I've implemented off_t as a long long - with one notable exception. 
-	This fixed intellisense and accommodates the CLR 64bit long implimentation positioners: And then intellisense 
+	This fixed intellisense and accommodates the CLR 64bit long implementation positioners: And then intellisense 
 	started	working correctly and made this a moot point - at least as far as intellisense is concerned.
  3) off_t notable exception - SeekDelegate
 	Usually 2008clr functions are called by the callee, long long (clr 64bit long) can be marshaled and passed
@@ -69,11 +83,14 @@ Developer Notes:
 	function correctly with libmpg123 cdecl calls. It saved making a separate dll for the posix elements.
 	REPEAT AFTER ME: Not for normal consumption....
 5)	The __clrcall decoration of mpg123clr functions is not strictly necessary for Visual Studio 2005 and later,
-	but has been left in for compatability with earlier versions. See MS documentation of "double thunking"
+	but has been left in for compatibility with earlier versions. See MS documentation of "double thunking"
 6)	Many functions use pin_ptr to pin the return variables prior to calling the libmpg123 function, this was
 	considered as an alternative to avoid the use of local variables with attendant overhead of 
 	allocate/use/copy/destroy etc. In practice pin_ptr has significant overhead, empirical tests showed very 
 	little performance difference between either method.
+7)	Set pin_ptr to NULL after use, to force early GC (recommended). Carried out performance trials and found
+	insignificant impact. Since most functions are likely to be used repeatedly decided to follow recommended usage.
+	If code analysis proves this to be redundant - can be removed...
 	
 =============================================================================
 Tested/Untested
@@ -110,6 +127,13 @@ THE CALLING APPLICATION IS RESPONSIBLE FOR ERROR DETECTION, TRAPPING AND CORRECT
 All projects are "as is" with no express or implied warranty. Demonstration projects are to demonstrate the 
 use of the library and are NOT considered examples of good coding practice. Use at own risk.
 
+===============================================================================
+Revision History
+
+	1.8.1.0	04-Aug-09	Initial release.
+	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+	1.9.0.0 30-Sep-09	Project config - if exists, copy libmpg123.dll to app output folder (mb)
+	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
 
 Constructive feedback preferred.
 

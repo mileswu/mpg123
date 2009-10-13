@@ -16,6 +16,7 @@
 /*
 	1.8.1.0	04-Aug-09	Initial release.
 	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+	1.9.0.0 13-Oct-09	pin_ptr = nullptr on return (mb)
 */
 
 #include "StdAfx.h"
@@ -25,6 +26,8 @@ mpg123clr::advpars::advpars(int% error)
 {
 	pin_ptr<int> err = &error;
 	mp = ::mpg123_new_pars(err);
+
+	err = nullptr;
 }
 
 mpg123clr::advpars::~advpars(void)
@@ -76,7 +79,15 @@ mpg123clr::mpg::ErrorCode mpg123clr::advpars::mpg123_getpar(mpg123clr::mpg::parm
 	pin_ptr<int> _val = &val;
 	pin_ptr<double> _fval = &fval;
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_getpar(mp, (mpg123_parms) type, (long*)_val, _fval);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_getpar(mp, (mpg123_parms) type, (long*)_val, _fval);
+	}
+	finally
+	{
+		_fval = nullptr;
+		_val = nullptr;
+	}
 }
 
 

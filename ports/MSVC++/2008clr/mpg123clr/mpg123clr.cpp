@@ -16,6 +16,8 @@
 /*
 	1.8.1.0	04-Aug-09	Initial release.
 	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
+	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
+	1.9.0.0 13-Oct-09	pin_ptr = nullptr on return (mb)
 */
 
 // mpg123clr.cpp : Defines the exported functions for the DLL application.
@@ -27,7 +29,7 @@
 
 mpg123clr::mpg123::mpg123(void)
 {
-	mh = NULL;
+	mh = nullptr;
 }
 
 mpg123clr::mpg123::mpg123(mpg123_handle* mh)
@@ -51,19 +53,19 @@ mpg123clr::mpg123::~mpg123(void)
 mpg123clr::mpg123::!mpg123(void)
 {
 	// clean up unmanaged resources
-	if (mh != NULL) 
+	if (mh != nullptr) 
 	{
 		::mpg123_delete(mh);
-		mh = NULL;
+		mh = nullptr;
 	}
 }
 
 void mpg123clr::mpg123::mpg123_delete(void)
 {
-	if (mh != NULL) 
+	if (mh != nullptr) 
 	{
 		::mpg123_delete(mh);
-		mh = NULL;
+		mh = nullptr;
 	}
 }
 
@@ -79,7 +81,6 @@ void mpg123clr::mpg123::mpg123_exit(void)
 
 mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_new(String ^ decoder)
 {
-	using namespace Runtime::InteropServices;
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(decoder)).ToPointer();
 
 	int err;
@@ -99,7 +100,6 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_new(void)
 
 mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_parnew(mpg123clr::advpars^ par, String ^ decoder)
 {
-	using namespace Runtime::InteropServices;
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(decoder)).ToPointer();
 
 	int err;
@@ -128,7 +128,15 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_getparam(mpg123clr::mpg::par
 	pin_ptr<int> _val = &val;
 	pin_ptr<double> _fval = &fval;
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_getparam(mh, (mpg123_parms)type, (long*) _val, _fval);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_getparam(mh, (mpg123_parms)type, (long*) _val, _fval);
+	}
+	finally
+	{
+		_fval = nullptr;
+		_val = nullptr;
+	}
 }
 
 String^ mpg123clr::mpg123::mpg123_strerror(void)
@@ -171,7 +179,6 @@ array<String^>^ mpg123clr::mpg123::mpg123_supported_decoders(void)
 
 mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_decoder(String^ name)
 {
-	using namespace Runtime::InteropServices;
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(name)).ToPointer();
 
 	int ret;
@@ -192,8 +199,6 @@ String^ mpg123clr::mpg123::mpg123_current_decoder(void)
 
 array<long>^ mpg123clr::mpg123::mpg123_rates(void)
 {
-	using namespace Runtime::InteropServices;
-
 	size_t number;
 	const long* list;
 
@@ -211,8 +216,6 @@ array<long>^ mpg123clr::mpg123::mpg123_rates(void)
 
 array<mpg123clr::mpg::enc>^ mpg123clr::mpg123::mpg123_encodings(void)
 {
-	using namespace Runtime::InteropServices;
-
 	size_t number;
 	const int* list;
 
@@ -267,12 +270,20 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_getformat([Out] int% rate, 
 	pin_ptr<mpg123clr::mpg::channelcount> _chan = &channels;
 	pin_ptr<mpg123clr::mpg::enc> _enc = &encodings;
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_getformat(mh, (long*)_rate, (int*)_chan, (int*)_enc);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_getformat(mh, (long*)_rate, (int*)_chan, (int*)_enc);
+	}
+	finally
+	{
+		_enc = nullptr;
+		_chan = nullptr;
+		_rate = nullptr;
+	}
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_open(String^ path)
 {
-	using namespace Runtime::InteropServices;
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(path)).ToPointer();
 
 	_ReplaceReader();
@@ -308,7 +319,15 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_read(array<unsigned char>^ 
 	pin_ptr<size_t> _count = &count;
 	pin_ptr<unsigned char> _ptr = &buffer[0];
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_read(mh, _ptr, buffer->Length, _count);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_read(mh, _ptr, buffer->Length, _count);
+	}
+	finally
+	{
+		_ptr = nullptr;
+		_count = nullptr;
+	}
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_read(array<unsigned char>^ buffer, size_t offset, size_t size, [Out] size_t% count)
@@ -317,7 +336,15 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_read(array<unsigned char>^ 
 	// WARN 4267 - clr limited to 32bit-length-size arrays!!
 	pin_ptr<unsigned char> _ptr = &buffer[(int)offset];
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_read(mh, _ptr, size, _count);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_read(mh, _ptr, size, _count);
+	}
+	finally
+	{
+		_ptr = nullptr;
+		_count = nullptr;
+	}
 }
 
 
@@ -325,7 +352,15 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_feed(array<unsigned char>^ 
 {
 	pin_ptr<unsigned char> _ptr = &inbuffer[0];
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_feed(mh, _ptr, size);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_feed(mh, _ptr, size);
+	}
+	finally
+	{
+		_ptr = nullptr;
+	}
+
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode(array<unsigned char>^ inbuffer, size_t insize, array<unsigned char>^ outbuffer, size_t outsize, [Out] size_t% count)
@@ -334,7 +369,16 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode(array<unsigned char>
 	pin_ptr<const unsigned char> _inptr = &inbuffer[0];
 	pin_ptr<unsigned char> _outptr = &outbuffer[0];
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_decode(mh, _inptr, insize, _outptr, outsize, _count);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_decode(mh, _inptr, insize, _outptr, outsize, _count);
+	}
+	finally
+	{
+		_outptr = nullptr;
+		_inptr = nullptr;
+		_count = nullptr;
+	}
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode_frame([Out] off_t% num, [Out] IntPtr% audio, [Out] size_t% count)
@@ -343,9 +387,18 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode_frame([Out] off_t% n
 	pin_ptr<off_t> _num = &num;
 	pin_ptr<IntPtr> _x = &audio;
 
-	int ret =  ::mpg123_decode_frame(mh, _num, (unsigned char**)_x, _count);
+	try
+	{
+		int ret =  ::mpg123_decode_frame(mh, _num, (unsigned char**)_x, _count);
 
-	return (mpg123clr::mpg::ErrorCode) ret;
+		return (mpg123clr::mpg::ErrorCode) ret;
+	}
+	finally
+	{
+		_x = nullptr;
+		_num = nullptr;
+		_count = nullptr;
+	}
 }
 
 long long mpg123clr::mpg123::mpg123_tell(void)
@@ -395,7 +448,6 @@ long long mpg123clr::mpg123::mpg123_timeframe(double seconds)
 mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_index([Out] array<long long>^% index, [Out] long long% step)
 {
 	// remnant: only works if off_t, index and step are 32 bit - possible redo for 64 bit library
-	// using namespace Runtime::InteropServices;
 	// pin_ptr<int> _step = &step;
 	// int ret = mpg123_index(mh, &_list, (off_t*)_step, &_count);
 	// index = gcnew array<int>((int)_count);
@@ -430,7 +482,15 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_index([Out] IntPtr% indexarr
 
 	step = _step;	// type conversion
 
-	return (mpg123clr::mpg::ErrorCode) ret;
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ret;
+	}
+	finally
+	{
+		_x = nullptr;
+		_fill = nullptr;
+	}
 
 }
 
@@ -451,7 +511,15 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_position(
 	currentframe = _currentframe;	// type conversion
 	framesleft = _framesleft;		// type conversion
 
-	return (mpg123clr::mpg::ErrorCode) ret;
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ret;
+	}
+	finally
+	{
+		_secondsleft = nullptr;
+		_currentseconds = nullptr;
+	}
 }
 
 #pragma region Volume and Equalizer
@@ -490,7 +558,16 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_getvolume([Out] double% base
 	pin_ptr<double> _really = &really;
 	pin_ptr<double> _rva_db = &rva_db;
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_getvolume(mh, _basevol, _really, _rva_db);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_getvolume(mh, _basevol, _really, _rva_db);
+	}
+	finally
+	{
+		_rva_db = nullptr;
+		_really = nullptr;
+		_basevol = nullptr;
+	}
 }
 
 #pragma endregion -Volume and Equalizer
@@ -542,10 +619,19 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_info([Out]mpeg_frameinfo^% f
 	//
 	// However, until it fails it'll do... and it's much faster (see mpg123_safeinfo(...)).
 
-	// WARNING:
-	// The epitome of "unsafe" as defined by CLR (using unmanaged pointers).
-	// If we start to get CLR stack corruptions - check here first! (see SafeInfo for "safe" managed version)
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_info(mh, (mpg123_frameinfo*)_ptr);
+	try
+	{
+		// 'try' is just for _ptr cleanup - not to trap stack error!!!
+
+		// WARNING:
+		// The epitome of "unsafe" as defined by CLR (using unmanaged pointers).
+		// If we start to get CLR stack corruptions - check here first! (see SafeInfo for "safe" managed version)
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_info(mh, (mpg123_frameinfo*)_ptr);
+	}
+	finally
+	{
+		_ptr = nullptr;
+	}
 }
 
 size_t mpg123clr::mpg123::mpg123_safe_buffer(void)
@@ -583,7 +669,15 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_getstate(mpg123clr::mpg::sta
 	pin_ptr<int> _val = &val;
 	pin_ptr<double> _fval = &fval;
 
-	return (mpg123clr::mpg::ErrorCode) ::mpg123_getstate(mh, (mpg123_state)key, (long*) _val, _fval);
+	try
+	{
+		return (mpg123clr::mpg::ErrorCode) ::mpg123_getstate(mh, (mpg123_state)key, (long*) _val, _fval);
+	}
+	finally
+	{
+		_fval = nullptr;
+		_val = nullptr;
+	}
 }
 
 #pragma endregion -Status and Information
@@ -710,7 +804,6 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_topen(String^ path)
 {
 	_ReplaceReader();	// mpg123_tOpen will replace its own reader, this is just for consistency
 
-	using namespace Runtime::InteropServices;
 	const _TCHAR* chars = (const _TCHAR*)(Marshal::StringToHGlobalUni(path)).ToPointer();
 
 	int ret = ::mpg123_topen(mh, chars);
