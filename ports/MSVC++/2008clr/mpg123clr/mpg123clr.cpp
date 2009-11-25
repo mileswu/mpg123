@@ -18,6 +18,7 @@
 	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
 	1.9.0.0 13-Oct-09	pin_ptr = nullptr on return (mb)
+	1.9.0.1	24-Nov-09	performance update - removed try/finally (mb)
 */
 
 // mpg123clr.cpp : Defines the exported functions for the DLL application.
@@ -128,15 +129,12 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_getparam(mpg123clr::mpg::par
 	pin_ptr<int> _val = &val;
 	pin_ptr<double> _fval = &fval;
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_getparam(mh, (mpg123_parms)type, (long*) _val, _fval);
-	}
-	finally
-	{
-		_fval = nullptr;
-		_val = nullptr;
-	}
+	int ret = ::mpg123_getparam(mh, (mpg123_parms)type, (long*) _val, _fval);
+
+	_fval = nullptr;
+	_val = nullptr;
+
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 String^ mpg123clr::mpg123::mpg123_strerror(void)
@@ -270,16 +268,13 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_getformat([Out] int% rate, 
 	pin_ptr<mpg123clr::mpg::channelcount> _chan = &channels;
 	pin_ptr<mpg123clr::mpg::enc> _enc = &encodings;
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_getformat(mh, (long*)_rate, (int*)_chan, (int*)_enc);
-	}
-	finally
-	{
-		_enc = nullptr;
-		_chan = nullptr;
-		_rate = nullptr;
-	}
+	int ret = ::mpg123_getformat(mh, (long*)_rate, (int*)_chan, (int*)_enc);
+
+	_enc = nullptr;
+	_chan = nullptr;
+	_rate = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_open(String^ path)
@@ -319,15 +314,12 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_read(array<unsigned char>^ 
 	pin_ptr<size_t> _count = &count;
 	pin_ptr<unsigned char> _ptr = &buffer[0];
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_read(mh, _ptr, buffer->Length, _count);
-	}
-	finally
-	{
-		_ptr = nullptr;
-		_count = nullptr;
-	}
+	int ret = ::mpg123_read(mh, _ptr, buffer->Length, _count);
+
+	_ptr = nullptr;
+	_count = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_read(array<unsigned char>^ buffer, size_t offset, size_t size, [Out] size_t% count)
@@ -336,15 +328,12 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_read(array<unsigned char>^ 
 	// WARN 4267 - clr limited to 32bit-length-size arrays!!
 	pin_ptr<unsigned char> _ptr = &buffer[(int)offset];
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_read(mh, _ptr, size, _count);
-	}
-	finally
-	{
-		_ptr = nullptr;
-		_count = nullptr;
-	}
+	int ret = ::mpg123_read(mh, _ptr, size, _count);
+
+	_ptr = nullptr;
+	_count = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 
@@ -352,15 +341,11 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_feed(array<unsigned char>^ 
 {
 	pin_ptr<unsigned char> _ptr = &inbuffer[0];
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_feed(mh, _ptr, size);
-	}
-	finally
-	{
-		_ptr = nullptr;
-	}
+	int ret = ::mpg123_feed(mh, _ptr, size);
 
+	_ptr = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode(array<unsigned char>^ inbuffer, size_t insize, array<unsigned char>^ outbuffer, size_t outsize, [Out] size_t% count)
@@ -369,16 +354,13 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode(array<unsigned char>
 	pin_ptr<const unsigned char> _inptr = &inbuffer[0];
 	pin_ptr<unsigned char> _outptr = &outbuffer[0];
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_decode(mh, _inptr, insize, _outptr, outsize, _count);
-	}
-	finally
-	{
-		_outptr = nullptr;
-		_inptr = nullptr;
-		_count = nullptr;
-	}
+	int ret = ::mpg123_decode(mh, _inptr, insize, _outptr, outsize, _count);
+
+	_outptr = nullptr;
+	_inptr = nullptr;
+	_count = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode_frame([Out] off_t% num, [Out] IntPtr% audio, [Out] size_t% count)
@@ -387,18 +369,13 @@ mpg123clr::mpg::ErrorCode  mpg123clr::mpg123::mpg123_decode_frame([Out] off_t% n
 	pin_ptr<off_t> _num = &num;
 	pin_ptr<IntPtr> _x = &audio;
 
-	try
-	{
-		int ret =  ::mpg123_decode_frame(mh, _num, (unsigned char**)_x, _count);
+	int ret = ::mpg123_decode_frame(mh, _num, (unsigned char**)_x, _count);
 
-		return (mpg123clr::mpg::ErrorCode) ret;
-	}
-	finally
-	{
-		_x = nullptr;
-		_num = nullptr;
-		_count = nullptr;
-	}
+	_x = nullptr;
+	_num = nullptr;
+	_count = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 long long mpg123clr::mpg123::mpg123_tell(void)
@@ -478,20 +455,14 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_index([Out] IntPtr% indexarr
 	pin_ptr<IntPtr> _x = &indexarr;	// NOTE: untyped index pointer.
 	off_t _step;	// type accomodation
 
-	int ret =  ::mpg123_index(mh, (off_t**)_x, &_step, _fill);
+	int ret = ::mpg123_index(mh, (off_t**)_x, &_step, _fill);
 
 	step = _step;	// type conversion
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ret;
-	}
-	finally
-	{
-		_x = nullptr;
-		_fill = nullptr;
-	}
-
+	_x = nullptr;
+	_fill = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_position(
@@ -511,15 +482,10 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_position(
 	currentframe = _currentframe;	// type conversion
 	framesleft = _framesleft;		// type conversion
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ret;
-	}
-	finally
-	{
-		_secondsleft = nullptr;
-		_currentseconds = nullptr;
-	}
+	_secondsleft = nullptr;
+	_currentseconds = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 #pragma region Volume and Equalizer
@@ -558,16 +524,13 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_getvolume([Out] double% base
 	pin_ptr<double> _really = &really;
 	pin_ptr<double> _rva_db = &rva_db;
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_getvolume(mh, _basevol, _really, _rva_db);
-	}
-	finally
-	{
-		_rva_db = nullptr;
-		_really = nullptr;
-		_basevol = nullptr;
-	}
+	int ret = ::mpg123_getvolume(mh, _basevol, _really, _rva_db);
+
+	_rva_db = nullptr;
+	_really = nullptr;
+	_basevol = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 #pragma endregion -Volume and Equalizer
@@ -619,19 +582,14 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_info([Out]mpeg_frameinfo^% f
 	//
 	// However, until it fails it'll do... and it's much faster (see mpg123_safeinfo(...)).
 
-	try
-	{
-		// 'try' is just for _ptr cleanup - not to trap stack error!!!
+	// WARNING:
+	// The epitome of "unsafe" as defined by CLR (using unmanaged pointers).
+	// If we start to get CLR stack corruptions - check here first! (see SafeInfo for "safe" managed version)
+	int ret = ::mpg123_info(mh, (mpg123_frameinfo*)_ptr);
 
-		// WARNING:
-		// The epitome of "unsafe" as defined by CLR (using unmanaged pointers).
-		// If we start to get CLR stack corruptions - check here first! (see SafeInfo for "safe" managed version)
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_info(mh, (mpg123_frameinfo*)_ptr);
-	}
-	finally
-	{
-		_ptr = nullptr;
-	}
+	_ptr = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 size_t mpg123clr::mpg123::mpg123_safe_buffer(void)
@@ -669,15 +627,12 @@ mpg123clr::mpg::ErrorCode mpg123clr::mpg123::mpg123_getstate(mpg123clr::mpg::sta
 	pin_ptr<int> _val = &val;
 	pin_ptr<double> _fval = &fval;
 
-	try
-	{
-		return (mpg123clr::mpg::ErrorCode) ::mpg123_getstate(mh, (mpg123_state)key, (long*) _val, _fval);
-	}
-	finally
-	{
-		_fval = nullptr;
-		_val = nullptr;
-	}
+	int ret = ::mpg123_getstate(mh, (mpg123_state)key, (long*) _val, _fval);
+
+	_fval = nullptr;
+	_val = nullptr;
+	
+	return (mpg123clr::mpg::ErrorCode) ret;
 }
 
 #pragma endregion -Status and Information

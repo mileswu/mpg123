@@ -91,6 +91,8 @@ Developer Notes:
 7)	Set pin_ptr to NULL after use, to force early GC (recommended). Carried out performance trials and found
 	insignificant impact. Since most functions are likely to be used repeatedly decided to follow recommended usage.
 	If code analysis proves this to be redundant - can be removed...
+	(1.9.0.1 update) "insignificant" in Debug mode, quite significant if the debug overhead is removed, 
+	i.e. Release mode. So try/finally blocks removed in favour of allocating temporary local return variable.
 	
 =============================================================================
 Tested/Untested
@@ -134,7 +136,8 @@ Revision History
 	1.9.0.0 24-Sep-09	Function names harmonized with libmpg123 (mb)
 	1.9.0.0 30-Sep-09	Project config - if exists, copy libmpg123.dll to app output folder (mb)
 	1.9.0.0 01-Oct-09	Technical cleanup - subst nullptr for NULL (mb)
-
+	1.9.0.1	24-Nov-09	Performance update - removed try/finally (mb)
+	
 Constructive feedback preferred.
 
 Malcolm Boczek
