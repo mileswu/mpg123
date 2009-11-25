@@ -11,7 +11,7 @@ AC_PREREQ(2.57)
 dnl ############# Initialisation
 
 AC_INIT([mpg123], [1.10.0], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=21:1:21
+LIBMPG123_VERSION=21:3:21
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
@@ -546,7 +546,12 @@ case $host in
   *-*-dragonfly* | *-*-freebsd* | *-*-midnightbsd* | *-*-mirbsd* | *-*-netbsd* | *-*-openbsd*)
     cpu_type="generic_fpu"
   ;;
-  # Todo: Add default for x86 solaris; need to test it there, too.
+  i386-*-solaris*)
+    cpu_type=x86
+  ;;
+  x86_64-*-solaris*)
+    cpu_type=x86-64_all
+  ;;
   *-*-solaris*)
     cpu_type="generic_fpu"
   ;;
@@ -913,21 +918,6 @@ if test x"$fifo" = xenabled; then
 	fi
 fi
 
-AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
-if test x"$ipv6" = xauto; then
-	if test x"$have_ipv6" = xyes; then
-		ipv6=enabled
-	else
-		ipv6=disabled
-	fi
-fi
-if test x"$ipv6" = xenabled; then
-	AC_DEFINE(IPV6, 1, [ Define if IPV6 support is enabled. ])
-	if test x"$have_ipv6" = xno; then
-		AC_MSG_WARN( [ You forced IPv6 code while I think there is no getaddrinfo() available! ] )
-	fi
-fi
-
 dnl ############## Header and Library Checks
 
 # locale headers
@@ -944,6 +934,12 @@ else
   have_network=no
 fi
 
+dnl trying to get that socket lib settled in one line
+AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32 wsock32) 
+dnl OK, two lines... Solaris needs -lnsl -lsocket
+AC_SEARCH_LIBS(socket, socket ws2_32 wsock32) 
+
+
 if test x"$network" = xauto; then
 	if test x"$have_network" = xyes; then
 		network=enabled
@@ -955,6 +951,22 @@ if test x"$network" = xenabled; then
 	AC_DEFINE(NETWORK, 1, [ Define if network support is enabled. ])
 	if test x"$have_network" = xno; then
 		AC_MSG_WARN( [ You forced network code while I think there is support missing! ] )
+	fi
+fi
+
+AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
+if test x"$ipv6" = xauto; then
+	if test x"$have_ipv6" = xyes; then
+		ipv6=enabled
+	else
+		ipv6=disabled
+	fi
+fi
+
+if test x"$ipv6" = xenabled; then
+	AC_DEFINE(IPV6, 1, [ Define if IPV6 support is enabled. ])
+	if test x"$have_ipv6" = xno; then
+		AC_MSG_WARN( [ You forced IPv6 code while I think there is no getaddrinfo() available! ] )
 	fi
 fi
 
@@ -1024,11 +1036,6 @@ case $host in
     AC_DEFINE(ABI_ALIGN_FUN, 1, [ Define if your architecture wants/needs/can use attribute_align_arg and alignment checks. It's for 32bit x86... ])
  ;;
 esac
-
-dnl trying to get that socket lib settled in one line
-AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32 wsock32) 
-dnl OK, two lines... Solaris needs -lnsl -lsocket
-AC_SEARCH_LIBS(socket, socket ws2_32 wsock32) 
 
 s_altivec="synth_altivec dct64_altivec"
 s_i386="dct64_i386"
@@ -1180,10 +1187,10 @@ esac
 case $cpu_type in
   3dnow|3dnow_alone|3dnowext|3dnowext_alone|mmx|mmx_alone|sse|sse_alone|x86|x86_dither)
     case $host in
-      i386-apple-darwin8*)
+      i386-apple-darwin8*|*-apple-darwin10*)
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-read_only_relocs,suppress"
       ;;
-      i386-apple-darwin9*|i386-apple-darwin10*)
+      i386-apple-darwin9*)
         ADD_CFLAGS="$ADD_CFLAGS -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk"
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-syslibroot,/Developer/SDKs/MacOSX10.4u.sdk -Wl,-classic_linker -Wl,-read_only_relocs,suppress"
       ;;
@@ -1206,7 +1213,7 @@ AC_ARG_ENABLE(feature_report,
 	],
 	[AC_MSG_RESULT([yes])])
 
-if test "x$feature_report" == xenabled; then
+if test "x$feature_report" = xenabled; then
 	more_sources="$more_sources feature"
 fi
 
@@ -1821,7 +1828,7 @@ AC_ARG_ENABLE(win32_unicode,
 	   fi
 	], [AC_MSG_RESULT([no])])
 
-AM_CONDITIONAL([WIN32_USE_UNICODE], [ test "x$win32_unicode" == xenabled])
+AM_CONDITIONAL([WIN32_USE_UNICODE], [ test "x$win32_unicode" = xenabled])
 
 dnl ############## Final Output
 

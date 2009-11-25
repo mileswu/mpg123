@@ -1,7 +1,31 @@
 1.10.0
-
+---
 - There is a build-time option to enable unicode file names on windows now. UNIX (Linux) does not need that, UTF-8 works natively.
   An unicode-enabled build of libmpg123 expects file names as UTF-8 strings, opening of non-utf8 strings (by old applications) still works via fallback when the conversion of the string or opening of the file failed.
+- Added pitch command to control interface.
+
+1.9.3
+---
+
+- Make modules work with libtool-2.2.6b .
+
+1.9.2
+---
+- Fix logic failure in gapless code: The trailing silence was only cut on the first decode. So, seek-back and decode again never was gapless:-(
+- Fix linker flags on MacOS 10.6 .
+- Improve portability (mainly for Solaris/x86, possibly others).
+- Fix reading from standard input in Windows (use binary mode).
+
+1.9.1
+---
+- Fix OpenAL output issue (bug 2840085)
+- Fix theoretically possible discarding of some audio samples when getting a new format.
+- Fix unwanted verboseness (some error messages from library even when MPG123_QUIET was specified).
+- Fix back-to-beginning for feed_skip (fixes bug 2859531).
+- Fix the CPU creep bug with NtoM decoding.
+  That one has been nasty on you with large files since bad frame fillup has been introduced.
+- Fix regression (since 1.9.0) in ID3 parsing: Now Foobar2000 RVA fields are interpreted again (among others).
+- Fix some compiler warnings, minor cleanup.
 
 1.9.0
 ---

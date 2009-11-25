@@ -338,6 +338,9 @@ void frame_gapless_ignore(mpg123_handle *fr, off_t frames);*/
 /* void frame_gapless_buffercheck(mpg123_handle *fr); */
 #endif
 
+/* Number of samples the decoding of the current frame should yield. */
+off_t frame_expect_outsamples(mpg123_handle *fr);
+
 /* Skip this frame... do some fake action to get away without actually decoding it. */
 void frame_skip(mpg123_handle *fr);
 
@@ -350,6 +353,8 @@ void frame_skip(mpg123_handle *fr);
 */
 off_t frame_ins2outs(mpg123_handle *fr, off_t ins);
 off_t frame_outs(mpg123_handle *fr, off_t num);
+/* This one just computes the expected sample count for _this_ frame. */
+off_t frame_expect_outsampels(mpg123_handle *fr);
 off_t frame_offset(mpg123_handle *fr, off_t outs);
 void frame_set_frameseek(mpg123_handle *fr, off_t fe);
 void frame_set_seek(mpg123_handle *fr, off_t sp);

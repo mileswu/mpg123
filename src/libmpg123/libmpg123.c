@@ -82,9 +82,13 @@ static void frame_buffercheck(mpg123_handle *fr)
 			        (void*)fr->buffer.p, (void*)fr->buffer.data, ((short*)fr->buffer.p)[2]);
 		}
 		else fr->buffer.fill = 0;
-		fr->firstoff = 0; /* Only enter here once... when you seek, firstoff should be reset. */
+		/* We can only reach this frame again by seeking. And on seeking, firstoff will be recomputed.
+		   So it is safe to null it here (and it makes the if() decision abort earlier). */
+		fr->firstoff = 0;
 	}
-	/* The last interesting (planned) frame: Only use some leading samples. */
+	/* The last interesting (planned) frame: Only use some leading samples.
+	   Note a difference from the above: The last frame and offset are unchanges by seeks.
+	   The lastoff keeps being valid. */
 	if(fr->lastoff && fr->num == fr->lastframe)
 	{
 		off_t byteoff = samples_to_bytes(fr, fr->lastoff);
@@ -92,7 +96,6 @@ static void frame_buffercheck(mpg123_handle *fr)
 		{
 			fr->buffer.fill = byteoff;
 		}
-		fr->lastoff = 0; /* Only enter here once... when you seek, lastoff should be reset. */
 	}
 }
 #endif
@@ -650,13 +653,7 @@ static int get_next_frame(mpg123_handle *mh)
 		/* Or, we are finally done and have a new frame. */
 		else break;
 	} while(1);
-	/* When we start actually using the CRC, this could move into the loop... */
-	/* A question of semantics ... should I fold start_frame and frame_number into firstframe/lastframe? */
-	if(mh->lastframe >= 0 && mh->num > mh->lastframe)
-	{
-		mh->to_decode = mh->to_ignore = FALSE;
-		return MPG123_DONE;
-	}
+
 	if(change)
 	{
 		if(decode_update(mh) < 0)  /* dito... */
@@ -700,8 +697,7 @@ static int zero_byte(mpg123_handle *fr)
 */
 void decode_the_frame(mpg123_handle *fr)
 {
-	size_t needed_bytes = samples_to_bytes(fr, frame_outs(fr, fr->num+1)-frame_outs(fr, fr->num));
-	fr->clip += (fr->do_layer)(fr);
+	size_t needed_bytes = samples_to_bytes(fr, frame_expect_outsamples(fr)); 	fr->clip += (fr->do_layer)(fr);
 	/*fprintf(stderr, "frame %"OFF_P": got %"SIZE_P" / %"SIZE_P"\n", fr->num,(size_p)fr->buffer.fill, (size_p)needed_bytes);*/
 	/* There could be less data than promised.
 	   Also, then debugging, we look out for coding errors that could result in _more_ data than expected. */
