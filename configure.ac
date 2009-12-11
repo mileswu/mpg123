@@ -938,6 +938,7 @@ dnl ############## Header and Library Checks
 # locale headers
 AC_CHECK_HEADERS([locale.h langinfo.h])
 # Headers for network (http) stuff
+network_type=Unknown
 AC_CHECK_HEADERS([netdb.h sys/param.h sys/socket.h netinet/in.h arpa/inet.h])
 if test "x$ac_cv_header_netdb_h" = "xyes"      &&
    test "x$ac_cv_header_sys_param_h" = "xyes"  &&
@@ -945,45 +946,17 @@ if test "x$ac_cv_header_netdb_h" = "xyes"      &&
    test "x$ac_cv_header_netinet_in_h" = "xyes" &&
    test "x$ac_cv_header_arpa_inet_h"  = "xyes"; then
   have_network=yes
+  network_type=Posix
 else
   have_network=no
 fi
 
 dnl trying to get that socket lib settled in one line
-AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32 wsock32) 
+AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32) 
 dnl OK, two lines... Solaris needs -lnsl -lsocket
-AC_SEARCH_LIBS(socket, socket ws2_32 wsock32) 
-
-
-if test x"$network" = xauto; then
-	if test x"$have_network" = xyes; then
-		network=enabled
-	else
-		network=disabled
-	fi
-fi
-if test x"$network" = xenabled; then
-	AC_DEFINE(NETWORK, 1, [ Define if network support is enabled. ])
-	if test x"$have_network" = xno; then
-		AC_MSG_WARN( [ You forced network code while I think there is support missing! ] )
-	fi
-fi
+AC_SEARCH_LIBS(socket, socket ws2_32) 
 
 AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
-if test x"$ipv6" = xauto; then
-	if test x"$have_ipv6" = xyes; then
-		ipv6=enabled
-	else
-		ipv6=disabled
-	fi
-fi
-
-if test x"$ipv6" = xenabled; then
-	AC_DEFINE(IPV6, 1, [ Define if IPV6 support is enabled. ])
-	if test x"$have_ipv6" = xno; then
-		AC_MSG_WARN( [ You forced IPv6 code while I think there is no getaddrinfo() available! ] )
-	fi
-fi
 
 # Substitutions for the installable mpg123.h header
 if test "x$ac_cv_header_stdio_h" = "xyes"; then
@@ -1842,11 +1815,14 @@ fi
 # Define that always... also without frame index enabled.
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
+dnl ############## Win32 function checks
 # Check if we want Unicode for Win32. Cygwin does not need _wopen
 win32_specific_codes=disabled
-win32_unicode=disabled
+win32_unicode=Uneeded
+win32_sockets=disabled
 AC_CHECK_HEADERS([windows.h], [win32_specific_codes=enabled])
-if test "x$win32_specific_codes" = xenabled; then
+if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; then
+  AC_CHECK_HEADERS([ws2tcpip.h], [win32_sockets=enabled], [AC_MSG_WARN([Please update your headers to support winsock 2.2.])])
   AC_CHECK_FUNC([_wopen], [win32_unicode=enabled],[win32_unicode=disabled])
   AC_MSG_CHECKING([if we want Unicode File Open for Win32])
   if test "x$win32_unicode" = xenabled; then
@@ -1855,9 +1831,48 @@ if test "x$win32_specific_codes" = xenabled; then
   else
     AC_MSG_RESULT([no])
   fi
+  AC_MSG_CHECKING([if we want Win32 sockets])
+  if test "x$win32_sockets" = xenabled; then
+    AC_DEFINE([WANT_WIN32_SOCKETS], [1], [ Define to use Win32 sockets ])
+    AC_MSG_RESULT([yes])
+    network_type=Winsock2
+    have_network=yes
+    have_ipv6=yes
+  else
+    AC_MSG_RESULT([no])
+  fi
 fi
 # Use Win32 support codes
 AM_CONDITIONAL([WIN32_CODES], [ test "x$win32_specific_codes" = xenabled ])
+
+if test x"$network" = xauto; then
+	if test x"$have_network" = xyes; then
+		network=enabled
+	else
+		network=disabled
+	fi
+fi
+if test x"$ipv6" = xauto; then
+	if test x"$have_ipv6" = xyes; then
+		ipv6=enabled
+	else
+		ipv6=disabled
+	fi
+fi
+
+if test x"$network" = xenabled; then
+	AC_DEFINE(NETWORK, 1, [ Define if network support is enabled. ])
+	if test x"$have_network" = xno; then
+		AC_MSG_WARN( [ You forced network code while I think there is support missing! ] )
+	fi
+fi
+
+if test x"$ipv6" = xenabled; then
+	AC_DEFINE(IPV6, 1, [ Define if IPV6 support is enabled. ])
+	if test x"$have_ipv6" = xno; then
+		AC_MSG_WARN( [ You forced IPv6 code while I think there is no getaddrinfo() available! ] )
+	fi
+fi
 
 dnl ############## Final Output
 
@@ -1895,6 +1910,7 @@ echo "
   FIFO support ............ $fifo
   Buffer .................. $buffer
   Network (http streams) .. $network
+  Network Sockets ......... $network_type
   IPv6 (getaddrinfo) ...... $ipv6
   File offset (if needed) . $ac_cv_sys_file_offset_bits
   Alignment checks ........ $aligncheck"
