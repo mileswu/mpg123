@@ -83,9 +83,7 @@ struct parameter param = {
 #ifdef FIFO
 	,NULL
 #endif
-#if !defined (WIN32) || defined (__CYGWIN__)
 	,0 /* timeout */
-#endif
 	,1 /* loop */
 	,0 /* delay */
 	,0 /* index */
@@ -191,7 +189,9 @@ void safe_exit(int code)
 #ifdef WIN32_WANT_UNICODE
 	win32_cmdline_free(argc, argv); /* This handles the premature argv == NULL, too. */
 #endif
-
+#if defined (WANT_WIN32_SOCKETS)
+	win32_net_deinit();
+#endif
 	/* It's ugly... but let's just fix this still-reachable memory chunk of static char*. */
 	split_dir_file("", &dummy, &dammy);
 	exit(code);
@@ -317,7 +317,7 @@ static void set_out_stdout1(char *arg)
 	#endif
 }
 
-#ifndef HAVE_SCHED_SETSCHEDULER
+#if defined (HAVE_SCHED_SETSCHEDULER) && !defined (HAVE_WINDOWS_H)
 static void realtime_not_compiled(char *arg)
 {
 	fprintf(stderr,"Option '-T / --realtime' not compiled into this binary.\n");
@@ -442,9 +442,7 @@ topt opts[] = {
 #ifdef FIFO
 	{0, "fifo", GLO_ARG | GLO_CHAR, 0, &param.fifo,  0},
 #endif
-#ifndef WIN32
 	{0, "timeout", GLO_ARG | GLO_LONG, 0, &param.timeout, 0},
-#endif
 	{0, "loop", GLO_ARG | GLO_LONG, 0, &param.loop, 0},
 	{'i', "index", GLO_INT, 0, &param.index, 1},
 	{'D', "delay", GLO_ARG | GLO_INT, 0, &param.delay, 0},
@@ -526,6 +524,9 @@ int open_track(char *fname)
 	}
 	else if (!strncmp(fname, "http://", 7)) /* http stream */
 	{
+#if defined (WANT_WIN32_SOCKETS)
+	    win32_net_replace(mh);
+#endif
 		filept = http_open(fname, &htd);
 		/* now check if we got sth. and if we got sth. good */
 		if(    (filept >= 0) && (htd.content_type.p != NULL)
@@ -698,24 +699,6 @@ int skip_or_die(struct timeval *start_time)
 #define skip_or_die(a) TRUE
 #endif
 
-#if defined (WANT_WIN32_UNICODE)
-static int
-argv_cleanup(void *in)
-{
-	debug ("argv_cleanup running!\n");
-	char ** ptr;
-	ptr = (char **)in;
-	while (ptr && *ptr) 
-	{
-		free ((void *)*ptr);
-		++ptr;
-	}
-	free(in);
-	debug ("argv_cleanup ran!\n");
-	return 0;
-}
-#endif
-
 int main(int sys_argc, char ** sys_argv)
 {
 	int result;
@@ -736,6 +719,9 @@ int main(int sys_argc, char ** sys_argv)
 #else
 	argv = sys_argv;
 	argc = sys_argc;
+#endif
+#if defined (WANT_WIN32_SOCKETS)
+	win32_net_init();
 #endif
 
 	/* Extract binary and path, take stuff before/after last / or \ . */
@@ -876,10 +862,8 @@ int main(int sys_argc, char ** sys_argv)
 	    && MPG123_OK == (result = mpg123_par(mp, MPG123_ICY_INTERVAL, 0, 0))
 	    && ++libpar
 	    && MPG123_OK == (result = mpg123_par(mp, MPG123_RESYNC_LIMIT, param.resync_limit, 0))
-#ifndef WIN32
 	    && ++libpar
 	    && MPG123_OK == (result = mpg123_par(mp, MPG123_TIMEOUT, param.timeout, 0))
-#endif
 	    && ++libpar
 	    && MPG123_OK == (result = mpg123_par(mp, MPG123_OUTSCALE, param.outscale, 0))
 	    && ++libpar
@@ -1212,9 +1196,7 @@ static void long_usage(int err)
 	fprintf(o," -l <n> --listentry <n>    play nth title in playlist; show whole playlist for n < 0\n");
 	fprintf(o,"        --loop <n>         loop track(s) <n> times, < 0 means infinite loop (not with --random!)\n");
 	fprintf(o,"        --keep-open        (--remote mode only) keep loaded file open after reaching end\n");
-#ifndef WIN32
 	fprintf(o,"        --timeout <n>      Timeout in seconds before declaring a stream dead (if <= 0, wait forever)\n");
-#endif
 	fprintf(o," -z     --shuffle          shuffle song-list before playing\n");
 	fprintf(o," -Z     --random           full random play\n");
 	fprintf(o,"        --no-icy-meta      Do not accept ICY meta data\n");

@@ -75,9 +75,7 @@ struct parameter
 #ifdef FIFO
 	char* fifo;
 #endif
-#if !defined (WIN32) || defined (__CYGWIN__)
 	long timeout; /* timeout for reading in seconds */
-#endif
 	long loop;    /* looping of tracks */
 	int delay;
 	int index;    /* index / scan through files before playback */

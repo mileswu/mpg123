@@ -119,8 +119,11 @@ debunk_result:
 
 
 #ifdef NETWORK
-
+#if !defined (WANT_WIN32_SOCKETS)
 int writestring (int fd, mpg123_string *string)
+#else
+int writestring (SOCKET fd, mpg123_string *string)
+#endif
 {
 	size_t result, bytes;
 	char *ptr = string->p;
@@ -128,7 +131,12 @@ int writestring (int fd, mpg123_string *string)
 
 	while(bytes)
 	{
-		if((result = write(fd, ptr, bytes)) < 0 && errno != EINTR)
+#if !defined (WANT_WIN32_SOCKETS)
+		result = write(fd, ptr, bytes);
+#else
+		result = win32_net_write(fd, ptr, bytes);
+#endif
+		if(result < 0 && errno != EINTR)
 		{
 			perror ("writing http string");
 			return FALSE;
@@ -146,6 +154,8 @@ int writestring (int fd, mpg123_string *string)
 
 size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
 {
+	debug2("Attempting readstring on %d for %d bytes", f ? fileno(f) : 0, maxlen);
+	int err;
 	string->fill = 0;
 	while(maxlen == 0 || string->fill < maxlen)
 	{
@@ -156,8 +166,13 @@ size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
 			string->fill = 0;
 			return 0;
 		}
+#if !defined (WANT_WIN32_SOCKETS)
+		err = read(fileno(f),string->p+string->fill,1);
+#else
+		err = win32_net_read(0,string->p+string->fill,1); /*fd is ignored */
+#endif
 		/* Whoa... reading one byte at a time... one could ensure the line break in another way, but more work. */
-		if( read(fileno(f),string->p+string->fill,1) == 1)
+		if( err == 1)
 		{
 			string->fill++;
 			if(string->p[string->fill-1] == '\n') break;
@@ -447,8 +462,11 @@ static int fill_request(mpg123_string *request, mpg123_string *host, mpg123_stri
 
 	return ret;
 }
-
+#if !defined (WANT_WIN32_SOCKETS)
 static int resolve_redirect(mpg123_string *response, mpg123_string *request_url, mpg123_string *purl)
+#else
+static SOCKET resolve_redirect(mpg123_string *response, mpg123_string *request_url, mpg123_string *purl)
+#endif
 {
 	debug1("request_url:%s", request_url->p);
 	/* initialized with full old url */
@@ -493,11 +511,15 @@ int http_open(char* url, struct httpdata *hd)
 	mpg123_string purl, host, port, path;
 	mpg123_string request, response, request_url;
 	mpg123_string httpauth1;
+#if !defined (WANT_WIN32_SOCKETS)
 	int sock = -1;
+#else
+	SOCKET sock = -1;
+#endif
 	int oom  = 0;
 	int relocate, numrelocs = 0;
 	int got_location = FALSE;
-	FILE *myfile;
+	FILE *myfile = NULL;
 	/*
 		workaround for http://www.global24music.com/rautemusik/files/extreme/isdn.pls
 		this site's apache gives me a relocation to the same place when I give the port in Host request field
@@ -574,22 +596,34 @@ int http_open(char* url, struct httpdata *hd)
 		if(!fill_request(&request, &host, &port, &httpauth1, &try_without_port)){ oom=1; goto exit; }
 
 		httpauth1.fill = 0; /* We use the auth data from the URL only once. */
-
-		if((sock = open_connection(&host, &port)) < 0)
+		debug2("attempting to open_connection to %s:%s", host.p, port.p);
+#if !defined (WANT_WIN32_SOCKETS)
+		sock = open_connection(&host, &port);
+#else
+		sock = win32_net_open_connection(&host, &port);
+#endif
+		if(sock < 0)
 		{
 			error1("Unable to establish connection to %s", host.fill ? host.p : "");
 			goto exit;
 		}
-
+#if !defined (WANT_WIN32_SOCKETS)
 #define http_failure close(sock); sock=-1; goto exit;
+#else
+#define http_failure closesocket(sock); sock=-1; goto exit;
+#endif
 		
 		if(param.verbose > 2) fprintf(stderr, "HTTP request:\n%s\n",request.p);
 		if(!writestring(sock, &request)){ http_failure; }
+#if !defined (WANT_WIN32_SOCKETS)
 		if (!(myfile = fdopen(sock, "rb")))
 		{
 			error1("fdopen: %s", strerror(errno));
 			http_failure;
 		}
+#else
+		debug("Skipping fdopen for WSA sockets");
+#endif
 		relocate = FALSE;
 		/* Arbitrary length limit here... */
 #define safe_readstring \
