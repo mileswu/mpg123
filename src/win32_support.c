@@ -67,19 +67,21 @@ void win32_set_priority (const int arg)
 #ifdef DEBUG
 #define msgme(x) win32_net_msg(x,__FILE__,__LINE__)
 #define msgme1 win32_net_msg(1,__FILE__,__LINE__)
+#define msgme_sock_err(x) if ((x)==SOCKET_ERROR) {msgme1;}
 #else
 #define msgme(x) x
-#define msgme1 continue
+#define msgme1 do{} while(0)
+#define msgme_sock_err(x) x
 #endif
 struct ws_local
 {
-  int inited:1;
+  int inited;
   SOCKET local_socket; /*stores last connet in win32_net_open_connection*/
   WSADATA wsadata;
 };
 
 static struct ws_local ws;
-
+#ifdef DEBUG
 static void win32_net_msg (const int err, const char * const filedata, const int linedata)
 {
   char *errbuff;
@@ -99,6 +101,7 @@ static void win32_net_msg (const int err, const char * const filedata, const int
     LocalFree (errbuff);
   }
 }
+#endif
 
 void win32_net_init (void)
 {
@@ -120,9 +123,12 @@ void win32_net_deinit (void)
   debug("Begin winsock cleanup");
   if (ws.inited)
   {
-    debug1("ws.local_socket = %d", ws.local_socket);
-    msgme(shutdown(ws.local_socket, SD_BOTH));
-    closesocket(ws.local_socket);
+    if (ws.inited >= 2)
+    {
+      debug1("ws.local_socket = %d", ws.local_socket);
+      msgme_sock_err(shutdown(ws.local_socket, SD_BOTH));
+      msgme_sock_err(closesocket(ws.local_socket));
+    }
     WSACleanup();
     ws.inited = 0;
   }
@@ -144,10 +150,9 @@ ssize_t win32_net_read (int fildes, void *buf, size_t nbyte)
 {
   debug1("Attempting to read %d bytes from network.", nbyte);
   ssize_t ret;
-  ret = (ssize_t) recv(ws.local_socket, buf, nbyte, 0);
+  msgme_sock_err(ret = (ssize_t) recv(ws.local_socket, buf, nbyte, 0));
   debug1("Read %d bytes from network.", ret);
 
-  if (ret == SOCKET_ERROR) {msgme1;}
   return ret;
 }
 
@@ -155,10 +160,8 @@ ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte)
 {
   debug1("Attempting to write %d bytes to network.", nbyte);
   ssize_t ret;
-  ret = (ssize_t) send(ws.local_socket, buf, nbyte, 0);
+  msgme_sock_err((ret = (ssize_t) send(ws.local_socket, buf, nbyte, 0)));
   debug1("wrote %d bytes to network.", ret);
-
-  if (ret == SOCKET_ERROR) {msgme1;}
 
   return ret;
 }

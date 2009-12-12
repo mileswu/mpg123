@@ -131,7 +131,13 @@ size_t bufferblock = 0;
 static int intflag = FALSE;
 static int skip_tracks = 0;
 int OutputDescriptor;
-static int filept = -1;
+
+#ifdef WANT_WIN32_SOCKETS
+  static SOCKET filept = -1; /* always large enough to hold an int */
+#else
+  static int filept = -1;
+#endif
+
 char *binpath; /* Path to myself. */
 
 /* File-global storage of command line arguments.
@@ -200,7 +206,7 @@ void safe_exit(int code)
 /* returns 1 if reset_audio needed instead */
 static void set_output_module( char *arg )
 {
-	int i;
+	unsigned int i;
 		
 	/* Search for a colon and set the device if found */
 	for(i=0; i< strlen( arg ); i++) {
@@ -536,7 +542,11 @@ int open_track(char *fname)
 			error("If you know the stream is mpeg1/2 audio, then please report this as "PACKAGE_NAME" bug");
 			return 0;
 		}
+#if defined (WANT_WIN32_SOCKETS)
 		if(filept < 0)
+#else
+		if(filept != SOCKET_ERROR)
+#endif
 		{
 			error1("Access to http resource %s failed.", fname);
 			return 0;

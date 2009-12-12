@@ -23,7 +23,6 @@
 
 #if defined (WANT_WIN32_SOCKETS) /*conflict with gethostname and select in select.h and unistd.h */
 #include <ws2tcpip.h>
-#define EINPROGRESS WSAEINPROGRESS
 SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port);
 ssize_t win32_net_read (int fildes, void *buf, size_t nbyte);
 ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte);
