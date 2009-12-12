@@ -137,13 +137,13 @@ void win32_net_deinit (void)
 static void win32_net_nonblock(SOCKET sock)
 {
   u_long mode = 1;
-  msgme(ioctlsocket(sock, FIONBIO, &mode));
+  msgme_sock_err(ioctlsocket(sock, FIONBIO, &mode));
 }
 
 static void win32_net_block(SOCKET sock)
 {
   u_long mode = 0;
-  msgme(ioctlsocket(sock, FIONBIO, &mode));
+  msgme_sock_err(ioctlsocket(sock, FIONBIO, &mode));
 }
 
 ssize_t win32_net_read (int fildes, void *buf, size_t nbyte)
@@ -185,14 +185,14 @@ static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_
 	{
 		int err;
 		win32_net_nonblock(sockfd);
-		msgme(err = connect(sockfd, serv_addr, addrlen));
+		err = connect(sockfd, serv_addr, addrlen);
 		if(err != SOCKET_ERROR)
 		{
 			debug("immediately successful");
 			win32_net_block(sockfd);
 			return 0;
 		}
-		else if(errno == WSAEINPROGRESS)
+		else if(WSAGetLastError() == WSAEWOULDBLOCK) /*WSAEINPROGRESS would not work here for some reason*/
 		{
 			struct timeval tv;
 			fd_set fds;
@@ -203,11 +203,11 @@ static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_
 
 			FD_ZERO(&fds);
 			FD_SET(sockfd, &fds);
-			msgme(err = select(sockfd+1, NULL, &fds, NULL, &tv));
-			if(err > 0)
+			err = select(sockfd+1, NULL, &fds, NULL, &tv);
+			if(err != SOCKET_ERROR)
 			{
 				socklen_t len = sizeof(err);
-				if(   (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (char *)&err, &len) != SOCKET_ERROR)
+				if((getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (char *)&err, &len) != SOCKET_ERROR)
 				   && (err == 0) )
 				{
 					debug("non-blocking connect has been successful");
@@ -297,10 +297,14 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 		addr=addr->ai_next;
 	}
 	if(sock < 0) {error2("Cannot resolve/connect to %s:%s!", host->p, port->p);}
+	else
+	{
+	  debug1("Saving socket %d",sock);
+	  ws.local_socket = sock;
+	  ws.inited = 2;
+	}
 
 	freeaddrinfo(addrlist);
-	debug1("Saving socket %d",sock);
-	ws.local_socket = sock;
 	return sock;
 }
 
