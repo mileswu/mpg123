@@ -21,8 +21,11 @@
 #include <shellapi.h>
 #include <mmsystem.h>
 
-#if defined (WANT_WIN32_SOCKETS) /*conflict with gethostname and select in select.h and unistd.h */
+#if defined (HAVE_WS2TCPIP_H) && !defined (__CYGWIN__)
 #include <ws2tcpip.h>
+#endif
+
+#if defined (WANT_WIN32_SOCKETS) /*conflict with gethostname and select in select.h and unistd.h */
 SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port);
 ssize_t win32_net_read (int fildes, void *buf, size_t nbyte);
 ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte);

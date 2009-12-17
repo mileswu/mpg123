@@ -533,6 +533,7 @@ int open_track(char *fname)
 #if defined (WANT_WIN32_SOCKETS)
 	    win32_net_replace(mh);
 #endif
+/* utf-8 encoded URLs might not work under Win32 */
 		filept = http_open(fname, &htd);
 		/* now check if we got sth. and if we got sth. good */
 		if(    (filept >= 0) && (htd.content_type.p != NULL)
