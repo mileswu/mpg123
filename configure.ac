@@ -952,9 +952,9 @@ else
 fi
 
 dnl trying to get that socket lib settled in one line
-AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32) 
+AC_SEARCH_LIBS(gethostbyname, nsl socket) 
 dnl OK, two lines... Solaris needs -lnsl -lsocket
-AC_SEARCH_LIBS(socket, socket ws2_32) 
+AC_SEARCH_LIBS(socket, socket) 
 
 AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
 
@@ -1815,7 +1815,6 @@ fi
 # Define that always... also without frame index enabled.
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
-dnl ############## Win32 function checks
 # Check if we want Unicode for Win32. Cygwin does not need _wopen
 win32_specific_codes=disabled
 win32_unicode=Uneeded
@@ -1838,10 +1837,12 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
     network_type=Winsock2
     have_network=yes
     have_ipv6=yes
+    LIBS="$LIBS -lws2_32"
   else
     AC_MSG_RESULT([no])
   fi
 fi
+dnl ############## Win32 function checks
 # Use Win32 support codes
 AM_CONDITIONAL([WIN32_CODES], [ test "x$win32_specific_codes" = xenabled ])
 
@@ -1860,6 +1861,7 @@ if test x"$ipv6" = xauto; then
 	fi
 fi
 
+dnl ############## Network enable
 if test x"$network" = xenabled; then
 	AC_DEFINE(NETWORK, 1, [ Define if network support is enabled. ])
 	if test x"$have_network" = xno; then
