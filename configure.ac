@@ -1815,6 +1815,7 @@ fi
 # Define that always... also without frame index enabled.
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
+dnl ############## Win32 function checks
 # Check if we want Unicode for Win32. Cygwin does not need _wopen
 win32_specific_codes=disabled
 win32_unicode=Uneeded
@@ -1842,7 +1843,7 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
     AC_MSG_RESULT([no])
   fi
 fi
-dnl ############## Win32 function checks
+
 # Use Win32 support codes
 AM_CONDITIONAL([WIN32_CODES], [ test "x$win32_specific_codes" = xenabled ])
 
