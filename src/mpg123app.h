@@ -12,10 +12,15 @@
 #ifndef MPG123_H
 #define MPG123_H
 #include "config.h"
-#include "win32_support.h"
+
 /* everyone needs it */
 #include "compat.h"
 /* import DLL symbols on windows */
+
+#include "xfermem.h"
+#include "httpget.h"
+#include "win32_support.h"
+
 #if defined(WIN32) && defined(DYNAMIC_BUILD)
 #define LINK_MPG123_DLL
 #endif
@@ -23,9 +28,6 @@
 #define MPG123_REMOTE
 #define REMOTE_BUFFER_SIZE 2048
 #define MAXOUTBURST 32768
-
-#include "xfermem.h"
-#include "httpget.h"
 
 #ifdef __GNUC__
 #define INLINE inline

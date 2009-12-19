@@ -531,10 +531,11 @@ int open_track(char *fname)
 	else if (!strncmp(fname, "http://", 7)) /* http stream */
 	{
 #if defined (WANT_WIN32_SOCKETS)
-	    win32_net_replace(mh);
+	/*Use recv instead of stdio functions */
+	win32_net_replace(mh);
 #endif
 /* utf-8 encoded URLs might not work under Win32 */
-		filept = http_open(fname, &htd);
+		filept = win32_net_http_open(fname, &htd);
 		/* now check if we got sth. and if we got sth. good */
 		if(    (filept >= 0) && (htd.content_type.p != NULL)
 			  && !param.ignore_mime && !(debunk_mime(htd.content_type.p) & IS_FILE) )
@@ -543,11 +544,8 @@ int open_track(char *fname)
 			error("If you know the stream is mpeg1/2 audio, then please report this as "PACKAGE_NAME" bug");
 			return 0;
 		}
-#if defined (WANT_WIN32_SOCKETS)
+		/* This should work for win32 too as SOCKET_ERROR is -1 */
 		if(filept < 0)
-#else
-		if(filept != SOCKET_ERROR)
-#endif
 		{
 			error1("Access to http resource %s failed.", fname);
 			return 0;

@@ -33,6 +33,9 @@ typedef struct playlist_struct
 	mpg123_string linebuf;
 	mpg123_string dir;
 	enum playlist_type type;
+#if defined (WANT_WIN32_SOCKETS)
+	SOCKET sockd; /* Is a socket Win32 descriptor */
+#endif
 } playlist_struct;
 
 extern struct playlist_struct pl;

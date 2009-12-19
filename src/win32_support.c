@@ -156,6 +156,38 @@ ssize_t win32_net_read (int fildes, void *buf, size_t nbyte)
   return ret;
 }
 
+static int get_sock_ch (SOCKET sock)
+{
+  char c;
+  int ret;
+  msgme_sock_err(ret = recv (sock, &c, 1, 0));
+  if (ret == 1)
+    return (((int) c)&0xff);
+  return -1;
+}
+/* Addapted from from newlib*/
+char *win32_net_fgets(char *s, int n, SOCKET stream)
+{
+  char c = 0;
+  char *buf;
+  buf = s;
+  debug1("Pseudo net fgets attempts to read %d bytes from network.", n - 1);
+  while (--n > 0 && (c = get_sock_ch (stream)) != -1)
+  {
+    *s++ = c;
+    if (c == '\n' || c == '\r')
+      break;
+  }
+  debug1("Pseudo net fgets got %u bytes.", (s - buf));
+  if (c == -1 && s == buf)
+  {
+    debug("Pseudo net fgets met a premature end.");
+    return NULL;
+  }
+  *s = 0;
+  return buf;
+}
+
 ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte)
 {
   debug1("Attempting to write %d bytes to network.", nbyte);
@@ -261,7 +293,7 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 {
 	struct addrinfo hints;
 	struct addrinfo *addr, *addrlist;
-	SOCKET addrcount, sock = -1;
+	SOCKET addrcount, sock = SOCKET_ERROR;
 
 	if(param.verbose>1) fprintf(stderr, "Note: Attempting new-style connection to %s\n", host->p);
 	memset(&hints, 0, sizeof(struct addrinfo));
@@ -292,11 +324,11 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 			break;
 			debug("win32_net_timeout_connect error, closing socket");
 			msgme(closesocket(sock));
-			sock=-1;
+			sock=SOCKET_ERROR;
 		}
 		addr=addr->ai_next;
 	}
-	if(sock < 0) {error2("Cannot resolve/connect to %s:%s!", host->p, port->p);}
+	if(sock == SOCKET_ERROR) {error2("Cannot resolve/connect to %s:%s!", host->p, port->p);}
 	else
 	{
 	  debug1("Saving socket %d",sock);

@@ -32,7 +32,6 @@
 #ifdef NETWORK
 #include "resolver.h"
 
-#define HTTP_MAX_RELOCATIONS 20
 #include <errno.h>
 #include "true.h"
 #endif
@@ -120,10 +119,7 @@ debunk_result:
 
 #ifdef NETWORK
 #if !defined (WANT_WIN32_SOCKETS)
-int writestring (int fd, mpg123_string *string)
-#else
-int writestring (SOCKET fd, mpg123_string *string)
-#endif
+static int writestring (int fd, mpg123_string *string)
 {
 	size_t result, bytes;
 	char *ptr = string->p;
@@ -131,11 +127,8 @@ int writestring (SOCKET fd, mpg123_string *string)
 
 	while(bytes)
 	{
-#if !defined (WANT_WIN32_SOCKETS)
 		result = write(fd, ptr, bytes);
-#else
 		result = win32_net_write(fd, ptr, bytes);
-#endif
 		if(result < 0 && errno != EINTR)
 		{
 			perror ("writing http string");
@@ -152,7 +145,7 @@ int writestring (SOCKET fd, mpg123_string *string)
 	return TRUE;
 }
 
-size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
+static size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
 {
 	debug2("Attempting readstring on %d for %d bytes", f ? fileno(f) : 0, maxlen);
 	int err;
@@ -166,11 +159,8 @@ size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
 			string->fill = 0;
 			return 0;
 		}
-#if !defined (WANT_WIN32_SOCKETS)
 		err = read(fileno(f),string->p+string->fill,1);
-#else
 		err = win32_net_read(0,string->p+string->fill,1); /*fd is ignored */
-#endif
 		/* Whoa... reading one byte at a time... one could ensure the line break in another way, but more work. */
 		if( err == 1)
 		{
@@ -197,6 +187,7 @@ size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
 	}
 	return string->fill;
 }
+#endif /* WANT_WIN32_SOCKETS */
 
 void encode64 (char *source,char *destination)
 {
@@ -261,17 +252,11 @@ void get_header_string(mpg123_string *response, const char *fieldname, mpg123_st
 	}
 }
 
-/* needed for HTTP/1.1 non-pipelining mode */
-/* #define CONN_HEAD "Connection: close\r\n" */
-#define CONN_HEAD ""
-
 /* shoutcsast meta data: 1=on, 0=off */
-static const char *icy_yes = "Icy-MetaData: 1\r\n";
-static const char *icy_no  = "Icy-MetaData: 0\r\n";
 
 char *httpauth = NULL;
 
-static size_t accept_length(void)
+size_t accept_length(void)
 {
 	int i,j;
 	static size_t l = 0;
@@ -285,7 +270,7 @@ static size_t accept_length(void)
 }
 
 /* Returns TRUE or FALSE for success. */
-static int proxy_init(struct httpdata *hd)
+int proxy_init(struct httpdata *hd)
 {
 	int ret = TRUE;
 	/* If we don't have explicit proxy given, probe the environment. */
@@ -346,7 +331,7 @@ static int append_accept(mpg123_string *s)
 	What about converting them to "+" instead? Would make things a lot easier.
 	Or, on the other hand... what about avoiding HTML encoding at all?
 */
-static int translate_url(const char *url, mpg123_string *purl)
+int translate_url(const char *url, mpg123_string *purl)
 {
 	const char *sptr;
 	/* The length of purl is upper bound by 3*strlen(url) + 1 if
@@ -387,7 +372,7 @@ static int translate_url(const char *url, mpg123_string *purl)
 	return TRUE;
 }
 
-static int fill_request(mpg123_string *request, mpg123_string *host, mpg123_string *port, mpg123_string *httpauth1, int *try_without_port)
+int fill_request(mpg123_string *request, mpg123_string *host, mpg123_string *port, mpg123_string *httpauth1, int *try_without_port)
 {
 	char* ttemp;
 	int ret = TRUE;
@@ -464,9 +449,6 @@ static int fill_request(mpg123_string *request, mpg123_string *host, mpg123_stri
 }
 #if !defined (WANT_WIN32_SOCKETS)
 static int resolve_redirect(mpg123_string *response, mpg123_string *request_url, mpg123_string *purl)
-#else
-static SOCKET resolve_redirect(mpg123_string *response, mpg123_string *request_url, mpg123_string *purl)
-#endif
 {
 	debug1("request_url:%s", request_url->p);
 	/* initialized with full old url */
@@ -511,11 +493,7 @@ int http_open(char* url, struct httpdata *hd)
 	mpg123_string purl, host, port, path;
 	mpg123_string request, response, request_url;
 	mpg123_string httpauth1;
-#if !defined (WANT_WIN32_SOCKETS)
 	int sock = -1;
-#else
-	SOCKET sock = -1;
-#endif
 	int oom  = 0;
 	int relocate, numrelocs = 0;
 	int got_location = FALSE;
@@ -597,33 +575,21 @@ int http_open(char* url, struct httpdata *hd)
 
 		httpauth1.fill = 0; /* We use the auth data from the URL only once. */
 		debug2("attempting to open_connection to %s:%s", host.p, port.p);
-#if !defined (WANT_WIN32_SOCKETS)
 		sock = open_connection(&host, &port);
-#else
-		sock = win32_net_open_connection(&host, &port);
-#endif
 		if(sock < 0)
 		{
 			error1("Unable to establish connection to %s", host.fill ? host.p : "");
 			goto exit;
 		}
-#if !defined (WANT_WIN32_SOCKETS)
 #define http_failure close(sock); sock=-1; goto exit;
-#else
-#define http_failure closesocket(sock); sock=-1; goto exit;
-#endif
 		
 		if(param.verbose > 2) fprintf(stderr, "HTTP request:\n%s\n",request.p);
 		if(!writestring(sock, &request)){ http_failure; }
-#if !defined (WANT_WIN32_SOCKETS)
 		if (!(myfile = fdopen(sock, "rb")))
 		{
 			error1("fdopen: %s", strerror(errno));
 			http_failure;
 		}
-#else
-		debug("Skipping fdopen for WSA sockets");
-#endif
 		relocate = FALSE;
 		/* Arbitrary length limit here... */
 #define safe_readstring \
@@ -719,6 +685,7 @@ exit: /* The end as well as the exception handling point... */
 	mpg123_free_string(&httpauth1);
 	return sock;
 }
+#endif /*WANT_WIN32_SOCKETS*/
 
 #else /* NETWORK */
 
