@@ -99,7 +99,7 @@ static void win32_net_block(SOCKET sock)
 
 ssize_t win32_net_read (int fildes, void *buf, size_t nbyte)
 {
-  debug1("Attempting to read %d bytes from network.", nbyte);
+  debug1("Attempting to read %u bytes from network.", nbyte);
   ssize_t ret;
   msgme_sock_err(ret = (ssize_t) recv(ws.local_socket, buf, nbyte, 0));
   debug1("Read %d bytes from network.", ret);
@@ -141,7 +141,7 @@ char *win32_net_fgets(char *s, int n, SOCKET stream)
 
 ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte)
 {
-  debug1("Attempting to write %d bytes to network.", nbyte);
+  debug1("Attempting to write %u bytes to network.", nbyte);
   ssize_t ret;
   msgme_sock_err((ret = (ssize_t) send(ws.local_socket, buf, nbyte, 0)));
   debug1("wrote %d bytes to network.", ret);
@@ -255,7 +255,7 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 	debug2("Atempt resolve/connect to %s:%s", host->p, port->p);
 	msgme(addrcount = getaddrinfo(host->p, port->p, &hints, &addrlist));
 
-	if(addrcount <0)
+	if(addrcount == INVALID_SOCKET)
 	{
 		error3("Resolving %s:%s: %s", host->p, port->p, gai_strerror(addrcount));
 		return -1;
@@ -293,7 +293,7 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 
 static size_t win32_net_readstring (mpg123_string *string, size_t maxlen, FILE *f)
 {
-	debug2("Attempting readstring on %d for %d bytes", f ? fileno(f) : 0, maxlen);
+	debug2("Attempting readstring on %d for %d bytes", f ? fileno(f) : -1, maxlen);
 	int err;
 	string->fill = 0;
 	while(maxlen == 0 || string->fill < maxlen)
@@ -342,7 +342,7 @@ static int win32_net_writestring (SOCKET fd, mpg123_string *string)
 	while(bytes)
 	{
 		result = win32_net_write(fd, ptr, bytes);
-		if(result < 0 && errno != EINTR)/* errno shouldn't be used here for win32*/
+		if(result < 0 && WSAGetLastError() != WSAEINTR)
 		{
 			perror ("writing http string");
 			return FALSE;
