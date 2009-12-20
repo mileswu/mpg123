@@ -482,8 +482,11 @@ int add_next_file (int argc, char *argv[])
 				param.listname = NULL;
 				pl.file = NULL;
 #ifdef WANT_WIN32_SOCKETS
-				closesocket(pl.sockd);
-				pl.sockd = SOCKET_ERROR;
+				if( pl.sockd != SOCKET_ERROR)
+				{
+				  closesocket(pl.sockd);
+				  pl.sockd = SOCKET_ERROR;
+				}
 #endif
 			}
 		}
