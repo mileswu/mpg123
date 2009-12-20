@@ -66,14 +66,22 @@ void win32_net_deinit (void)
   debug("Begin winsock cleanup");
   if (ws.inited)
   {
-    if (ws.inited >= 2)
+    if (ws.inited >= 2 && ws.local_socket != SOCKET_ERROR)
     {
       debug1("ws.local_socket = %d", ws.local_socket);
       msgme_sock_err(shutdown(ws.local_socket, SD_BOTH));
-      msgme_sock_err(closesocket(ws.local_socket));
+      win32_net_close(ws.local_socket);
     }
     WSACleanup();
     ws.inited = 0;
+  }
+}
+
+void win32_net_close (SOCKET sock)
+{
+  if (sock != SOCKET_ERROR)
+  {
+    msgme_sock_err(closesocket(ws.local_socket));
   }
 }
 
@@ -266,7 +274,7 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 			if(win32_net_timeout_connect(sock, addr->ai_addr, addr->ai_addrlen) == 0)
 			break;
 			debug("win32_net_timeout_connect error, closing socket");
-			msgme(closesocket(sock));
+			win32_net_close(sock);
 			sock=SOCKET_ERROR;
 		}
 		addr=addr->ai_next;
@@ -483,7 +491,7 @@ int win32_net_http_open(char* url, struct httpdata *hd)
 			error1("Unable to establish connection to %s", host.fill ? host.p : "");
 			goto exit;
 		}
-#define http_failure closesocket(sock); sock=SOCKET_ERROR; goto exit;
+#define http_failure win32_net_close(sock); sock=SOCKET_ERROR; goto exit;
 		
 		if(param.verbose > 2) fprintf(stderr, "HTTP request:\n%s\n",request.p);
 		if(!win32_net_writestring(sock, &request)){ http_failure; }

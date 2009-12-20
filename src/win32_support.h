@@ -33,6 +33,7 @@ ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte);
 char *win32_net_fgets(char *s, int n, SOCKET stream);
 void win32_net_init (void);
 void win32_net_deinit (void);
+void win32_net_close (SOCKET sock);
 void win32_net_replace (mpg123_handle *fr);
 #endif
 

@@ -243,7 +243,7 @@ int add_next_file (int argc, char *argv[])
 						if(fd >= 0) close(fd);
 						fd = -1;
 #else
-						if(fd != SOCKET_ERROR) closesocket(fd);
+						if(fd != SOCKET_ERROR) win32_net_close(fd);
 						fd = SOCKET_ERROR;
 #endif
 						
@@ -484,7 +484,7 @@ int add_next_file (int argc, char *argv[])
 #ifdef WANT_WIN32_SOCKETS
 				if( pl.sockd != SOCKET_ERROR)
 				{
-				  closesocket(pl.sockd);
+				  win32_net_close(pl.sockd);
 				  pl.sockd = SOCKET_ERROR;
 				}
 #endif
