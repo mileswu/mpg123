@@ -61,7 +61,7 @@ mpg123_SOURCES = \
 if WIN32_CODES
 mpg123_SOURCES += \
 	win32_support.c \
-	win32_support_net.c
+	win32_net.c
 endif
 
 # That is not nice... but it is how I manage to get the dependency on output/alsa.o without error about .deps/output/alsa.Tpo .
