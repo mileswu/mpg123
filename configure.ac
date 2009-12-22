@@ -1832,7 +1832,7 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
     AC_MSG_RESULT([no])
   fi
   AC_MSG_CHECKING([if we want Win32 sockets])
-  if test "x$win32_sockets" = xenabled && test "x$network" != "xdisabled"; then
+  if test "x$win32_sockets" = "xenabled" && test "x$network" != "xdisabled"; then
     AC_DEFINE([WANT_WIN32_SOCKETS], [1], [ Define to use Win32 sockets ])
     AC_MSG_RESULT([yes])
     network_type=Winsock2
@@ -1841,6 +1841,12 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
     LIBS="$LIBS -lws2_32"
   else
     AC_MSG_RESULT([no])
+  fi
+  if test "x$win32_unicode" = "xenabled" || test "x$win32_sockets" = "xenabled"; then
+    CFLAGS="$CFLAGS -DWINVER=0x0501 -D_WIN32_WINNT=0x0501"
+    # getaddrinfo and freeaddrinfo are available for Win2K and above
+    # Bug: MinGW.org w32api ws2tcpip.h incorrectly wants (_WIN32_WINNT >= 0x0501) for getaddrinfo and freeaddrinfo
+    # MultiByteToWideChar and WideCharToMultiByte are available for Win2K and above
   fi
 fi
 
