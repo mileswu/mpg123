@@ -19,7 +19,9 @@
 
 #include "xfermem.h"
 #include "httpget.h"
+#ifndef BUILDING_OUTPUT_MODULES
 #include "win32_support.h"
+#endif
 
 #if defined(WIN32) && defined(DYNAMIC_BUILD)
 #define LINK_MPG123_DLL
