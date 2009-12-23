@@ -1820,37 +1820,111 @@ dnl ############## Win32 function checks
 win32_specific_codes=disabled
 win32_unicode=Uneeded
 win32_sockets=disabled
+win32_sockets_working=no
+win32_wide_working=no
+win32_winver_bump=no
 AC_CHECK_HEADERS([windows.h], [win32_specific_codes=enabled])
 if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; then
-  AC_CHECK_HEADERS([ws2tcpip.h], [win32_sockets=enabled], [AC_MSG_WARN([Please update your headers to support winsock 2.2.])])
+
+#### Check for Wide functions
   AC_CHECK_FUNC([_wopen], [win32_unicode=enabled],[win32_unicode=disabled])
   AC_MSG_CHECKING([if we want Unicode File Open for Win32])
   if test "x$win32_unicode" = xenabled; then
-    AC_DEFINE([WANT_WIN32_UNICODE], [1], [ Define to use Unicode for Windows ])
     AC_MSG_RESULT([yes])
+    AC_MSG_CHECKING([if Unicode functions working])
+    AC_LINK_IFELSE([[
+      #include <windows.h>
+      #include <stdlib.h>
+      int main()
+      {
+        MultiByteToWideChar (0, 0, NULL, 0, NULL, 0);
+        WideCharToMultiByte (0, 0, NULL, 0, NULL, 0, NULL, NULL);
+        return 0;
+      }
+    ]], [win32_wide_working=yes], [win32_winver_bump=yes])
+    if test "x$win32_wide_working" = xno; then
+      AC_LINK_IFELSE([[
+        #define WINVER 0x501
+        #define _WIN32_WINNT 0x501
+        #include <windows.h>
+        #include <stdlib.h>
+        int main()
+        {
+          MultiByteToWideChar (0, 0, NULL, 0, NULL, 0);
+          WideCharToMultiByte (0, 0, NULL, 0, NULL, 0, NULL, NULL);
+          return 0;
+        }
+      ]], [win32_wide_working=yes], [AC_MSG_RESULT([no])])
+    fi
+    if test "x$win32_wide_working" = xyes; then
+      AC_MSG_RESULT([yes])
+      AC_DEFINE([WANT_WIN32_UNICODE], [1], [ Define to use Unicode for Windows ])
+    fi
   else
-    AC_MSG_RESULT([no])
+    AC_MSG_WARN([Unicode File Open for Win32 disabled])
   fi
+
+#### Check for Network functions
+  AC_CHECK_HEADERS([ws2tcpip.h], [win32_sockets=enabled], [AC_MSG_WARN([Please update your headers to support winsock 2.2.])])
   AC_MSG_CHECKING([if we want Win32 sockets])
   if test "x$win32_sockets" = "xenabled" && test "x$network" != "xdisabled"; then
-    AC_DEFINE([WANT_WIN32_SOCKETS], [1], [ Define to use Win32 sockets ])
-    AC_MSG_RESULT([yes])
-    network_type=Winsock2
-    have_network=yes
-    have_ipv6=yes
+  AC_MSG_RESULT([yes])
+  AC_MSG_CHECKING([if winsock2 API is available])
+    wsoldlibs="$LIBS"
     LIBS="$LIBS -lws2_32"
+    AC_LINK_IFELSE([[
+      #include <winsock2.h>
+      #include <ws2tcpip.h>
+      #include <stdlib.h>
+      int main()
+      {
+        getaddrinfo(NULL, NULL, NULL, NULL);
+        freeaddrinfo(NULL);
+        return 0;
+      }
+    ]], [win32_sockets_working=yes], [win32_winver_bump=yes])
+    if test "x$win32_sockets_working" = "xno"; then
+      AC_MSG_CHECKING([deeper if winsock2 API is available])
+      AC_LINK_IFELSE([
+        #define WINVER 0x501
+        #define _WIN32_WINNT 0x501
+        #include <winsock2.h>
+        #include <ws2tcpip.h>
+        #include <stdlib.h>
+        int main()
+        {
+          getaddrinfo(NULL, NULL, NULL, NULL);
+          freeaddrinfo(NULL);
+          return 0;
+        }
+      ], [win32_sockets_working=yes], [AC_MSG_RESULT([no])])
+    fi
+    if test "x$win32_sockets_working" = "xyes"; then
+      AC_MSG_RESULT([yes])
+      AC_DEFINE([WANT_WIN32_SOCKETS], [1], [ Define to use Win32 sockets ])
+      network_type=Winsock2
+      have_network=yes
+      have_ipv6=yes
+    else
+      LIBS="$wsoldlibs"
+      AC_MSG_WARN([Please update your headers to support winsock 2.2.])
+    fi
   else
     AC_MSG_RESULT([no])
   fi
-  if test "x$win32_unicode" = "xenabled" || test "x$win32_sockets" = "xenabled"; then
+  AC_MSG_CHECKING([if WINVER and _WIN32_WINNT needs version bumps])
+  if test "x$win32_winver_bump" = "xyes"; then
+    AC_MSG_RESULT([yes])
     CFLAGS="$CFLAGS -DWINVER=0x0501 -D_WIN32_WINNT=0x0501"
     # getaddrinfo and freeaddrinfo are available for Win2K and above
     # Bug: MinGW.org w32api ws2tcpip.h incorrectly wants (_WIN32_WINNT >= 0x0501) for getaddrinfo and freeaddrinfo
     # MultiByteToWideChar and WideCharToMultiByte are available for Win2K and above
+  else
+    AC_MSG_RESULT([no])
   fi
 fi
 
-# Use Win32 support codes
+#### Use Win32 support codes
 AM_CONDITIONAL([WIN32_CODES], [ test "x$win32_specific_codes" = xenabled ])
 
 if test x"$network" = xauto; then
