@@ -398,7 +398,7 @@ static SOCKET win32_net_resolve_redirect(mpg123_string *response, mpg123_string 
 	return TRUE;
 }
 
-int win32_net_http_open(char* url, struct httpdata *hd)
+SOCKET win32_net_http_open(char* url, struct httpdata *hd)
 {
 	mpg123_string purl, host, port, path;
 	mpg123_string request, response, request_url;
