@@ -533,9 +533,12 @@ int open_track(char *fname)
 #if defined (WANT_WIN32_SOCKETS)
 	/*Use recv instead of stdio functions */
 	win32_net_replace(mh);
+	filept = win32_net_http_open(fname, &htd);
+#else
+	filept = http_open(fname, &htd);
 #endif
 /* utf-8 encoded URLs might not work under Win32 */
-		filept = win32_net_http_open(fname, &htd);
+		
 		/* now check if we got sth. and if we got sth. good */
 		if(    (filept >= 0) && (htd.content_type.p != NULL)
 			  && !param.ignore_mime && !(debunk_mime(htd.content_type.p) & IS_FILE) )

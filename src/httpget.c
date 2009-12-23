@@ -128,7 +128,6 @@ static int writestring (int fd, mpg123_string *string)
 	while(bytes)
 	{
 		result = write(fd, ptr, bytes);
-		result = win32_net_write(fd, ptr, bytes);
 		if(result < 0 && errno != EINTR)
 		{
 			perror ("writing http string");
@@ -160,7 +159,6 @@ static size_t readstring (mpg123_string *string, size_t maxlen, FILE *f)
 			return 0;
 		}
 		err = read(fileno(f),string->p+string->fill,1);
-		err = win32_net_read(0,string->p+string->fill,1); /*fd is ignored */
 		/* Whoa... reading one byte at a time... one could ensure the line break in another way, but more work. */
 		if( err == 1)
 		{
