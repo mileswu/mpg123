@@ -22,6 +22,7 @@
 #include <mmsystem.h>
 
 #if defined (HAVE_WS2TCPIP_H) && !defined (__CYGWIN__)
+#include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
 
