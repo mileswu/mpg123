@@ -88,13 +88,13 @@ void win32_net_close (SOCKET sock)
 static void win32_net_nonblock(SOCKET sock)
 {
   u_long mode = 1;
-  msgme_sock_err(ioctlsocket(sock, FIONBIO, &mode));
+  msgme_sock_err(ioctlsocket(ws.local_socket, FIONBIO, &mode));
 }
 
 static void win32_net_block(SOCKET sock)
 {
   u_long mode = 0;
-  msgme_sock_err(ioctlsocket(sock, FIONBIO, &mode));
+  msgme_sock_err(ioctlsocket(ws.local_socket, FIONBIO, &mode));
 }
 
 ssize_t win32_net_read (int fildes, void *buf, size_t nbyte)
@@ -111,7 +111,7 @@ static int get_sock_ch (SOCKET sock)
 {
   char c;
   int ret;
-  msgme_sock_err(ret = recv (sock, &c, 1, 0));
+  msgme_sock_err(ret = recv (ws.local_socket, &c, 1, 0));
   if (ret == 1)
     return (((int) c)&0xff);
   return -1;
@@ -167,12 +167,12 @@ static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_
 	if(param.timeout > 0)
 	{
 		int err;
-		win32_net_nonblock(sockfd);
-		err = connect(sockfd, serv_addr, addrlen);
+		win32_net_nonblock(ws.local_socket);
+		err = connect(ws.local_socket, serv_addr, addrlen);
 		if(err != SOCKET_ERROR)
 		{
 			debug("immediately successful");
-			win32_net_block(sockfd);
+			win32_net_block(ws.local_socket);
 			return 0;
 		}
 		else if(WSAGetLastError() == WSAEWOULDBLOCK) /*WSAEINPROGRESS would not work here for some reason*/
@@ -185,16 +185,16 @@ static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_
 			debug("in progress, waiting...");
 
 			FD_ZERO(&fds);
-			FD_SET(sockfd, &fds);
-			err = select(sockfd+1, NULL, &fds, NULL, &tv);
+			FD_SET(ws.local_socket, &fds);
+			err = select(ws.local_socket+1, NULL, &fds, NULL, &tv);
 			if(err != SOCKET_ERROR)
 			{
 				socklen_t len = sizeof(err);
-				if((getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (char *)&err, &len) != SOCKET_ERROR)
+				if((getsockopt(ws.local_socket, SOL_SOCKET, SO_ERROR, (char *)&err, &len) != SOCKET_ERROR)
 				   && (err == 0) )
 				{
 					debug("non-blocking connect has been successful");
-					win32_net_block(sockfd);
+					win32_net_block(ws.local_socket);
 					return 0;
 				}
 				else
@@ -226,7 +226,7 @@ static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_
 	}
 	else
 	{
-		if(connect(sockfd, serv_addr, addrlen) == SOCKET_ERROR)
+		if(connect(ws.local_socket, serv_addr, addrlen) == SOCKET_ERROR)
 		{
 			/*error1("connecton failed: %s", strerror(errno));*/
 			debug("connecton failed");
@@ -244,7 +244,8 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 {
 	struct addrinfo hints;
 	struct addrinfo *addr, *addrlist;
-	SOCKET addrcount, sock = SOCKET_ERROR;
+	SOCKET addrcount;
+	ws.local_socket = SOCKET_ERROR;
 
 	if(param.verbose>1) fprintf(stderr, "Note: Attempting new-style connection to %s\n", host->p);
 	memset(&hints, 0, sizeof(struct addrinfo));
@@ -264,31 +265,29 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 	addr = addrlist;
 	while(addr != NULL)
 	{
-		sock = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-		if (sock == INVALID_SOCKET)
+		ws.local_socket = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+		if (ws.local_socket == INVALID_SOCKET)
 		{
 			msgme1;
 		}
 		else
 		{
-			if(win32_net_timeout_connect(sock, addr->ai_addr, addr->ai_addrlen) == 0)
+			if(win32_net_timeout_connect(ws.local_socket, addr->ai_addr, addr->ai_addrlen) == 0)
 			break;
 			debug("win32_net_timeout_connect error, closing socket");
-			win32_net_close(sock);
-			sock=SOCKET_ERROR;
+			win32_net_close(ws.local_socket);
+			ws.local_socket=SOCKET_ERROR;
 		}
 		addr=addr->ai_next;
 	}
-	if(sock == SOCKET_ERROR) {error2("Cannot resolve/connect to %s:%s!", host->p, port->p);}
+	if(ws.local_socket == SOCKET_ERROR) {error2("Cannot resolve/connect to %s:%s!", host->p, port->p);}
 	else
 	{
-	  debug1("Saving socket %d",sock);
-	  ws.local_socket = sock;
 	  ws.inited = 2;
 	}
 
 	freeaddrinfo(addrlist);
-	return sock;
+	return ws.local_socket;
 }
 
 static size_t win32_net_readstring (mpg123_string *string, size_t maxlen, FILE *f)
@@ -341,7 +340,7 @@ static int win32_net_writestring (SOCKET fd, mpg123_string *string)
 
 	while(bytes)
 	{
-		result = win32_net_write(fd, ptr, bytes);
+		result = win32_net_write(ws.local_socket, ptr, bytes);
 		if(result < 0 && WSAGetLastError() != WSAEINTR)
 		{
 			perror ("writing http string");
@@ -403,7 +402,7 @@ SOCKET win32_net_http_open(char* url, struct httpdata *hd)
 	mpg123_string purl, host, port, path;
 	mpg123_string request, response, request_url;
 	mpg123_string httpauth1;
-	SOCKET sock = SOCKET_ERROR;
+	ws.local_socket = SOCKET_ERROR;
 	int oom  = 0;
 	int relocate, numrelocs = 0;
 	int got_location = FALSE;
@@ -485,16 +484,17 @@ SOCKET win32_net_http_open(char* url, struct httpdata *hd)
 
 		httpauth1.fill = 0; /* We use the auth data from the URL only once. */
 		debug2("attempting to open_connection to %s:%s", host.p, port.p);
-		sock = win32_net_open_connection(&host, &port);
-		if(sock < 0)
+		ws.local_socket = win32_net_open_connection(&host, &port);
+		if(ws.local_socket == SOCKET_ERROR)
 		{
 			error1("Unable to establish connection to %s", host.fill ? host.p : "");
 			goto exit;
 		}
-#define http_failure win32_net_close(sock); sock=SOCKET_ERROR; goto exit;
+		debug("win32_net_open_connection succeed");
+#define http_failure win32_net_close(ws.local_socket); ws.local_socket=SOCKET_ERROR; goto exit;
 		
 		if(param.verbose > 2) fprintf(stderr, "HTTP request:\n%s\n",request.p);
-		if(!win32_net_writestring(sock, &request)){ http_failure; }
+		if(!win32_net_writestring(ws.local_socket, &request)){ http_failure; }
 		debug("Skipping fdopen for WSA sockets");
 		relocate = FALSE;
 		/* Arbitrary length limit here... */
@@ -589,7 +589,7 @@ exit: /* The end as well as the exception handling point... */
 	mpg123_free_string(&response);
 	mpg123_free_string(&request_url);
 	mpg123_free_string(&httpauth1);
-	return sock;
+	return ws.local_socket;
 }
 #else
 int win32_net_http_open(char* url, struct httpdata *hd)
