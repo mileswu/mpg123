@@ -161,7 +161,7 @@ void init_playlist()
 	pl.type = UNKNOWN;
 	pl.loop = param.loop;
 #ifdef WANT_WIN32_SOCKETS
-	pl.sockd = SOCKET_ERROR;
+	pl.sockd = -1;
 #endif
 }
 
@@ -204,7 +204,7 @@ int add_next_file (int argc, char *argv[])
 #ifndef WANT_WIN32_SOCKETS
 		if (!pl.file)
 #else
-		if (!pl.file && pl.sockd == SOCKET_ERROR)
+		if (!pl.file && pl.sockd == -1)
 #endif
 		{
 			/* empty or "-" */
@@ -216,11 +216,7 @@ int add_next_file (int argc, char *argv[])
 			}
 			else if (!strncmp(param.listname, "http://", 7))
 			{
-#ifdef WANT_WIN32_SOCKETS
-				SOCKET fd;
-#else
 				int fd;
-#endif
 				struct httpdata htd;
 				httpdata_init(&htd);
 #ifndef WANT_WIN32_SOCKETS
@@ -241,11 +237,10 @@ int add_next_file (int argc, char *argv[])
 					{
 #ifndef WANT_WIN32_SOCKETS
 						if(fd >= 0) close(fd);
-						fd = -1;
 #else
 						if(fd != SOCKET_ERROR) win32_net_close(fd);
-						fd = SOCKET_ERROR;
 #endif
+						fd = -1;
 						
 						if(mimi & IS_FILE)
 						{
@@ -271,7 +266,7 @@ int add_next_file (int argc, char *argv[])
 					param.listname = NULL;
 					pl.file = NULL;
 #ifdef WANT_WIN32_SOCKETS
-					pl.sockd = SOCKET_ERROR;
+					pl.sockd = -1;
 #endif
 					error("Invalid playlist from http_open()!\n");
 				}
@@ -302,7 +297,7 @@ int add_next_file (int argc, char *argv[])
 #ifndef WANT_WIN32_SOCKETS
 		while (pl.file)
 #else
-		while (pl.file || (pl.sockd) != SOCKET_ERROR)
+		while (pl.file || (pl.sockd) != -1)
 #endif
 		{
 			/*
@@ -482,10 +477,10 @@ int add_next_file (int argc, char *argv[])
 				param.listname = NULL;
 				pl.file = NULL;
 #ifdef WANT_WIN32_SOCKETS
-				if( pl.sockd != SOCKET_ERROR)
+				if( pl.sockd != -1)
 				{
 				  win32_net_close(pl.sockd);
-				  pl.sockd = SOCKET_ERROR;
+				  pl.sockd = -1;
 				}
 #endif
 			}
