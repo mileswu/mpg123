@@ -77,7 +77,7 @@ void win32_net_deinit (void)
   }
 }
 
-void win32_net_close (SOCKET sock)
+void win32_net_close (int sock)
 {
   if (sock != SOCKET_ERROR)
   {
@@ -85,13 +85,13 @@ void win32_net_close (SOCKET sock)
   }
 }
 
-static void win32_net_nonblock(SOCKET sock)
+static void win32_net_nonblock(int sock)
 {
   u_long mode = 1;
   msgme_sock_err(ioctlsocket(ws.local_socket, FIONBIO, &mode));
 }
 
-static void win32_net_block(SOCKET sock)
+static void win32_net_block(int sock)
 {
   u_long mode = 0;
   msgme_sock_err(ioctlsocket(ws.local_socket, FIONBIO, &mode));
@@ -107,7 +107,7 @@ ssize_t win32_net_read (int fildes, void *buf, size_t nbyte)
   return ret;
 }
 
-static int get_sock_ch (SOCKET sock)
+static int get_sock_ch (int sock)
 {
   char c;
   int ret;
@@ -117,7 +117,7 @@ static int get_sock_ch (SOCKET sock)
   return -1;
 }
 /* Addapted from from newlib*/
-char *win32_net_fgets(char *s, int n, SOCKET stream)
+char *win32_net_fgets(char *s, int n, int stream)
 {
   char c = 0;
   char *buf;
@@ -161,7 +161,7 @@ void win32_net_replace (mpg123_handle *fr)
   mpg123_replace_reader(fr, win32_net_read, win32_net_lseek);
 }
 
-static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_addr, socklen_t addrlen)
+static int win32_net_timeout_connect(int sockfd, const struct sockaddr *serv_addr, socklen_t addrlen)
 {
 	debug("win32_net_timeout_connect ran");
 	if(param.timeout > 0)
@@ -240,7 +240,7 @@ static int win32_net_timeout_connect(SOCKET sockfd, const struct sockaddr *serv_
 	}
 }
 
-SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
+int win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 {
 	struct addrinfo hints;
 	struct addrinfo *addr, *addrlist;
@@ -287,7 +287,7 @@ SOCKET win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 	}
 
 	freeaddrinfo(addrlist);
-	return ws.local_socket;
+	return 1;
 }
 
 static size_t win32_net_readstring (mpg123_string *string, size_t maxlen, FILE *f)
@@ -332,7 +332,7 @@ static size_t win32_net_readstring (mpg123_string *string, size_t maxlen, FILE *
 	return string->fill;
 }
 
-static int win32_net_writestring (SOCKET fd, mpg123_string *string)
+static int win32_net_writestring (int fd, mpg123_string *string)
 {
 	size_t result, bytes;
 	char *ptr = string->p;
@@ -357,7 +357,7 @@ static int win32_net_writestring (SOCKET fd, mpg123_string *string)
 	return TRUE;
 }
 
-static SOCKET win32_net_resolve_redirect(mpg123_string *response, mpg123_string *request_url, mpg123_string *purl)
+static int win32_net_resolve_redirect(mpg123_string *response, mpg123_string *request_url, mpg123_string *purl)
 {
 	debug1("request_url:%s", request_url->p);
 	/* initialized with full old url */
@@ -397,7 +397,7 @@ static SOCKET win32_net_resolve_redirect(mpg123_string *response, mpg123_string 
 	return TRUE;
 }
 
-SOCKET win32_net_http_open(char* url, struct httpdata *hd)
+int win32_net_http_open(char* url, struct httpdata *hd)
 {
 	mpg123_string purl, host, port, path;
 	mpg123_string request, response, request_url;
@@ -406,7 +406,6 @@ SOCKET win32_net_http_open(char* url, struct httpdata *hd)
 	int oom  = 0;
 	int relocate, numrelocs = 0;
 	int got_location = FALSE;
-	FILE *myfile = NULL;
 	/*
 		workaround for http://www.global24music.com/rautemusik/files/extreme/isdn.pls
 		this site's apache gives me a relocation to the same place when I give the port in Host request field
@@ -484,7 +483,7 @@ SOCKET win32_net_http_open(char* url, struct httpdata *hd)
 
 		httpauth1.fill = 0; /* We use the auth data from the URL only once. */
 		debug2("attempting to open_connection to %s:%s", host.p, port.p);
-		ws.local_socket = win32_net_open_connection(&host, &port);
+		win32_net_open_connection(&host, &port);
 		if(ws.local_socket == SOCKET_ERROR)
 		{
 			error1("Unable to establish connection to %s", host.fill ? host.p : "");
@@ -499,7 +498,7 @@ SOCKET win32_net_http_open(char* url, struct httpdata *hd)
 		relocate = FALSE;
 		/* Arbitrary length limit here... */
 #define safe_readstring \
-		win32_net_readstring(&response, SIZE_MAX/16, myfile); \
+		win32_net_readstring(&response, SIZE_MAX/16, NULL); \
 		if(response.fill > SIZE_MAX/16) /* > because of appended zero. */ \
 		{ \
 			error("HTTP response line exceeds max. length"); \
@@ -589,7 +588,10 @@ exit: /* The end as well as the exception handling point... */
 	mpg123_free_string(&response);
 	mpg123_free_string(&request_url);
 	mpg123_free_string(&httpauth1);
-	return ws.local_socket;
+	if (ws.local_socket == SOCKET_ERROR)
+	return -1;
+	else
+	return 1;
 }
 #else
 int win32_net_http_open(char* url, struct httpdata *hd)
