@@ -132,11 +132,9 @@ static int intflag = FALSE;
 static int skip_tracks = 0;
 int OutputDescriptor;
 
-#ifdef WANT_WIN32_SOCKETS
-  static SOCKET filept = -1; /* always large enough to hold an int */
-#else
-  static int filept = -1;
-#endif
+static int filept = -1;
+
+static int network_sockets_used = 0; /* Win32 socket open/close Support */
 
 char *binpath; /* Path to myself. */
 
@@ -514,6 +512,20 @@ static void reset_audio(long rate, int channels, int format)
 #endif
 }
 
+static int open_track_fd (void)
+{
+	/* Let reader handle invalid filept */
+	if(mpg123_open_fd(mh, filept) != MPG123_OK)
+	{
+		error2("Cannot open fd %i: %s", filept, mpg123_strerror(mh));
+		return 0;
+	}
+	debug("Track successfully opened.");
+	fresh = TRUE;
+	return 1;
+	/*1 for success, 0 for failure */
+}
+
 /* 1 on success, 0 on failure */
 int open_track(char *fname)
 {
@@ -527,6 +539,7 @@ int open_track(char *fname)
 #ifdef WIN32
 		_setmode(STDIN_FILENO, _O_BINARY);
 #endif
+		return open_track_fd();
 	}
 	else if (!strncmp(fname, "http://", 7)) /* http stream */
 	{
@@ -537,6 +550,7 @@ int open_track(char *fname)
 #else
 	filept = http_open(fname, &htd);
 #endif
+	network_sockets_used = 1;
 /* utf-8 encoded URLs might not work under Win32 */
 		
 		/* now check if we got sth. and if we got sth. good */
@@ -547,7 +561,6 @@ int open_track(char *fname)
 			error("If you know the stream is mpeg1/2 audio, then please report this as "PACKAGE_NAME" bug");
 			return 0;
 		}
-		/* This should work for win32 too as SOCKET_ERROR is -1 */
 		if(filept < 0)
 		{
 			error1("Access to http resource %s failed.", fname);
@@ -559,13 +572,9 @@ int open_track(char *fname)
 	}
 	debug("OK... going to finally open.");
 	/* Now hook up the decoder on the opened stream or the file. */
-	if(filept > -1)
+	if(network_sockets_used) 
 	{
-		if(mpg123_open_fd(mh, filept) != MPG123_OK)
-		{
-			error2("Cannot open fd %i: %s", filept, mpg123_strerror(mh));
-			return 0;
-		}
+		return open_track_fd();
 	}
 	else if(mpg123_open(mh, fname) != MPG123_OK)
 	{
@@ -581,6 +590,13 @@ int open_track(char *fname)
 void close_track(void)
 {
 	mpg123_close(mh);
+#if defined (WANT_WIN32_SOCKETS)
+	if (network_sockets_used)
+	win32_net_close(filept);
+	filept = -1;
+	return;
+#endif
+	network_sockets_used = 0;
 	if(filept > -1) close(filept);
 	filept = -1;
 }
