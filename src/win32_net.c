@@ -79,10 +79,7 @@ void win32_net_deinit (void)
 
 void win32_net_close (int sock)
 {
-  if (sock != SOCKET_ERROR)
-  {
     msgme_sock_err(closesocket(ws.local_socket));
-  }
 }
 
 static void win32_net_nonblock(int sock)
@@ -588,7 +585,7 @@ exit: /* The end as well as the exception handling point... */
 	mpg123_free_string(&response);
 	mpg123_free_string(&request_url);
 	mpg123_free_string(&httpauth1);
-	if (ws.local_socket == SOCKET_ERROR)
+	if (ws.local_socket == SOCKET_ERROR || oom)
 	return -1;
 	else
 	return 1;
