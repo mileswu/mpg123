@@ -30,8 +30,7 @@
 /* 
 Note: Do not treat return values as valid file/socket handles, they only indicate success/failure.
 file descriptors are ignored, only the local ws.local_socket is used for storing socket handle,
-so the socket handle is always associated with the last call to win32_net_open_connection or 
-win32_net_http_open
+so the socket handle is always associated with the last call to win32_net_http_open
 */
 
 /**
