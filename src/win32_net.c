@@ -237,7 +237,7 @@ static int win32_net_timeout_connect(int sockfd, const struct sockaddr *serv_add
 	}
 }
 
-int win32_net_open_connection(mpg123_string *host, mpg123_string *port)
+static int win32_net_open_connection(mpg123_string *host, mpg123_string *port)
 {
 	struct addrinfo hints;
 	struct addrinfo *addr, *addrlist;

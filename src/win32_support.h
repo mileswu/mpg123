@@ -27,15 +27,68 @@
 #endif
 
 #if defined (WANT_WIN32_SOCKETS) /*conflict with gethostname and select in select.h and unistd.h */
-/* file descriptors are ignored, only the local ws.local_socket is used for storing socket handle */
+/* 
+Note: Do not treat return values as valid file/socket handles, they only indicate success/failure.
+file descriptors are ignored, only the local ws.local_socket is used for storing socket handle,
+so the socket handle is always associated with the last call to win32_net_open_connection or 
+win32_net_http_open
+*/
+
+/**
+ * Opens an http URL
+ * @param[in] url URL to open
+ * @param[out] hd http data info
+ * @return -1 for failure, 1 for success
+ */
 int win32_net_http_open(char* url, struct httpdata *hd);
-int win32_net_open_connection(mpg123_string *host, mpg123_string *port);
+
+/**
+ * Reads from network socket
+ * @param[in] filedes Value is ignored, last open connection is used.
+ * @param[out] buf buffer to store data.
+ * @param[in] nbyte bytes to read.
+ * @return bytes read successfully from socket
+ */
 ssize_t win32_net_read (int fildes, void *buf, size_t nbyte);
+
+/**
+ * Writes to network socket
+ * @param[in] filedes Value is ignored, last open connection is used.
+ * @param[in] buf buffer to read data from.
+ * @param[in] nbyte bytes to write.
+ * @return bytes written successfully to socket
+ */
 ssize_t win32_net_write (int fildes, const void *buf, size_t nbyte);
+
+/**
+ * Similar to fgets - get a string from a stream
+ * @param[out] s buffer to Write to
+ * @param[in] n bytes of data to read.
+ * @param[in] stream ignored for compatiblity, last open connection is used.
+ * @return pointer to s if successful, NULL if failture
+ */
 char *win32_net_fgets(char *s, int n, int stream);
+
+/**
+ * Initialize Winsock 2.2.
+ */
 void win32_net_init (void);
+
+/**
+ * Shutdown all win32 sockets.
+ */
 void win32_net_deinit (void);
+
+/**
+ * Close last open socket.
+ * @param[in] sock value is ignored.
+ */
 void win32_net_close (int sock);
+
+/**
+ * Replace reder for mpg123_open_fd
+ * @param[in] fr pointer to a mpg123_handle struct.
+ */
 void win32_net_replace (mpg123_handle *fr);
 #endif
 
