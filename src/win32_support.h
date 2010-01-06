@@ -85,7 +85,7 @@ void win32_net_deinit (void);
 void win32_net_close (int sock);
 
 /**
- * Replace reder for mpg123_open_fd
+ * Set reader callback for mpg123_open_fd
  * @param[in] fr pointer to a mpg123_handle struct.
  */
 void win32_net_replace (mpg123_handle *fr);
