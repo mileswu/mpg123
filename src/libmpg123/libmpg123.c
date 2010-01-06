@@ -661,20 +661,22 @@ static int get_next_frame(mpg123_handle *mh)
 debug1("new format: %i", mh->new_format);
 
 		mh->decoder_change = 0;
-#ifdef GAPLESS
 		if(mh->fresh)
 		{
+#ifdef GAPLESS
 			int b=0;
 			/* Prepare offsets for gapless decoding. */
 			debug1("preparing gapless stuff with native rate %li", frame_freq(mh));
 			frame_gapless_realinit(mh);
 			frame_set_frameseek(mh, mh->num);
+#endif
 			mh->fresh = 0;
+#ifdef GAPLESS
 			/* Could this possibly happen? With a real big gapless offset... */
 			if(mh->num < mh->firstframe) b = get_next_frame(mh);
 			if(b < 0) return b; /* Could be error, need for more, new format... */
-		}
 #endif
+		}
 	}
 	return MPG123_OK;
 }
@@ -1326,10 +1328,13 @@ off_t attribute_align_arg mpg123_length(mpg123_handle *mh)
 	length = frame_ins2outs(mh, length);
 	debug1("mpg123_length: external sample length: %"OFF_P, (off_p)length);
 #ifdef GAPLESS
-	debug2("mpg123_length: begin_os = %"OFF_P", end_os = %"OFF_P, (off_p)mh->begin_os, (off_p)mh->end_os);
-	if(mh->end_os > 0 && length > mh->end_os) length = mh->end_os;
-	length -= mh->begin_os;
-	debug1("mpg123_length: after gapless correction: %"OFF_P, (off_p)length);
+	if(mh->p.flags & MPG123_GAPLESS)
+	{
+		debug2("mpg123_length: begin_os = %"OFF_P", end_os = %"OFF_P, (off_p)mh->begin_os, (off_p)mh->end_os);
+		if(mh->end_os > 0 && length > mh->end_os) length = mh->end_os;
+		length -= mh->begin_os;
+		debug1("mpg123_length: after gapless correction: %"OFF_P, (off_p)length);
+	}
 #endif
 	return length;
 }

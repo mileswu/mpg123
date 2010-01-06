@@ -369,9 +369,7 @@ static int generic_read_frame_body(mpg123_handle *fr,unsigned char *buf, int siz
 	{
 		long ll = l;
 		if(ll <= 0) ll = 0;
-
-		/* This allows partial frames at the end... do we really want to pad and decode these?! */
-		memset(buf+ll,0,size-ll);
+		return READER_MORE;
 	}
 	return l;
 }
@@ -541,7 +539,7 @@ static ssize_t bc_give(struct bufferchain *bc, unsigned char *out, ssize_t size)
 		if(chunk > b->size - loff) chunk = b->size - loff;
 
 #ifdef EXTRA_DEBUG
-		debug3("copying %liB from %p+%li",(long)chunk, b->data, (long)loff); */
+		debug3("copying %liB from %p+%li",(long)chunk, b->data, (long)loff);
 #endif
 
 		memcpy(out+gotcount, b->data+loff, chunk);
