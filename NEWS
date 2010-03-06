@@ -1,11 +1,15 @@
 1.11.0
 ---
 
+- Important change for the large file support in the library:
+  On systems sensitive to large file support (off_t can be 32 bits or 64 bits), the libmpg123 version supporting large files will be installed as libmpg123_64 instead of just renaming symbols in libmpg123.
+  This change could force re-linking some client binaries that use large file support! But in the long run, it should reduce trouble by being able to offer both variants of the library in a system.
 - Assembler cleanup (no relying on stack alignment for SSE, helping portability and even speedup by 8% on x86-64!).
 - Windows networking.
 - Do not ask for addresses that do not have matching interfaces configured (IPv6 on a IPv4-only host, for example).
   That can help with broken DNS servers that choke on IPv6 addresses (T-Online Speedport W502V, for example).
 - ...
+
 
 1.10.1
 ---
