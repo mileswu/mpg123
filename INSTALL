@@ -66,6 +66,13 @@ Hint: If you want to install both variants of the library, do a main build with 
 There is no benefit from installing the non-large-file mpg123 end-user binary.
 Also, the header will work for both libs.
 
+Oh, a simpler method might be to just do
+
+./configure --disable-largefile && make && make install
+./configure && make && make install
+
+The second build will enable large file support if possible and replace all files from the first install except the library and its pkg-config definition.
+
 
 2. The classic way via the provided Makefile
 
