@@ -67,7 +67,6 @@ libmpg123_la_SOURCES = \
 	index.c
 
 EXTRA_libmpg123_la_SOURCES = \
-	lfs_alias.c \
 	lfs_wrap.c \
 	icy.c \
 	icy2utf8.c \
