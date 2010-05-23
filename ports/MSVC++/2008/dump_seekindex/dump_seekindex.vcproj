@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9,00"
-	Name="mpglib"
-	ProjectGUID="{9FB32EE1-C45A-4CCD-9AC8-112C43AF80A7}"
-	RootNamespace="mpglib"
+	Name="dump_seekindex"
+	ProjectGUID="{B086EA3E-700A-4DED-A91D-85ED8A79A8FC}"
+	RootNamespace="dump_seekindex"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -43,12 +43,16 @@
 				Optimization="0"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
-				MinimalRebuild="true"
+				MinimalRebuild="false"
+				ExceptionHandling="0"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
+				RuntimeTypeInfo="false"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
-				DebugInformationFormat="4"
+				DebugInformationFormat="3"
+				CompileAs="1"
+				DisableSpecificWarnings="4996"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -125,7 +129,6 @@
 				BufferSecurityCheck="false"
 				EnableFunctionLevelLinking="true"
 				EnableEnhancedInstructionSet="1"
-				FloatingPointModel="0"
 				RuntimeTypeInfo="false"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -182,7 +185,7 @@
 	</References>
 	<Files>
 		<File
-			RelativePath="..\..\..\..\doc\examples\mpglib.c"
+			RelativePath="..\..\..\..\doc\examples\dump_seekindex.c"
 			>
 		</File>
 	</Files>

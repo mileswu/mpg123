@@ -62,7 +62,8 @@ static ssize_t plain_read(mpg123_handle *fr, void *buf, size_t count)
 	if(VERBOSE3) debug2("read %li bytes of %li", (long)ret, (long)count);
 	return ret;
 }
-#if defined (NETWORK) && !defined (WANT_WIN32_SOCKETS)
+
+#ifdef TIMEOUT_READ
 
 /* Wait for data becoming available, allowing soft-broken network connection to die
    This is needed for Shoutcast servers that have forgotten about us while connection was temporarily down. */
@@ -434,6 +435,9 @@ static off_t get_fileinfo(mpg123_handle *fr)
 	return len;
 }
 
+/* Let's work in nice 4K blocks, that may be nicely reusable (by malloc(), even). */
+#define BUFFBLOCK 4096
+
 #ifndef NO_FEEDER
 /* Methods for the buffer chain, mainly used for feed reader, but not just that. */
 
@@ -470,7 +474,8 @@ static int bc_append(struct bufferchain *bc, ssize_t size)
 	newbuf = malloc(sizeof(struct buffy));
 	if(newbuf == NULL) return -2;
 
-	newbuf->data = malloc(size);
+	newbuf->realsize = size > BUFFBLOCK ? size : BUFFBLOCK;
+	newbuf->data = malloc(newbuf->realsize);
 	if(newbuf->data == NULL)
 	{
 		free(newbuf);
@@ -517,11 +522,26 @@ static void bc_drop(struct bufferchain *bc)
 static int bc_add(struct bufferchain *bc, const unsigned char *data, ssize_t size)
 {
 	int ret = 0;
+	ssize_t part = 0;
 	debug2("bc_add: adding %"SSIZE_P" bytes at %"OFF_P, (ssize_p)size, (off_p)(bc->fileoff+bc->size));
 	if(size >=4) debug4("first bytes: %02x %02x %02x %02x", data[0], data[1], data[2], data[3]);
 
-	if((ret = bc_append(bc, size)) == 0)
-	memcpy(bc->last->data, data, size);
+	/* Try to fill up the last buffer block. */
+	if(bc->last != NULL && bc->last->size < bc->last->realsize)
+	{
+		part = bc->last->realsize - bc->last->size;
+		if(part > size) part = size;
+
+		memcpy(bc->last->data+bc->last->size, data, part);
+		bc->last->size += part;
+		size -= part;
+		bc->size += part;
+	}
+
+
+	/* If there is still data left, put it into a new buffer block. */
+	if(size > 0 && (ret = bc_append(bc, size)) == 0)
+	memcpy(bc->last->data, data+part, size);
 
 	return ret;
 }
@@ -700,8 +720,6 @@ off_t feed_set_pos(mpg123_handle *fr, off_t pos)
 
 /* The specific stuff for buffered stream reader. */
 
-/* Let's work in nice 4K blocks, that may be nicely reusable (by malloc(), even). */
-#define BUFFBLOCK 4096
 static ssize_t buffered_fullread(mpg123_handle *fr, unsigned char *out, ssize_t count)
 {
 	struct bufferchain *bc = &fr->rdat.buffer;
@@ -897,7 +915,7 @@ struct reader bad_reader =
 
 static int default_init(mpg123_handle *fr)
 {
-#if (!defined (WIN32) || defined (__CYGWIN__))
+#ifdef TIMEOUT_READ
 	if(fr->p.timeout > 0)
 	{
 		int flags;
